@@ -1,0 +1,21 @@
+{
+    "name": "assegaiphp/orm",
+    "description": "AssegaiORM is an ORM written in modern PHP. It supports both Active Record and Data Mapper patterns. AssegaiORM is highly influenced by other ORMs, such as TypeORM, Doctrine and Entity Framework.",
+    "type": "library",
+    "require-dev": {
+        "codeception/codeception": "^4.2"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Assegaiphp\\Orm\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Andrew Masiye",
+            "email": "amasiye313@gmail.com"
+        }
+    ],
+    "require": {}
+}
