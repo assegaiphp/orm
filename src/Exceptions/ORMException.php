@@ -6,6 +6,9 @@ use Exception;
 
 class ORMException extends Exception
 {
+  protected int $status = 500;
+  protected string $error = 'Internal Server Error';
+
   public function __construct(protected $message)
   {
     parent::__construct($message);
@@ -15,9 +18,9 @@ class ORMException extends Exception
   {
     parent::__toString();
     return json_encode([
-      'statusCode' => 500,
+      'statusCode' => $this->status,
       'message' => sprintf("ORM Exception: %s", $this->message),
-      'error' => 'Internal Server Error'
+      'error' => $this->error
     ]);
   }
 }
