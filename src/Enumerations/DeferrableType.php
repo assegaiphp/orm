@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegaiphp\Orm\Enumerations;
+namespace Assegai\Orm\Enumerations;
 
 /**
  * DEFERRABLE type to be used to specify if foreign key constraints can be deferred.

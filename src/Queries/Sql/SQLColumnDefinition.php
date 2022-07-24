@@ -1,9 +1,9 @@
 <?php
 
-namespace Assegaiphp\Orm\Queries\Sql;
+namespace Assegai\Orm\Queries\Sql;
 
-use Assegaiphp\Orm\Attributes\Columns\Column;
-use Assegaiphp\Orm\Enumerations\SQLDialect;
+use Assegai\Orm\Attributes\Columns\Column;
+use Assegai\Orm\Enumerations\SQLDialect;
 
 class SQLColumnDefinition
 {

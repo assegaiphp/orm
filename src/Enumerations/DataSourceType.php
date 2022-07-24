@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegaiphp\Orm\Enumerations;
+namespace Assegai\Orm\Enumerations;
 
 enum DataSourceType: string
 {

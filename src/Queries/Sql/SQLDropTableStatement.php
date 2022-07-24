@@ -1,8 +1,8 @@
 <?php
 
-namespace Assegaiphp\Orm\Queries\Sql;
+namespace Assegai\Orm\Queries\Sql;
 
-use Assegaiphp\Orm\Traits\ExecutableTrait;
+use Assegai\Orm\Traits\ExecutableTrait;
 
 /**
  * Removes one or more tables. You must have the [DROP](https://dev.mysql.com/doc/refman/8.0/en/privileges-provided.html#priv_drop) privelege for each table.

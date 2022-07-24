@@ -1,9 +1,9 @@
 <?php
 
-namespace Assegaiphp\Orm\Queries\Sql;
+namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Core\Config;
-use Assegaiphp\Orm\Exceptions\ORMException;
+use Assegai\Orm\Config;
+use Assegai\Orm\Exceptions\ORMException;
 use Exception;
 use PDO;
 use stdClass;
@@ -256,10 +256,7 @@ final class SQLQuery
     {
       $statement = $this->db->prepare($this->queryString);
 
-      switch ($this->type())
-      {
-        default: $statement->execute( $this->params );
-      };
+      $statement->execute($this->params);
 
       if (!empty($statement->errorInfo()))
       {
@@ -288,7 +285,7 @@ final class SQLQuery
 
       return new SQLQueryResult( data: [], errors: $errors, isOK: false );
     }
-    catch (Exception $e)
+    catch (Exception)
     {
       list($sqlCode, $driverCode, $message) = $statement->errorInfo();
       if (Config::environment('ENVIRONMENT') === 'PROD')

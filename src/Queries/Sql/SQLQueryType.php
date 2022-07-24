@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegaiphp\Orm\Queries\Sql;
+namespace Assegai\Orm\Queries\Sql;
 
 final class SQLQueryType
 {

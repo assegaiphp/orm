@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegaiphp\Orm\Enumerations;
+namespace Assegai\Orm\Enumerations;
 
 /**
  * ON_UPDATE type to be used to specify update strategy when some relation is being updated.

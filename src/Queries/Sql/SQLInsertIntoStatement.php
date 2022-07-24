@@ -1,9 +1,9 @@
 <?php
 
-namespace Assegaiphp\Orm\Queries\Sql;
+namespace Assegai\Orm\Queries\Sql;
 
-use Assegaiphp\Orm\Traits\DuplicateKeyUpdatableTrait;
-use Assegaiphp\Orm\Traits\ExecutableTrait;
+use Assegai\Orm\Traits\DuplicateKeyUpdatableTrait;
+use Assegai\Orm\Traits\ExecutableTrait;
 
 /**
  * Inserts new rows into an existing table.

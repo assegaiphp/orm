@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegaiphp\Orm\Enumerations;
+namespace Assegai\Orm\Enumerations;
 
 /**
  * ON_DELETE type to be used to specify delete strategy when some relation is being deleted from the database.

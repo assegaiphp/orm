@@ -1,8 +1,8 @@
 <?php
 
-namespace Assegaiphp\Orm\Traits;
+namespace Assegai\Orm\Traits;
 
-use Assegaiphp\Orm\Queries\Sql\SQLLimitClause;
+use Assegai\Orm\Queries\Sql\SQLLimitClause;
 
 trait SQLAggregatorTrait
 {

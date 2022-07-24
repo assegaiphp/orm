@@ -1,9 +1,9 @@
 <?php
 
-namespace Assegaiphp\Orm\Queries\Sql;
+namespace Assegai\Orm\Queries\Sql;
 
-use Assegaiphp\Orm\Traits\ExecutableTrait;
-use Assegaiphp\Orm\Traits\JoinableTrait;
+use Assegai\Orm\Traits\ExecutableTrait;
+use Assegai\Orm\Traits\JoinableTrait;
 
 final class SQLJoinSpecification
 {
