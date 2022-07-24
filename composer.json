@@ -17,5 +17,10 @@
             "email": "amasiye313@gmail.com"
         }
     ],
-    "require": {}
+    "require": {
+        "php": ">=8.1",
+        "ext-pdo": "*",
+        "ext-curl": "*",
+        "ext-intl": "*"
+    }
 }
