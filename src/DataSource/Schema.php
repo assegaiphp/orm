@@ -3,6 +3,7 @@
 namespace Assegai\Orm\DataSource;
 
 use Assegai\Orm\Enumerations\SQLDialect;
+use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\EntityManager;
@@ -14,9 +15,12 @@ use ReflectionException;
 
 class Schema implements ISchema
 {
-
   /**
-   * @inheritDoc
+   * @param string $entityClass
+   * @param SchemaOptions|null $options
+   * @return bool|null
+   * @throws ORMException
+   * @throws ClassNotFoundException
    */
   public static function create(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
@@ -45,16 +49,15 @@ class Schema implements ISchema
     }
     catch(ReflectionException $e)
     {
-      exit(new ORMException(message: $e->getMessage()));
-    }
-    catch (ORMException $e)
-    {
-      exit($e);
+      throw new ORMException(message: $e->getMessage());
     }
   }
 
   /**
-   * @inheritDoc
+   * @param string $entityClass
+   * @param SchemaOptions|null $options
+   * @return bool|null
+   * @throws ORMException
    */
   public static function createIfNotExists(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
@@ -76,17 +79,17 @@ class Schema implements ISchema
     }
     catch(ReflectionException $e)
     {
-      exit(new ORMException(message: $e->getMessage()));
-    }
-    catch (ORMException $e)
-    {
-      exit($e);
+      throw new ORMException(message: $e->getMessage());
     }
   }
 
   /**
    * @inheritDoc
-   * @throws PDOException
+   * @param string $from
+   * @param string $to
+   * @param SchemaOptions|null $options
+   * @return bool|null
+   * @throws ORMException
    */
   public static function renameTable(string $from, string $to, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
@@ -101,7 +104,7 @@ class Schema implements ISchema
     }
     catch (PDOException)
     {
-      exit(new ORMException(message: $e->getMessage()));
+      throw new ORMException(message: $e->getMessage());
     }
 
     return $result;
@@ -135,7 +138,10 @@ class Schema implements ISchema
   }
 
   /**
-   * @inheritDoc
+   * @param string $entityClass
+   * @param SchemaOptions|null $options
+   * @return bool|null
+   * @throws ORMException
    */
   public static function dropTable(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
@@ -158,16 +164,15 @@ class Schema implements ISchema
     }
     catch(ReflectionException $e)
     {
-      exit(new ORMException(message: $e->getMessage()));
-    }
-    catch (ORMException $e)
-    {
-      exit($e);
+      throw new ORMException(message: $e->getMessage());
     }
   }
 
   /**
-   * @inheritDoc
+   * @param string $entityClass
+   * @param SchemaOptions|null $options
+   * @return bool|null
+   * @throws ORMException
    */
   public static function dropTableIfExists(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
@@ -195,14 +200,16 @@ class Schema implements ISchema
     }
     catch(ReflectionException $e)
     {
-      exit(new ORMException(message: $e->getMessage()));
-    }
-    catch (ORMException $e)
-    {
-      exit($e);
+      throw new ORMException(message: $e->getMessage());
     }
   }
 
+  /**
+   * @param PDO|DataSource $dataSource
+   * @param string $databaseName
+   * @return bool
+   * @throws GeneralSQLQueryException
+   */
   public static function dbExists(PDO|DataSource $dataSource, string $databaseName): bool
   {
     $query = "SHOW DATABASES LIKE '$databaseName'";
@@ -212,7 +219,7 @@ class Schema implements ISchema
 
     if ($executionResult === false)
     {
-      exit(new GeneralSQLQueryException());
+      throw new GeneralSQLQueryException();
     }
 
     $result = $executionResult->fetchAll(PDO::FETCH_ASSOC);
@@ -220,6 +227,14 @@ class Schema implements ISchema
     return !empty($result);
   }
 
+  /**
+   * @param PDO|DataSource $dataSource
+   * @param string $databaseName
+   * @param string $tableName
+   * @param SQLDialect $dialect
+   * @return bool
+   * @throws GeneralSQLQueryException
+   */
   public static function dbTableExists(PDO|DataSource $dataSource, string $databaseName, string $tableName, SQLDialect $dialect = SQLDialect::MYSQL): bool
   {
     $query = "SHOW TABLES LIKE '$tableName'";
@@ -230,7 +245,7 @@ class Schema implements ISchema
 
     if ($executionResult === false)
     {
-      exit(new GeneralSQLQueryException());
+      throw new GeneralSQLQueryException();
     }
 
     $result = $executionResult->fetchAll(PDO::FETCH_ASSOC);

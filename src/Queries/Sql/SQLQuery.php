@@ -6,6 +6,7 @@ use Assegai\Orm\Config;
 use Assegai\Orm\Exceptions\ORMException;
 use Exception;
 use PDO;
+use PDOException;
 use stdClass;
 
 final class SQLQuery
@@ -249,6 +250,7 @@ final class SQLQuery
 
   /**
    * @return SQLQueryResult
+   * @throws ORMException
    */
   public function execute(): SQLQueryResult
   {
@@ -285,19 +287,17 @@ final class SQLQuery
 
       return new SQLQueryResult( data: [], errors: $errors, isOK: false );
     }
-    catch (Exception)
+    catch (PDOException)
     {
       list($sqlCode, $driverCode, $message) = $statement->errorInfo();
       if (Config::environment('ENVIRONMENT') === 'PROD')
       {
         $message = 'Bad Request';
       }
-      $ormException = match($sqlCode) {
+      throw match($sqlCode) {
         '23000' => new ORMException(message: "$driverCode - $message"),
         default => new ORMException(message: "General SQL error - $message")
       };
-
-      exit($ormException . PHP_EOL);
     }
   }
 

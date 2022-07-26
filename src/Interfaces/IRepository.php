@@ -26,23 +26,23 @@ interface IRepository
    * given entities in a single transaction. Also supports partial updating since all
    * undefined properties are skipped.
    *
-   * @param Entity|array<Entity> $targetOrEntity The target entity/entities to be saved.
+   * @param object|array<Entity> $targetOrEntity The target entity/entities to be saved.
    *
-   * @return Entity|array Returns the saved entity/entities.
+   * @return object|array Returns the saved entity/entities.
    * @throws IllegalTypeException
    */
-  public function save(Entity|array $targetOrEntity): Entity|array;
+  public function save(object|array $targetOrEntity): object|array;
 
   /**
    * Creates a new entity instance or instances. Optionally accepts an object literal with entity
    * properties which will be written into newly created Entity object.
    *
-   * @param null|Entity|array $plainObjectOrObjects an object or array literal with entity properties
+   * @param Entity|array|null $plainObjectOrObjects an object or array literal with entity properties
    *
-   * @return Entity|array<Entity> Returns a newly created Entity object
+   * @return object|array<Entity> Returns a newly created Entity object
    * @throws ClassNotFoundException
    */
-  public function create(null|Entity|array $plainObjectOrObjects = null): Entity|array;
+  public function create(null|Entity|array $plainObjectOrObjects = null): object|array;
 
   /**
    * Merges multiple entities into a single entity.
@@ -61,7 +61,7 @@ interface IRepository
    * replaced from the new object.
    * @throws ORMException
    */
-  public function preload(object $entityLike): ?Entity;
+  public function preload(object $entityLike): ?object;
 
   /**
    * Inserts a given entity into the database.
@@ -96,7 +96,7 @@ interface IRepository
    * @param Entity|Entity[] $entity
    * @return InsertResult|UpdateResult
    */
-  public function upsert(Entity|array $entity): InsertResult|UpdateResult;
+  public function upsert(object|array $entity): InsertResult|UpdateResult;
 
   /**
    * Removes a given entity from the database.
@@ -111,11 +111,11 @@ interface IRepository
   /**
    * Records the deletion date of a given entity.
    *
-   * @param Entity|array $entityOrEntities
+   * @param object|array $entityOrEntities
    * @param SaveOptions|null $removeOptions
    * @return UpdateResult Returns the removed entities.
    */
-  public function softRemove(Entity|array $entityOrEntities, ?SaveOptions $removeOptions = null): UpdateResult;
+  public function softRemove(object|array $entityOrEntities, ?SaveOptions $removeOptions = null): UpdateResult;
 
   /**
    * Deletes entities by a given condition(s).
@@ -126,12 +126,12 @@ interface IRepository
    * Does not check if the entity exists in the database.
    * Condition(s) cannot be empty.
    *
-   * @param int|array|Entity $conditions The deletion conditions.
+   * @param int|array|object $conditions The deletion conditions.
    *
    * @return DeleteResult Returns the removed entities.
    * @throws ORMException
    */
-  public function delete(int|array|Entity $conditions): DeleteResult;
+  public function delete(int|array|object $conditions): DeleteResult;
 
   /**
    * Restores entities by a given condition(s).
@@ -140,7 +140,7 @@ interface IRepository
    * Does not check if entity exist in the database.
    * Condition(s) cannot be empty.
    */
-  public function restore(int|array|Entity $conditions): UpdateResult;
+  public function restore(int|array|object $conditions): UpdateResult;
 
   /**
    * Counts entities that match given options.
@@ -191,5 +191,5 @@ interface IRepository
    *
    * @return null|Entity Returns the entity if found, null otherwise.
    */
-  public function findOne(FindOptions|FindOneOptions $options): ?Entity;
+  public function findOne(FindOptions|FindOneOptions $options): ?object;
 }

@@ -69,7 +69,7 @@ class Filter
     return $name;
   }
 
-  public static function getDeleteDateColumnName(Entity $entity): string
+  public static function getDeleteDateColumnName(object $entity): string
   {
     $instance = new ReflectionClass($entity);
     $properties = $instance->getProperties(ReflectionProperty::IS_PUBLIC);
