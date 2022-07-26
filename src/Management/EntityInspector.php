@@ -5,7 +5,6 @@ namespace Assegai\Orm\Management;
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
-use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Exceptions\ORMException;
 use DateTime;
 use ReflectionClass;
@@ -98,6 +97,7 @@ final class EntityInspector
   /**
    * @param object $entity
    * @param array $exclude
+   * @param array $options
    * @return array
    * @throws ClassNotFoundException
    * @throws ORMException
