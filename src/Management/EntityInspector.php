@@ -103,8 +103,9 @@ final class EntityInspector
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function getValues(object $entity, array $exclude = []): array
+  public function getValues(object $entity, array $exclude = [], array $options = ['filter' => true]): array
   {
+    $filterValues = $options['filter'] ?? true;
     $values = [];
     $class = get_class($entity);
     self::validateEntityName($class);
@@ -143,7 +144,14 @@ final class EntityInspector
           default => $property
         };
       }
-      $values[] = $property;
+      $filteredValue = match(gettype($entity->$propName)) {
+        'integer' => filter_var($property, FILTER_SANITIZE_NUMBER_INT),
+        'double' => filter_var($property, FILTER_SANITIZE_NUMBER_FLOAT),
+        'boolean' => boolval($property),
+        'string' => filter_var($property, FILTER_SANITIZE_ADD_SLASHES),
+        default => $property
+      };
+      $values[] = ($filterValues) ? $filteredValue : $property;
     }
 
     return $values;

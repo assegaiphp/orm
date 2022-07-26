@@ -32,6 +32,8 @@ class EntityManager
   protected array $repositories = [];
 
   protected array $readonlyColumns = ['id', 'createdAt', 'updatedAt', 'deletedAt'];
+  protected array $secure = ['password'];
+  protected array $customSecure = [];
 
   /**
    * @param DataSource $connection
@@ -282,11 +284,17 @@ class EntityManager
       throw new GeneralSQLQueryException($this->query);
     }
 
-    $generatedMaps = new stdClass();
-    foreach ($result->value() as $key => $value)
+    $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
+    $generatedMaps->id = $this->lastInsertId();
+
+    foreach ($generatedMaps as $prop => $value)
     {
-      $generatedMaps->$key = $value;
+      if (in_array($prop, $this->getSecure()))
+      {
+        unset($generatedMaps->$prop);
+      }
     }
+
     return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: $generatedMaps);
   }
 
@@ -873,5 +881,21 @@ class EntityManager
   public static function isNotEntity(string|object $className): bool
   {
     return ! self::isEntity(className: $className);
+  }
+
+  /**
+   * @return array|string[]
+   */
+  public function getSecure(): array
+  {
+    return array_merge($this->secure, $this->customSecure);
+  }
+
+  /**
+   * @param array|string[] $secure
+   */
+  public function setSecure(array $secure): void
+  {
+    $this->customSecure = $secure;
   }
 }
