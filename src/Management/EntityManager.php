@@ -23,6 +23,7 @@ use NumberFormatter;
 use PDOStatement;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionProperty;
 use stdClass;
 
 class EntityManager
@@ -158,7 +159,7 @@ class EntityManager
    *
    * @return object Returns a newly created Entity object
    * @throws ClassNotFoundException
-   * @throws ORMException
+   * @throws ORMException|ReflectionException
    */
   public function create(string $entityClass, null|object|array $entityLike = null): object
   {
@@ -172,6 +173,12 @@ class EntityManager
       {
         if (property_exists($entity, $key))
         {
+          $reflection = new ReflectionProperty($entityClass, $key);
+          if (is_null($value) && !$reflection->getType()->allowsNull())
+          {
+            continue;
+          }
+
           $entity->$key = $value;
         }
       }
@@ -314,6 +321,7 @@ class EntityManager
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function update(
     string $entityClass,
@@ -370,7 +378,10 @@ class EntityManager
     {
       if (in_array($prop, $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns)))
       {
-        $assignmentList[$prop] = $value;
+        if (!is_null($value))
+        {
+          $assignmentList[$prop] = $value;
+        }
       }
     }
 
