@@ -2,14 +2,25 @@
 
 namespace Assegai\Orm\Management;
 
-use stdClass;
-
+/**
+ *
+ */
 final class FindWhereOptions
 {
-  public function __construct(public readonly stdClass|array $conditions)
+  /**
+   * @param object|array $conditions
+   * @param array $exclude
+   */
+  public function __construct(
+    public readonly object|array $conditions,
+    public readonly array $exclude = ['password'],
+  )
   {
   }
 
+  /**
+   * @return string
+   */
   public function __toString(): string
   {
     $output = '';

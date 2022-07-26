@@ -12,8 +12,12 @@ final class FindRelationsOptions
 {
   /**
    * @param stdClass | array<KeyBoolPair> $relations
+   * @param array $exclude
    */
-  public function __construct(public readonly stdClass|array $relations)
+  public function __construct(
+    public readonly object|array $relations,
+    public readonly array $exclude = ['password'],
+  )
   {
   }
 }
