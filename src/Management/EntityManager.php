@@ -409,7 +409,7 @@ class EntityManager
    * Removes a given entity from the database.
    *
    * @param object|object[] $entityOrEntities
-   * @param SaveOptions|null $removeOptions
+   * @param RemoveOptions|null $removeOptions
    * @return DeleteResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
@@ -417,7 +417,7 @@ class EntityManager
    */
   public function remove(
     object|array $entityOrEntities,
-    ?SaveOptions $removeOptions = null
+    ?RemoveOptions $removeOptions = null
   ): DeleteResult
   {
     if (is_object($entityOrEntities))
@@ -455,7 +455,7 @@ class EntityManager
    * Records the deletion date of a given entity.
    *
    * @param object|object[] $entityOrEntities
-   * @param SaveOptions|null $removeOptions
+   * @param RemoveOptions|null $removeOptions
    * @return UpdateResult Returns the removed entities.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
@@ -463,7 +463,7 @@ class EntityManager
    */
   public function softRemove(
     object|array $entityOrEntities,
-    ?SaveOptions $removeOptions = null
+    ?RemoveOptions $removeOptions = null
   ): UpdateResult
   {
     $result = null;

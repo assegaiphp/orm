@@ -7,6 +7,7 @@ use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Exceptions\ORMException;
+use DateTime;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
@@ -128,9 +129,19 @@ final class EntityInspector
           }
         }
       }
-      if (is_object($property) && property_exists($property, 'value'))
+
+      // TODO: Perform type conversion
+      if (is_object($property))
       {
-        $property = $property->value;
+        if (property_exists($property, 'value'))
+        {
+          $property = $property->value;
+        }
+
+        $property = match(true) {
+          $property instanceof DateTime => $property->format(DATE_ATOM),
+          default => $property
+        };
       }
       $values[] = $property;
     }
