@@ -7,6 +7,9 @@ namespace Assegai\Orm\Management;
  */
 class FindOneOptions extends FindOptions
 {
+  public readonly ?int $limit;
+  public readonly ?int $skip;
+
   /**
    * Constructs a `FindOneOptions` object
    *
@@ -14,8 +17,6 @@ class FindOneOptions extends FindOptions
    * @param object|array|null $relations Indicates what relations of entity should be loaded (simplified left join form).
    * @param FindWhereOptions|array|null $where Simple condition that should be applied to match entities.
    * @param object|array|null $order Order, in which entities should be ordered.
-   * @param null|int $skip Skips/offsets the specified number of entities.
-   * @param null|int $limit Specifies the number of entities to return.
    * @param array|JoinOptions|null $join Specifies what relations should be loaded.
    * @param array $exclude
    * @noinspection PhpMissingParentConstructorInspection
@@ -25,11 +26,13 @@ class FindOneOptions extends FindOptions
     public readonly null|object|array $relations = null,
     public readonly null|FindWhereOptions|array $where = null,
     public readonly null|object|array $order = null,
-    public readonly ?int $skip = null,
-    public readonly ?int $limit = null,
     public readonly null|array|JoinOptions $join = null,
     public readonly array $exclude = ['password'],
-  ) { }
+  )
+  {
+    $this->skip = 0;
+    $this->limit = 1;
+  }
 
   /**
    * @param array $options
@@ -64,8 +67,6 @@ class FindOneOptions extends FindOptions
       relations: $relations,
       where: $where,
       order: $order,
-      skip: $skip,
-      limit: $limit,
       join: $join,
       exclude: $exclude
     );

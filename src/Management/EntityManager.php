@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Management;
 
+use Assegai\Core\Config;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
@@ -685,7 +686,10 @@ class EntityManager
       $statement = $statement->where(condition: $findOptions);
     }
 
-    $result = $statement->execute();
+    $limit = $findOptions->limit ?? $_GET['limit'] ?? Config::get('DEFAULT_LIMIT') ?? 10;
+    $skip = $findOptions->skip ?? $_GET['skip'] ?? Config::get('DEFAULT_SKIP') ?? 0;
+
+    $result = $statement->limit(limit: $limit, offset: $skip)->execute();
 
     if ($result->isError())
     {
@@ -720,7 +724,10 @@ class EntityManager
       ->from(tableReferences: $this->inspector->getTableName(entity: $entity))
       ->where(condition: $where);
 
-    $result = $statement->execute();
+    $limit = $findOptions->limit ?? $_GET['limit'] ?? 100;
+    $skip = $findOptions->skip ?? $_GET['skip'] ?? 0;
+
+    $result = $statement->limit(limit: $limit, offset: $skip)->execute();
 
     if ($result->isError())
     {
