@@ -139,12 +139,13 @@ class Config
   /**
    * @param string $name
    * @param string $value The new value to set the configuration to.
+   * @throws ORMException
    */
   public static function setWorkspace(string $name, mixed $value): void
   {
     if (!file_exists('assegai.json'))
     {
-      exit(new ORMException('Missing workspace config file: assegai.json'));
+      throw new ORMException('Missing workspace config file: assegai.json');
     }
 
     $config = file_get_contents('assegai.json');
