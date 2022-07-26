@@ -15,6 +15,7 @@ use Assegai\Orm\Management\FindManyOptions;
 use Assegai\Orm\Management\FindOneOptions;
 use Assegai\Orm\Management\FindOptions;
 use Assegai\Orm\Management\FindWhereOptions;
+use Assegai\Orm\Management\RemoveOptions;
 use Assegai\Orm\Management\SaveOptions;
 use Assegai\Orm\Interfaces\IRepository;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
@@ -124,7 +125,7 @@ class Repository implements IRepository
   /**
    * @inheritDoc
    */
-  public function remove(array|object $entityOrEntities, ?SaveOptions $removeOptions = null): DeleteResult
+  public function remove(array|object $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult
   {
     return $this->manager->remove(entityOrEntities: $entityOrEntities, removeOptions: $removeOptions);
   }
@@ -138,7 +139,7 @@ class Repository implements IRepository
    * @throws GeneralSQLQueryException
    * @throws ORMException
    */
-  public function softRemove(array|object $entityOrEntities, ?SaveOptions $removeOptions = null): UpdateResult
+  public function softRemove(array|object $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
   {
     return $this->manager->softRemove(entityOrEntities: $entityOrEntities, removeOptions: $removeOptions);
   }
@@ -165,51 +166,67 @@ class Repository implements IRepository
   }
 
   /**
-   * @param FindOptions|null $options
+   * @param FindOptions|array|null $options
    * @return int
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    */
-  public function count(?FindOptions $options = null): int
+  public function count(FindOptions|array|null $options = null): int
   {
+    if (is_array($options))
+    {
+      $options = FindOneOptions::fromArray($options);
+    }
     return $this->manager->count(entityClass: $this->entityId, options: $options);
   }
 
   /**
-   * @param FindOptions|null $findOptions
+   * @param FindOptions|array|null $findOptions
    * @return array|null
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    */
-  public function find(?FindOptions $findOptions = new FindOptions()): ?array
+  public function find(FindOptions|array|null $findOptions = new FindOptions()): ?array
   {
+    if (is_array($findOptions))
+    {
+      $findOptions = FindOneOptions::fromArray($findOptions);
+    }
     return $this->manager->find(entityClass: $this->entityId, findOptions: $findOptions);
   }
 
   /**
-   * @param FindWhereOptions $where
+   * @param FindWhereOptions|array $where
    * @return array|null
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    */
-  public function findBy(FindWhereOptions $where): ?array
+  public function findBy(FindWhereOptions|array $where): ?array
   {
+    if (is_array($where))
+    {
+      $where = FindOneOptions::fromArray($where);
+    }
     return $this->manager->findBy(entityClass: $this->entityId, where: $where);
   }
 
   /**
-   * @param FindManyOptions|null $options
+   * @param FindManyOptions|array|null $options
    * @return array
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    */
   #[ArrayShape(['entities' => "\array|null", 'count' => "int"])]
-  public function findAndCount(?FindManyOptions $options = null): array
+  public function findAndCount(FindManyOptions|array|null $options = null): array
   {
+    if (is_array($options))
+    {
+      $options = FindOneOptions::fromArray($options);
+    }
     return $this->manager->findAndCount(entityClass: $this->entityId, options: $options);
   }
 
@@ -231,7 +248,9 @@ class Repository implements IRepository
   }
 
   /**
-   * @param FindOptions|FindOneOptions|array $options
+   * @param FindOptions|FindOneOptions|array $options If an array is passed, the whole array will be used to generate
+   * the `where` clause of a FindOneOptions object. To specify the other options, you must explicitly specify
+   * the `where` clause e.g. 'where' => '...'
    * @return Entity|null
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException

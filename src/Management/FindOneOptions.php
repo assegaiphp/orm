@@ -46,6 +46,14 @@ class FindOneOptions extends FindOptions
     $join = $options['join'] ?? ['password'];
     $exclude = $options['exclude'] ?? ['password'];
 
+    if (
+      !$where &&
+      !empty($options)
+    )
+    {
+      $where = $options;
+    }
+
     if (is_array($where))
     {
       $where = new FindWhereOptions($where);
