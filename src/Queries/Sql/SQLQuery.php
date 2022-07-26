@@ -2,9 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Orm\Config;
+use Assegai\Core\Config;
 use Assegai\Orm\Exceptions\ORMException;
-use Exception;
 use PDO;
 use PDOException;
 use stdClass;
