@@ -38,6 +38,7 @@ class Column
    * @param string $comment
    * @param bool $canUpdate
    * @param string $enum
+   * @throws ORMException
    */
   public function __construct(
     public string                $name = '',
@@ -58,7 +59,6 @@ class Column
     public string                $enum = ''
   )
   {
-
     # Build definition string
     if ($this->type === SQLDataTypes::ENUM && !empty($this->enum))
     {
@@ -72,7 +72,7 @@ class Column
         {
           if (!isset($case->value))
           {
-            exit(new ORMException('Enum ' . $this->enum . ' is NOT backed.'));
+            throw new ORMException('Enum ' . $this->enum . ' is NOT backed.');
           }
           $this->lengthOrValues[] = $case->value;
         }
@@ -116,13 +116,18 @@ class Column
     $this->value .= 'NULL ';
 
     if ($zeroFilled && !$signed)  { $this->value .= Column::ZEROFILL . ' '; }
-    if (isset($defaultValue))
+    if (isset($this->defaultValue))
     {
-      if (is_object($defaultValue) && property_exists($defaultValue, 'value'))
+      if (is_object($this->defaultValue) && property_exists($this->defaultValue, 'value'))
       {
-        $defaultValue = $defaultValue->value;
+        $this->defaultValue = $this->defaultValue->value;
       }
-      $this->value .= "DEFAULT $defaultValue ";
+      else if(is_callable($this->defaultValue))
+      {
+        $this->defaultValue = call_user_func($this->defaultValue);
+      }
+
+      $this->value .= "DEFAULT $this->defaultValue ";
     }
 
     if ($autoIncrement)           { $this->value .= "AUTO_INCREMENT "; }
