@@ -223,18 +223,26 @@ class Repository implements IRepository
   #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
   public function findAndCountBy(FindWhereOptions|array $where): array
   {
+    if (is_array($where))
+    {
+      $where = FindOneOptions::fromArray($where);
+    }
     return $this->manager->findAndCountBy(entityClass: $this->entityId, where: $where);
   }
 
   /**
-   * @param FindOptions|FindOneOptions $options
+   * @param FindOptions|FindOneOptions|array $options
    * @return Entity|null
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    */
-  public function findOne(FindOptions|FindOneOptions $options): ?object
+  public function findOne(FindOptions|FindOneOptions|array $options): ?object
   {
+    if (is_array($options))
+    {
+      $options = FindOneOptions::fromArray($options);
+    }
     return $this->manager->findOne(entityClass: $this->entityId, options: $options);
   }
 }

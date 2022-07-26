@@ -2,6 +2,9 @@
 
 namespace Assegai\Orm\Management;
 
+/**
+ *
+ */
 class RemoveOptions
 {
   /**
@@ -27,4 +30,23 @@ class RemoveOptions
     public readonly ?bool $transaction = false,
     public readonly ?int $chunk = null,
   ) { }
+
+  /**
+   * @param array $options
+   * @return RemoveOptions
+   */
+  public static function fromArray(array $options): RemoveOptions
+  {
+    $data = $options['data'] ?? null;
+    $listeners = $options['listeners'] ?? true;
+    $transaction = $options['transaction'] ?? false;
+    $chunk = $options['chunk'] ?? null;
+
+    return new RemoveOptions(
+      data: $data,
+      listeners: $listeners,
+      transaction: $transaction,
+      chunk: $chunk
+    );
+  }
 }

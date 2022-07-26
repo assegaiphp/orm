@@ -20,4 +20,16 @@ final class FindRelationsOptions
   )
   {
   }
+
+  /**
+   * @param array $options
+   * @return FindRelationsOptions
+   */
+  public static function fromArray(array $options): FindRelationsOptions
+  {
+    $relations = $options['$relations'] ?? [];
+    $exclude = $options['exclude'] ?? ['password'];
+
+    return new FindRelationsOptions(relations: $relations, exclude: $exclude);
+  }
 }

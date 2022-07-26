@@ -19,6 +19,18 @@ final class FindWhereOptions
   }
 
   /**
+   * @param array $options
+   * @return FindWhereOptions
+   */
+  public static function fromArray(array $options): FindWhereOptions
+  {
+    $conditions = $options['conditions'] ?? [];
+    $exclude = $options['exclude'] ?? ['password'];
+
+    return new FindWhereOptions(conditions: $conditions, exclude: $exclude);
+  }
+
+  /**
    * @return string
    */
   public function __toString(): string

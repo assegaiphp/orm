@@ -54,4 +54,25 @@ class JoinOptions
     public readonly null|stdClass|array $leftJoin,
     public readonly null|stdClass|array $innerJoin,
   ) { }
+
+  /**
+   * @param array $options
+   * @return JoinOptions
+   */
+  public static function fromArray(array $options): JoinOptions
+  {
+    $alias = $options['alias'] ?? null;
+    $leftJoinAndSelect = $options['leftJoinAndSelect'] ?? null;
+    $innerJoinAndSelect = $options['innerJoinAndSelect'] ?? null;
+    $leftJoin = $options['leftJoin'] ?? null;
+    $innerJoin = $options['innerJoin'] ?? null;
+
+    return new JoinOptions(
+      alias: $alias,
+      leftJoinAndSelect: $leftJoinAndSelect,
+      innerJoinAndSelect: $innerJoinAndSelect,
+      leftJoin: $leftJoin,
+      innerJoin: $innerJoin
+    );
+  }
 }

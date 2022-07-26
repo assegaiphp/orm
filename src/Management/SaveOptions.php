@@ -2,6 +2,9 @@
 
 namespace Assegai\Orm\Management;
 
+/**
+ *
+ */
 class SaveOptions
 {
   /**
@@ -34,4 +37,25 @@ class SaveOptions
     public readonly ?int $chunk = null,
     public readonly ?bool $reload = null,
   ) { }
+
+  /**
+   * @param array $options
+   * @return SaveOptions
+   */
+  public static function fromArray(array $options): SaveOptions
+  {
+    $data = $options['data'] ?? null;
+    $listeners = $options['listeners'] ?? true;
+    $transaction = $options['transaction'] ?? false;
+    $chunk = $options['chunk'] ?? null;
+    $reload = $options['reload'] ?? null;
+
+    return new SaveOptions(
+      data: $data,
+      listeners: $listeners,
+      transaction: $transaction,
+      chunk: $chunk,
+      reload: $reload
+    );
+  }
 }
