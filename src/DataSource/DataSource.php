@@ -8,6 +8,7 @@ use Assegai\ORM\Exceptions\DataSourceException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Interfaces\IRepository;
 use Assegai\Orm\Management\EntityManager;
+use Assegai\Orm\Management\Repository;
 use JetBrains\PhpStorm\ArrayShape;
 use PDO;
 use ReflectionClass;

@@ -1,8 +1,9 @@
 <?php
 
-namespace Assegai\Orm\DataSource;
+namespace Assegai\Orm\Management;
 
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
@@ -10,13 +11,6 @@ use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
-use Assegai\Orm\Management\EntityManager;
-use Assegai\Orm\Management\FindManyOptions;
-use Assegai\Orm\Management\FindOneOptions;
-use Assegai\Orm\Management\FindOptions;
-use Assegai\Orm\Management\FindWhereOptions;
-use Assegai\Orm\Management\RemoveOptions;
-use Assegai\Orm\Management\SaveOptions;
 use Assegai\Orm\Interfaces\IRepository;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;

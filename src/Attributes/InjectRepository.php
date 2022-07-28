@@ -2,12 +2,12 @@
 
 namespace Assegai\Orm\Attributes;
 
-use Assegai\Orm\DataSource\DataSourceOptions;
-use Assegai\Orm\DataSource\Repository;
-use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\DataSource\DataSourceOptions;
+use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\EntityManager;
+use Assegai\Orm\Management\Repository;
 use Attribute;
 use ReflectionClass;
 use ReflectionException;
