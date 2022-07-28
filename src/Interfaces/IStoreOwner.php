@@ -14,10 +14,10 @@ interface IStoreOwner
   public function getStore(?string $name = null): array;
 
   /**
-   * @param $string
+   * @param string $key
    * @return object|null
    */
-  public function getStoreEntry($string): ?object;
+  public function getStoreEntry(string $key): ?object;
 
   /**
    * @param string $key
