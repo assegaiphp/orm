@@ -2,8 +2,6 @@
 
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
-use stdClass;
-
 class InsertResult
 {
   /**
