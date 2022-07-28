@@ -13,6 +13,7 @@ use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
 use Assegai\Orm\Exceptions\NotFoundException;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Interfaces\IEntityStoreOwner;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
@@ -26,15 +27,27 @@ use ReflectionException;
 use ReflectionProperty;
 use stdClass;
 
-class EntityManager
+/**
+ *
+ */
+class EntityManager implements IEntityStoreOwner
 {
   /**
    * Once created and then reused by repositories.
    */
-  protected array $repositories = [];
+  protected array $entities = [];
 
+  /**
+   * @var array|string[]
+   */
   protected array $readonlyColumns = ['id', 'createdAt', 'updatedAt', 'deletedAt'];
+  /**
+   * @var array|string[]
+   */
   protected array $secure = ['password'];
+  /**
+   * @var array
+   */
   protected array $customSecure = [];
 
   /**
@@ -55,6 +68,9 @@ class EntityManager
     }
   }
 
+  /**
+   * @return int|null
+   */
   public function lastInsertId(): ?int
   {
     return $this->query->lastInsertId();
@@ -100,7 +116,7 @@ class EntityManager
       {
         $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity);
       }
-      else if ($entity = $this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id])))
+      else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id])))
       {
         $saveResult = $this->update(entityClass: $targetOrEntity::class, partialEntity: $targetOrEntity, conditions: ['id' => $targetOrEntity->id]);
       }
@@ -238,6 +254,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function preload(string $entityClass, object $entityLike): ?object
   {
@@ -475,7 +492,7 @@ class EntityManager
    * Records the deletion date of a given entity.
    *
    * @param object|object[] $entityOrEntities
-   * @param RemoveOptions|null $removeOptions
+   * @param RemoveOptions|array|null $removeOptions
    * @return UpdateResult Returns the removed entities.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
@@ -483,7 +500,7 @@ class EntityManager
    */
   public function softRemove(
     object|array $entityOrEntities,
-    ?RemoveOptions $removeOptions = null
+    RemoveOptions|array|null $removeOptions = null
   ): UpdateResult
   {
     $result = null;
@@ -557,6 +574,7 @@ class EntityManager
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function delete(
     string $entityClass,
@@ -595,6 +613,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function restore(
     string $entityClass,
@@ -641,6 +660,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function count(
     string $entityClass,
@@ -681,6 +701,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function find(string $entityClass, ?FindOptions $findOptions = new FindOptions()): ?array
   {
@@ -718,7 +739,7 @@ class EntityManager
    * @return null|array<object> Returns a list of entities that match the given `FindWhereOptions`.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
-   * @throws ORMException
+   * @throws ORMException|ReflectionException
    */
   public function findBy(string $entityClass, FindWhereOptions|array $where): ?array
   {
@@ -759,6 +780,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "array|null", 'count' => "int"])]
   public function findAndCount(
@@ -781,6 +803,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
   public function findAndCountBy(
@@ -803,6 +826,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function findOne(
     string $entityClass,
@@ -915,5 +939,52 @@ class EntityManager
   public function setSecure(array $secure): void
   {
     $this->customSecure = $secure;
+  }
+
+  /**
+   * @param string|null $name
+   * @return array
+   */
+  public function getStore(?string $name = null): array
+  {
+    return $this->entities;
+  }
+
+  /**
+   * @param string $key
+   * @return object|null
+   */
+  public function getStoreEntry(string $key): ?object
+  {
+    return $this->hasStoreEntry($key) ? $this->getStoreEntry($key) : null;
+  }
+
+  /**
+   * @param string $key
+   * @param object $value
+   * @return int
+   */
+  public function addStoreEntry(string $key, object $value): int
+  {
+    return count($this->entities);
+  }
+
+  /**
+   * @param string $key
+   * @param object $value
+   * @return int
+   */
+  public function removeStoreEntry(string $key, object $value): int
+  {
+    return count($this->entities);
+  }
+
+  /**
+   * @param string $key
+   * @return bool
+   */
+  public function hasStoreEntry(string $key): bool
+  {
+    return isset($this->entities[$key]);
   }
 }
