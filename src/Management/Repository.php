@@ -3,7 +3,6 @@
 namespace Assegai\Orm\Management;
 
 use Assegai\Orm\Attributes\Entity;
-use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
@@ -21,8 +20,6 @@ use stdClass;
 
 class Repository implements IRepository
 {
-  public readonly DataSource $dataSource;
-
   /**
    * @param string $entityId
    * @param EntityManager $manager
@@ -62,7 +59,7 @@ class Repository implements IRepository
    * @param stdClass|array|null $plainObjectOrObjects
    * @return object
    * @throws ClassNotFoundException
-   * @throws ORMException
+   * @throws ORMException|ReflectionException
    */
   public function create(null|object|array $plainObjectOrObjects = null): object|array
   {
@@ -82,8 +79,8 @@ class Repository implements IRepository
    * @return Entity|null
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
-   * @throws IllegalTypeException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function preload(object $entityLike): ?object
   {
@@ -101,6 +98,7 @@ class Repository implements IRepository
 
   /**
    * @inheritDoc
+   * @throws ReflectionException
    */
   public function update(string|object|array $conditions, stdClass|array|Entity $entity): UpdateResult
   {
@@ -140,6 +138,7 @@ class Repository implements IRepository
 
   /**
    * @inheritDoc
+   * @throws ReflectionException
    */
   public function delete(int|array|object $conditions): DeleteResult
   {
@@ -148,11 +147,12 @@ class Repository implements IRepository
 
   /**
    * @inheritDoc
-   * @param int|array|stdClass $conditions
+   * @param int|array|object $conditions
    * @return UpdateResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function restore(int|array|object $conditions): UpdateResult
   {
@@ -165,6 +165,7 @@ class Repository implements IRepository
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function count(FindOptions|array|null $options = null): int
   {
@@ -181,6 +182,7 @@ class Repository implements IRepository
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function find(FindOptions|array|null $findOptions = new FindOptions()): ?array
   {
@@ -197,6 +199,7 @@ class Repository implements IRepository
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function findBy(FindWhereOptions|array $where): ?array
   {
@@ -213,6 +216,7 @@ class Repository implements IRepository
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "\array|null", 'count' => "int"])]
   public function findAndCount(FindManyOptions|array|null $options = null): array
@@ -230,6 +234,7 @@ class Repository implements IRepository
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
   public function findAndCountBy(FindWhereOptions|array $where): array
@@ -249,6 +254,7 @@ class Repository implements IRepository
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function findOne(FindOptions|FindOneOptions|array $options): ?object
   {
