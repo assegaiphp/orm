@@ -16,15 +16,19 @@ class EntityProvider implements IProvider
 {
   /**
    * @param IEntityStoreOwner $owner
+   * @param IFactory|null $factory
    */
-  public function __construct(protected readonly IEntityStoreOwner $owner)
+  public function __construct(protected readonly IEntityStoreOwner $owner, protected ?IFactory $factory = null)
   {
   }
 
   /**
-   * @throws ReflectionException|ContainerException
+   * @param string $className
+   * @return object
+   * @throws ContainerException
+   * @throws ReflectionException
    */
-  public function get(string $className, ?IFactory $factory = null): object
+  public function get(string $className): object
   {
     if ($this->owner->hasStoreEntry($className))
     {
@@ -39,9 +43,9 @@ class EntityProvider implements IProvider
       throw new ContainerException(storeOwner: $this->owner, message: 'Cannot instantiate ' . $className);
     }
 
-    if ($factory)
+    if ($this->factory)
     {
-      return $factory->create($className);
+      return $this->factory->create($className);
     }
 
     return $reflectionClass->newInstance();
