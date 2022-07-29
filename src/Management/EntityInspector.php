@@ -11,14 +11,26 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 
+/**
+ * Provides for entity object introspection.
+ */
 final class EntityInspector
 {
+  /**
+   * @var EntityInspector|null
+   */
   private static ?EntityInspector $instance = null;
 
+  /**
+   * Constructs a new EntityInspector
+   */
   private final function __construct()
   {
   }
 
+  /**
+   * @return EntityInspector
+   */
   public static function getInstance(): EntityInspector
   {
     if (!self::$instance)
@@ -47,14 +59,15 @@ final class EntityInspector
 
     if (empty($entityAttribute))
     {
-      throw new ORMException(message: "Missing entity attribute for $entityClass");
+      throw new ORMException(message: "Missing Entity attribute for $entityClass");
     }
   }
 
   /**
+   * Returns a list of class property names that are marked with the `Column` attribute.
    * @param object $entity
    * @param array $exclude
-   * @return array
+   * @return array Returns a list of properties that are marked with the `Column` attribute.
    */
   public function getColumns(object $entity, array $exclude = []): array
   {
@@ -175,7 +188,6 @@ final class EntityInspector
     {
       $arguments = $attribute->getArguments();
       $tableName = $arguments['table'] ?? $this->getTableNameFromClassName(get_class($entity));
-//      Assegai\\Orm\\Attributes\\Entity
     }
 
     return $tableName;

@@ -9,6 +9,7 @@ use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Interfaces\IRepository;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Repository;
+use Assegai\Orm\Queries\Sql\SQLQuery;
 use JetBrains\PhpStorm\ArrayShape;
 use PDO;
 use ReflectionClass;
@@ -34,7 +35,6 @@ class DataSource
   ])]
   public function __construct(DataSourceOptions|array|null $options = null)
   {
-//    exit(var_export(['options' => $options], true) . PHP_EOL);
     $reflectionClass = new ReflectionClass($this);
     $refAttributes = $reflectionClass->getAttributes(DataSourceOptions::class);
 
@@ -42,12 +42,6 @@ class DataSource
     {
       throw new DataSourceException("DataSourceOptions not set");
     }
-
-//    /** @var ReflectionAttribute $refOptions */
-//    $refOptions = array_pop($refAttributes);
-//
-//    /** @var DataSourceOptions $options */
-//    $options = $refOptions->newInstance();
 
     $this->type = $options->type;
 
@@ -84,8 +78,12 @@ class DataSource
       };
     }
 
-//    exit(var_export(['connection' => $this], true) . PHP_EOL);
-    $this->manager = new EntityManager(connection: $this);
+    $this->manager = count($options->entities) === 1
+      ? new EntityManager(
+        connection: $this,
+        query: new SQLQuery(db: $this->db,fetchClass: $options->entities[0]::class, fetchMode: PDO::FETCH_CLASS)
+      )
+      : new EntityManager(connection: $this);
   }
 
   /**
