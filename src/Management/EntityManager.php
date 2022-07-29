@@ -5,6 +5,7 @@ namespace Assegai\Orm\Management;
 use Assegai\Core\Config;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
+use Assegai\Orm\Exceptions\ContainerException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
@@ -13,11 +14,16 @@ use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
 use Assegai\Orm\Exceptions\NotFoundException;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Exceptions\TypeConversionException;
+use Assegai\Orm\Interfaces\IEntityStoreOwner;
+use Assegai\Orm\Interfaces\IFactory;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Util\Filter;
+use Assegai\Orm\Util\TypeConversion\GeneralConverters;
+use Assegai\Orm\Util\TypeConversion\TypeResolver;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
 use PDOStatement;
@@ -26,26 +32,44 @@ use ReflectionException;
 use ReflectionProperty;
 use stdClass;
 
-class EntityManager
+/**
+ *
+ */
+class EntityManager implements IEntityStoreOwner
 {
   /**
    * Once created and then reused by repositories.
    */
-  protected array $repositories = [];
+  protected array $entities = [];
 
+  /**
+   * @var array|string[]
+   */
   protected array $readonlyColumns = ['id', 'createdAt', 'updatedAt', 'deletedAt'];
+  /**
+   * @var array|string[]
+   */
   protected array $secure = ['password'];
+  /**
+   * @var array
+   */
   protected array $customSecure = [];
+
+  protected array $defaultConverters = [];
+
+  protected array $customConverters = [];
 
   /**
    * @param DataSource $connection
    * @param SQLQuery|null $query
    * @param EntityInspector|null $inspector
+   * @param TypeResolver|null $typeResolver
    */
   public function __construct(
     protected DataSource $connection,
     protected ?SQLQuery $query = null,
     protected ?EntityInspector $inspector = null,
+    protected ?TypeResolver $typeResolver = null,
   )
   {
     $this->query = $query ?? new SQLQuery(db: $connection->db);
@@ -53,8 +77,18 @@ class EntityManager
     {
       $this->inspector = EntityInspector::getInstance();
     }
+
+    if (!$this->typeResolver)
+    {
+      $this->typeResolver = TypeResolver::getInstance();
+    }
+
+    $this->defaultConverters[] = new GeneralConverters();
   }
 
+  /**
+   * @return int|null
+   */
   public function lastInsertId(): ?int
   {
     return $this->query->lastInsertId();
@@ -100,7 +134,7 @@ class EntityManager
       {
         $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity);
       }
-      else if ($entity = $this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id])))
+      else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id])))
       {
         $saveResult = $this->update(entityClass: $targetOrEntity::class, partialEntity: $targetOrEntity, conditions: ['id' => $targetOrEntity->id]);
       }
@@ -238,6 +272,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function preload(string $entityClass, object $entityLike): ?object
   {
@@ -463,7 +498,7 @@ class EntityManager
     $raw = '';
     foreach ($entityOrEntities as $entity)
     {
-      $removeResult = $this->softRemove(entityOrEntities: $entity, removeOptions: $removeOptions);
+      $removeResult = $this->remove(entityOrEntities: $entity, removeOptions: $removeOptions);
       $affected += $removeResult->affected;
       $raw .= $removeResult->raw . PHP_EOL;
     }
@@ -475,7 +510,7 @@ class EntityManager
    * Records the deletion date of a given entity.
    *
    * @param object|object[] $entityOrEntities
-   * @param RemoveOptions|null $removeOptions
+   * @param RemoveOptions|array|null $removeOptions
    * @return UpdateResult Returns the removed entities.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
@@ -483,7 +518,7 @@ class EntityManager
    */
   public function softRemove(
     object|array $entityOrEntities,
-    ?RemoveOptions $removeOptions = null
+    RemoveOptions|array|null $removeOptions = null
   ): UpdateResult
   {
     $result = null;
@@ -557,6 +592,7 @@ class EntityManager
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function delete(
     string $entityClass,
@@ -595,6 +631,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function restore(
     string $entityClass,
@@ -641,6 +678,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function count(
     string $entityClass,
@@ -681,6 +719,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function find(string $entityClass, ?FindOptions $findOptions = new FindOptions()): ?array
   {
@@ -718,7 +757,7 @@ class EntityManager
    * @return null|array<object> Returns a list of entities that match the given `FindWhereOptions`.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
-   * @throws ORMException
+   * @throws ORMException|ReflectionException
    */
   public function findBy(string $entityClass, FindWhereOptions|array $where): ?array
   {
@@ -759,6 +798,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "array|null", 'count' => "int"])]
   public function findAndCount(
@@ -781,6 +821,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
   public function findAndCountBy(
@@ -803,6 +844,7 @@ class EntityManager
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function findOne(
     string $entityClass,
@@ -818,6 +860,11 @@ class EntityManager
 
     /** @var Entity $entityClass */
     return (object)$found[0];
+  }
+
+  public function useConverters(array $converters): void
+  {
+    $this->customConverters = $converters;
   }
 
   /**
@@ -915,5 +962,146 @@ class EntityManager
   public function setSecure(array $secure): void
   {
     $this->customSecure = $secure;
+  }
+
+  /**
+   * @param string $entityClassName
+   * @param object $object
+   * @param IFactory|null $factory
+   * @return object
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
+   * @throws ContainerException
+   */
+  public function getEntityFromObject(string $entityClassName, object $object, ?IFactory $factory = null): object
+  {
+    self::validateEntityName($entityClassName);
+
+    $provider = new EntityProvider($this, $factory);
+    $entity = $provider->get($entityClassName);
+
+    foreach ($object as $prop => $value)
+    {
+      if (property_exists($entity, $prop))
+      {
+        $sourceReflection = new ReflectionProperty($object, $prop);
+        $targetReflection = new ReflectionProperty($entity, $prop);
+
+        $sourceType = $sourceReflection->getType()?->getName() ?? match(gettype($object->$prop)) {
+            'integer' => 'int',
+            'double' => 'float',
+            'NULL' => null,
+            default => gettype($object->$prop)
+          };
+        $targetType = $targetReflection->getType()?->getName() ?? match(gettype($entity->$prop)) {
+            'integer' => 'int',
+            'double' => 'float',
+            'NULL' => null,
+            default => gettype($entity->$prop)
+        };
+
+        if (is_null($sourceType) || is_null($targetType))
+        {
+          continue;
+        }
+
+        if ($sourceType !== $targetType)
+        {
+          $value = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
+        }
+
+        $entity->$prop = $value;
+      }
+    }
+
+    return $entity;
+  }
+
+  /**
+   * @param string|null $name
+   * @return array
+   */
+  public function getStore(?string $name = null): array
+  {
+    return $this->entities;
+  }
+
+  /**
+   * @param string $key
+   * @return object|null
+   */
+  public function getStoreEntry(string $key): ?object
+  {
+    return $this->hasStoreEntry($key) ? $this->getStoreEntry($key) : null;
+  }
+
+  /**
+   * @param string $key
+   * @param object $value
+   * @return int
+   */
+  public function addStoreEntry(string $key, object $value): int
+  {
+    return count($this->entities);
+  }
+
+  /**
+   * @param string $key
+   * @param object $value
+   * @return int
+   */
+  public function removeStoreEntry(string $key, object $value): int
+  {
+    return count($this->entities);
+  }
+
+  /**
+   * @param string $key
+   * @return bool
+   */
+  public function hasStoreEntry(string $key): bool
+  {
+    return isset($this->entities[$key]);
+  }
+
+  /**
+   * @throws ReflectionException
+   * @throws TypeConversionException
+   */
+  private function castValue(mixed $value, string $sourceType, string $targetType): mixed
+  {
+    if (is_null($value))
+    {
+      return null;
+    }
+
+    foreach ($this->customConverters as $converter)
+    {
+      $result =
+        $this->typeResolver->resolve(
+          converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType
+        );
+
+      if (! is_null($result) )
+      {
+        return $result;
+      }
+    }
+
+    foreach ($this->defaultConverters as $converter)
+    {
+      $result =
+        $this->typeResolver->resolve(
+          converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType
+        );
+
+      if (! is_null($result) )
+      {
+        return $result;
+      }
+    }
+
+    return null;
   }
 }
