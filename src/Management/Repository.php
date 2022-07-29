@@ -4,12 +4,14 @@ namespace Assegai\Orm\Management;
 
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
+use Assegai\Orm\Exceptions\ContainerException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
+use Assegai\Orm\Interfaces\IFactory;
 use Assegai\Orm\Interfaces\IRepository;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
@@ -124,16 +126,19 @@ class Repository implements IRepository
 
   /**
    * @inheritDoc
-   * @param Entity|array|stdClass $entityOrEntities
-   * @param SaveOptions|null $removeOptions
+   * @param array|object $entityOrEntities
+   * @param RemoveOptions|array|null $removeOptions
    * @return UpdateResult
    * @throws ClassNotFoundException
+   * @throws ContainerException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function softRemove(array|object $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
   {
-    return $this->manager->softRemove(entityOrEntities: $entityOrEntities, removeOptions: $removeOptions);
+    $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entityOrEntities);
+    return $this->manager->softRemove(entityOrEntities: $entity, removeOptions: $removeOptions);
   }
 
   /**
@@ -263,5 +268,35 @@ class Repository implements IRepository
       $options = FindOneOptions::fromArray($options);
     }
     return $this->manager->findOne(entityClass: $this->entityId, options: $options);
+  }
+
+  /**
+   * @param string $entityClassName
+   * @param object|array $object $object
+   * @param IFactory|null $factory
+   * @return object|array
+   * @throws ClassNotFoundException
+   * @throws ContainerException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  protected function getEntityFromObject(string $entityClassName, object|array $object, ?IFactory $factory = null): object|array
+  {
+    if (is_array($object))
+    {
+      $results = [];
+      foreach ($object as $obj)
+      {
+        $results[] = $this->getEntityFromObject(entityClassName: $entityClassName, object: $obj, factory: $factory);
+      }
+
+      return $results;
+    }
+
+    return $this->manager->getEntityFromObject(
+      entityClassName: $entityClassName,
+      object: $object,
+      factory: $factory
+    );
   }
 }
