@@ -8,6 +8,7 @@ use Assegai\Orm\Exceptions\ContainerException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
+use Assegai\Orm\Exceptions\NotFoundException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
@@ -102,26 +103,43 @@ class Repository implements IRepository
    * @inheritDoc
    * @throws ReflectionException
    */
-  public function update(string|object|array $conditions, stdClass|array|Entity $entity): UpdateResult
+  public function update(string|object|array $conditions, object|array|null $entity): UpdateResult
   {
     return $this->manager->update(entityClass: $this->entityId, partialEntity: $entity, conditions: $conditions);
   }
 
   /**
    * @inheritDoc
+   * @param array|object|null $entity
+   * @return UpdateResult|InsertResult
+   * @throws ClassNotFoundException
+   * @throws ContainerException
    * @throws NotImplementedException
+   * @throws ORMException
+   * @throws ReflectionException
    */
-  public function upsert(array|object $entity): UpdateResult|InsertResult
+  public function upsert(array|object|null $entity): UpdateResult|InsertResult
   {
+    if (empty($entity))
+    {
+      throw new NotFoundException($this->entityId);
+    }
+    $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entity);
     return $this->manager->upsert(entityClass: $this->entityId, entityOrEntities: $entity);
   }
 
   /**
    * @inheritDoc
+   * @throws ReflectionException
    */
-  public function remove(array|object $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult
+  public function remove(array|object|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult
   {
-    return $this->manager->remove(entityOrEntities: $entityOrEntities, removeOptions: $removeOptions);
+    if (empty($entityOrEntities))
+    {
+      throw new NotFoundException($this->entityId);
+    }
+    $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entityOrEntities);
+    return $this->manager->remove(entityOrEntities: $entity, removeOptions: $removeOptions);
   }
 
   /**
@@ -135,8 +153,12 @@ class Repository implements IRepository
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function softRemove(array|object $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
+  public function softRemove(array|object|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
   {
+    if (empty($entityOrEntities))
+    {
+      throw new NotFoundException($this->entityId);
+    }
     $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entityOrEntities);
     return $this->manager->softRemove(entityOrEntities: $entity, removeOptions: $removeOptions);
   }
