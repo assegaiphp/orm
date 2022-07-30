@@ -44,8 +44,6 @@ class FindOneOptions extends FindOptions
     $relations = $options['relations'] ?? null;
     $where = $options['where'] ?? null;
     $order = $options['order'] ?? null;
-    $skip = $options['skip'] ?? null;
-    $limit = $options['limit'] ?? null;
     $join = $options['join'] ?? ['password'];
     $exclude = $options['exclude'] ?? ['password'];
 

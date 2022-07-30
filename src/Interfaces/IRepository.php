@@ -26,7 +26,7 @@ interface IRepository
    * given entities in a single transaction. Also supports partial updating since all
    * undefined properties are skipped.
    *
-   * @param object|array<Entity> $targetOrEntity The target entity/entities to be saved.
+   * @param object|array<object> $targetOrEntity The target entity/entities to be saved.
    * @return object|array Returns the saved entity/entities.
    * @throws IllegalTypeException
    */
@@ -36,20 +36,20 @@ interface IRepository
    * Creates a new entity instance or instances. Optionally accepts an object literal with entity
    * properties which will be written into newly created Entity object.
    *
-   * @param Entity|array|null $plainObjectOrObjects an object or array literal with entity properties
-   * @return object|array<Entity> Returns a newly created Entity object
+   * @param object|array|null $plainObjectOrObjects an object or array literal with entity properties
+   * @return object|array<object> Returns a newly created Entity object
    * @throws ClassNotFoundException
    */
-  public function create(null|Entity|array $plainObjectOrObjects = null): object|array;
+  public function create(null|object|array $plainObjectOrObjects = null): object|array;
 
   /**
    * Merges multiple entities into a single entity.
    *
-   * @param Entity[] ...$entities
-   * @return Entity Returns a single entity
+   * @param object[] ...$entities
+   * @return object Returns a single entity
    * @throws ClassNotFoundException
    */
-  public function merge(...$entities): Entity;
+  public function merge(...$entities): object;
 
   /**
    * Creates a new entity from the given plain php object. If the entity already exist in the database, then
@@ -70,11 +70,11 @@ interface IRepository
    * duplicate entity is being inserted.
    * You can execute bulk inserts using this method.
    *
-   * @param array|Entity $entity
+   * @param array|object $entity
    * @return InsertResult
    * @throws ORMException
    */
-  public function insert(array|Entity $entity): InsertResult;
+  public function insert(array|object $entity): InsertResult;
 
   /**
    * Updates entity partially. Entity can be found by a given condition(s).
@@ -83,37 +83,37 @@ interface IRepository
    * Does not check if entity exist in the database.
    * Condition(s) cannot be empty.
    *
-   * @param string|Entity|array $conditions
-   * @param array|Entity $entity
+   * @param string|object|array $conditions
+   * @param object|array|null $entity
    * @return UpdateResult
    * @throws ORMException
    */
-  public function update(string|Entity|array $conditions, Entity|array $entity): UpdateResult;
+  public function update(string|object|array $conditions, object|array|null $entity): UpdateResult;
 
   /**
-   * @param Entity|Entity[] $entity
+   * @param object|object[] $entity
    * @return InsertResult|UpdateResult
    */
-  public function upsert(object|array $entity): InsertResult|UpdateResult;
+  public function upsert(object|array|null $entity): InsertResult|UpdateResult;
 
   /**
    * Removes a given entity from the database.
    *
-   * @param Entity|array $entityOrEntities
+   * @param object|array|null $entityOrEntities
    * @param RemoveOptions|array|null $removeOptions
    * @return DeleteResult
    * @throws ORMException
    */
-  public function remove(Entity|array $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult;
+  public function remove(object|array|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult;
 
   /**
    * Records the deletion date of a given entity.
    *
-   * @param object|array $entityOrEntities
+   * @param object|array|null $entityOrEntities
    * @param RemoveOptions|array|null $removeOptions
    * @return UpdateResult Returns the removed entities.
    */
-  public function softRemove(object|array $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult;
+  public function softRemove(object|array|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult;
 
   /**
    * Deletes entities by a given condition(s).

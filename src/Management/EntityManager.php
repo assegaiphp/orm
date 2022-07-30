@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Management;
 
 use Assegai\Core\Config;
+use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ContainerException;
@@ -724,6 +725,13 @@ class EntityManager implements IEntityStoreOwner
   public function find(string $entityClass, ?FindOptions $findOptions = new FindOptions()): ?array
   {
     $entity = $this->create(entityClass: $entityClass);
+    $conditions = [];
+
+    if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass))
+    {
+      $conditions = array_merge($findOptions->where->conditions ?? [], [$deleteColumnName => 'NULL']);
+    }
+
     $statement
       = $this
       ->query
@@ -733,6 +741,10 @@ class EntityManager implements IEntityStoreOwner
 
     if (!empty($findOptions))
     {
+      if ($conditions)
+      {
+        $findOptions = new FindWhereOptions(conditions: $conditions);
+      }
       $statement = $statement->where(condition: $findOptions);
     }
 
@@ -1100,6 +1112,38 @@ class EntityManager implements IEntityStoreOwner
       {
         return $result;
       }
+    }
+
+    return null;
+  }
+
+  /**
+   * @param string|ReflectionClass $entityClass
+   * @return string|null
+   * @throws ReflectionException
+   */
+  private function getDeleteDateColumnName(string|ReflectionClass $entityClass): ?string
+  {
+    # If $entityClass is a string, get a reflection class
+    $reflection = is_string($entityClass) ? new ReflectionClass($entityClass) : $entityClass;
+
+    # Get properties
+    $properties = $reflection->getProperties(ReflectionProperty::IS_PUBLIC);
+
+    foreach ($properties as $property)
+    {
+      # Find DeleteDateColumn attribute
+      $deleteDateColumnAttributes = $property->getAttributes(DeleteDateColumn::class);
+
+      if (empty($deleteDateColumnAttributes))
+      {
+        continue;
+      }
+
+      # If name is specified use name, else use property name
+      $columnInstance = $deleteDateColumnAttributes[0]->newInstance();
+
+      return $columnInstance->name ?? $property->getName();
     }
 
     return null;

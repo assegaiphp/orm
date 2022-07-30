@@ -39,9 +39,9 @@ final class FindWhereOptions
 
     foreach ($this->conditions as $key => $value)
     {
-      $output .= "$key=$value";
+      $output .= ((is_null($value) || $value === 'NULL') ? "$key IS $value" : "$key=$value") . ' AND ';
     }
 
-    return $output;
+    return trim($output, ' AND');
   }
 }

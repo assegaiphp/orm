@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Management;
 
+use JetBrains\PhpStorm\ArrayShape;
+
 /**
  * Defines the search criteria for finding entities.
  */
@@ -74,5 +76,27 @@ class FindOptions
       limit: $limit,
       exclude: $exclude
     );
+  }
+
+  #[ArrayShape([
+    'select' => "array|null|object",
+    'relations' => "array|null|object",
+    'where' => "array|\Assegai\Orm\Management\FindWhereOptions|null",
+    'order' => "array|null|object",
+    'skip' => "int|null",
+    'limit' => "int|null",
+    'exclude' => "array|string[]"
+  ])]
+  public static function toArray(self $options): array
+  {
+    return [
+      'select' => $options->select,
+      'relations' => $options->relations,
+      'where' => $options->where,
+      'order' => $options->order,
+      'skip' => $options->skip,
+      'limit' => $options->limit,
+      'exclude' => $options->exclude
+    ];
   }
 }
