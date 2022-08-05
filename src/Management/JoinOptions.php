@@ -5,7 +5,7 @@ namespace Assegai\Orm\Management;
 use stdClass;
 
 /**
- *  * Used to specify what entity relations should be loaded.
+ * Used to specify what entity relations should be loaded.
  *
  * Example:
  *  JoinOptions $options = new JoinOptions(
