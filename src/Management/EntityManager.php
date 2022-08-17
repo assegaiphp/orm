@@ -410,7 +410,7 @@ class EntityManager implements IEntityStoreOwner
       return new UpdateResult(
         raw: $this->query->queryString(),
         affected: $this->query->rowCount(),
-        identifiers: $partialEntity,
+        identifiers: (object)$partialEntity,
         generatedMaps: $generatedMaps
       );
     }
