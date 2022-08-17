@@ -208,13 +208,21 @@ class EntityManager implements IEntityStoreOwner
       {
         if (property_exists($entity, $key))
         {
+          $sourceTypeReflection = new ReflectionProperty($entityLike, $key);
           $reflection = new ReflectionProperty($entityClass, $key);
           if (is_null($value) && !$reflection->getType()->allowsNull())
           {
             continue;
           }
 
-          $entity->$key = $value;
+          $sourceType = $sourceTypeReflection->getType()->getName();
+          $targetType = $reflection->getType()->getName();
+          $typesMatch = $sourceType === $targetType;
+
+          $entity->$key =
+            $typesMatch
+              ? $value
+              : $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType) ?? $value;
         }
       }
     }
@@ -786,8 +794,8 @@ class EntityManager implements IEntityStoreOwner
       ->from(tableReferences: $this->inspector->getTableName(entity: $entity))
       ->where(condition: $where);
 
-    $limit = $findOptions->limit ?? $_GET['limit'] ?? 100;
-    $skip = $findOptions->skip ?? $_GET['skip'] ?? 0;
+    $limit = $_GET['limit'] ?? 100;
+    $skip = $_GET['skip'] ?? 0;
 
     $result = $statement->limit(limit: $limit, offset: $skip)->execute();
 
