@@ -7,7 +7,7 @@ use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
 use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use DateTime;
 
-trait RecordsChangesTrait
+trait ChangeRecorderTrait
 {
   #[CreateDateColumn]
   public ?DateTime $createdAt = null;
