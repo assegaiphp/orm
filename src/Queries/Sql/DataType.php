@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-class SQLDataTypes
+class DataType
 {
   /* Numeric Data Types */
   const TINYINT = 'TINYINT';
@@ -69,21 +69,21 @@ class SQLDataTypes
     return in_array(
       $type,
       [
-        SQLDataTypes::TINYINT,
-        SQLDataTypes::TINYINT_UNSIGNED,
-        SQLDataTypes::BOOLEAN,
-        SQLDataTypes::SMALLINT,
-        SQLDataTypes::SMALLINT_UNSIGNED,
-        SQLDataTypes::MEDIUMINT,
-        SQLDataTypes::MEDIUMINT_UNSIGNED,
-        SQLDataTypes::INT,
-        SQLDataTypes::INT_UNSIGNED,
-        SQLDataTypes::BIGINT,
-        SQLDataTypes::BIGINT_UNSIGNED,
-        SQLDataTypes::DECIMAL,
-        SQLDataTypes::FLOAT,
-        SQLDataTypes::DOUBLE,
-        SQLDataTypes::BIT,
+        DataType::TINYINT,
+        DataType::TINYINT_UNSIGNED,
+        DataType::BOOLEAN,
+        DataType::SMALLINT,
+        DataType::SMALLINT_UNSIGNED,
+        DataType::MEDIUMINT,
+        DataType::MEDIUMINT_UNSIGNED,
+        DataType::INT,
+        DataType::INT_UNSIGNED,
+        DataType::BIGINT,
+        DataType::BIGINT_UNSIGNED,
+        DataType::DECIMAL,
+        DataType::FLOAT,
+        DataType::DOUBLE,
+        DataType::BIT,
       ]
     );
   }
@@ -97,24 +97,24 @@ class SQLDataTypes
     return in_array(
       $type,
       [
-        SQLDataTypes::BINARY,
-        SQLDataTypes::BLOB,
-        SQLDataTypes::TEXT,
-        SQLDataTypes::CHAR,
-        SQLDataTypes::ENUM,
-        SQLDataTypes::INET6,
-        SQLDataTypes::JSON,
-        SQLDataTypes::MEDIUMBLOB,
-        SQLDataTypes::MEDIUMTEXT,
-        SQLDataTypes::LONGBLOB,
-        SQLDataTypes::LONGTEXT,
-        SQLDataTypes::ROW,
-        SQLDataTypes::TINYBLOB,
-        SQLDataTypes::TINYTEXT,
-        SQLDataTypes::VARBINARY,
-        SQLDataTypes::VARCHAR,
-        SQLDataTypes::SET,
-        SQLDataTypes::UUID,
+        DataType::BINARY,
+        DataType::BLOB,
+        DataType::TEXT,
+        DataType::CHAR,
+        DataType::ENUM,
+        DataType::INET6,
+        DataType::JSON,
+        DataType::MEDIUMBLOB,
+        DataType::MEDIUMTEXT,
+        DataType::LONGBLOB,
+        DataType::LONGTEXT,
+        DataType::ROW,
+        DataType::TINYBLOB,
+        DataType::TINYTEXT,
+        DataType::VARBINARY,
+        DataType::VARCHAR,
+        DataType::SET,
+        DataType::UUID,
       ]
     );
   }
@@ -128,13 +128,13 @@ class SQLDataTypes
     return in_array(
       $type,
       [
-        SQLDataTypes::DATE,
-        SQLDataTypes::TIME,
-        SQLDataTypes::DATETIME,
-        SQLDataTypes::TIMESTAMP,
-        SQLDataTypes::YEAR,
-        SQLDataTypes::AUTO_INCREMENT,
-        SQLDataTypes::NULL,
+        DataType::DATE,
+        DataType::TIME,
+        DataType::DATETIME,
+        DataType::TIMESTAMP,
+        DataType::YEAR,
+        DataType::AUTO_INCREMENT,
+        DataType::NULL,
       ]
     );
   }
@@ -148,14 +148,14 @@ class SQLDataTypes
     return in_array(
       $type,
       [
-        SQLDataTypes::POINT,
-        SQLDataTypes::LINESTRING,
-        SQLDataTypes::POLYGON,
-        SQLDataTypes::MULTIPOINT,
-        SQLDataTypes::MULTILINESTRING,
-        SQLDataTypes::MULTIPOLYGON,
-        SQLDataTypes::GEOMETRYCOLLECTION,
-        SQLDataTypes::GEOMETRY,
+        DataType::POINT,
+        DataType::LINESTRING,
+        DataType::POLYGON,
+        DataType::MULTIPOINT,
+        DataType::MULTILINESTRING,
+        DataType::MULTIPOLYGON,
+        DataType::GEOMETRYCOLLECTION,
+        DataType::GEOMETRY,
       ]
     );
   }
