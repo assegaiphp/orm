@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5a9d2484d0fe50abbc8bc9b60af78bd5",
+    "content-hash": "f06ed63cfbd8bce401e2ddc6f5a79407",
     "packages": [
         {
             "name": "assegaiphp/core",
-            "version": "0.1.4",
+            "version": "0.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/assegaiphp/core.git",
-                "reference": "5e29133bc2f08e3c1ffde948bcc30331142a63c0"
+                "reference": "e5d069caf48fffe7316f544c09b83cdc658d1686"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/assegaiphp/core/zipball/5e29133bc2f08e3c1ffde948bcc30331142a63c0",
-                "reference": "5e29133bc2f08e3c1ffde948bcc30331142a63c0",
+                "url": "https://api.github.com/repos/assegaiphp/core/zipball/e5d069caf48fffe7316f544c09b83cdc658d1686",
+                "reference": "e5d069caf48fffe7316f544c09b83cdc658d1686",
                 "shasum": ""
             },
             "require": {
@@ -48,9 +48,9 @@
             "description": "A progressive PHP framework for building efficient and scalable server-side applications.",
             "support": {
                 "issues": "https://github.com/assegaiphp/core/issues",
-                "source": "https://github.com/assegaiphp/core/tree/0.1.4"
+                "source": "https://github.com/assegaiphp/core/tree/0.2.0"
             },
-            "time": "2022-08-31T02:43:34+00:00"
+            "time": "2022-11-27T03:13:08+00:00"
         },
         {
             "name": "graham-campbell/result-type",
