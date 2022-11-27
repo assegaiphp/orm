@@ -23,6 +23,7 @@ class DataSourceOptions
     public readonly int $port = 3306,
     public readonly ?string $username = null,
     public readonly ?string $password = null,
+    public readonly bool $synchronize = false,
   )
   {
   }

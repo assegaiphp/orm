@@ -24,7 +24,7 @@ final class FindWhereOptions
    */
   public static function fromArray(array $options): FindWhereOptions
   {
-    $conditions = $options['conditions'] ?? [];
+    $conditions = $options['conditions'] ?? $options ?? [];
     $exclude = $options['exclude'] ?? ['password'];
 
     return new FindWhereOptions(conditions: $conditions, exclude: $exclude);
@@ -39,6 +39,10 @@ final class FindWhereOptions
 
     foreach ($this->conditions as $key => $value)
     {
+      $value = match (true) {
+        (bool)preg_match('/[!@#$%^&*()_\-+=\/\\\[\],]+/', $value) => "'$value'",
+        default => $value
+      };
       $output .= ((is_null($value) || $value === 'NULL') ? "$key IS $value" : "$key=$value") . ' AND ';
     }
 

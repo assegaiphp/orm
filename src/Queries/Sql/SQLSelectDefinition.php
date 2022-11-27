@@ -32,7 +32,7 @@ final class SQLSelectDefinition
    */
   public function count(array $columns = []): SQLSelectExpression
   {
-    $queryString = "COUNT(" . $this->getColumnListString(columns: $columns) . ')';
+    $queryString = "COUNT(" . $this->getColumnListString(columns: $columns) . ') as total';
 
     $this->query->appendQueryString($queryString);
 

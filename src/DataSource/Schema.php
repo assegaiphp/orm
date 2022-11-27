@@ -155,7 +155,7 @@ class Schema implements ISchema
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $instance = $reflection->newInstance();
       $tableName = $instance->tableName();
-      $query = "DROP TABLE `$tableName`";
+      $query = "DROP TABLE $tableName";
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName(), dialect: $options->dialect());
       $statement = $db->prepare(query: $query);
