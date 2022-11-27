@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Columns;
 
-use Assegai\Orm\Queries\Sql\SQLDataTypes;
+use Assegai\Orm\Queries\Sql\DataType;
 use Attribute;
 
 /**
@@ -20,7 +20,7 @@ class CreateDateColumn extends Column
     parent::__construct(
       name: $name,
       alias: $alias,
-      type: SQLDataTypes::DATETIME,
+      type: DataType::DATETIME,
       allowNull: false,
       defaultValue: 'CURRENT_TIMESTAMP',
       comment: $comment
