@@ -390,7 +390,11 @@ class EntityManager implements IEntityStoreOwner
     {
       foreach ($conditions as $key => $value)
       {
-        $conditionString .= "$key=" . (is_numeric($value) ? $value : "'$value'");
+        $conditionString .= "$key=" . match (true) {
+          is_numeric($value) => $value,
+          $value instanceof \UnitEnum && property_exists($value, 'value') => $value->value,
+          default => "'$value'"
+        };
       }
     }
     else
