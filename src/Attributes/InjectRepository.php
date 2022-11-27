@@ -13,7 +13,7 @@ use Attribute;
 use ReflectionClass;
 use ReflectionException;
 
-#[Attribute(Attribute::TARGET_PARAMETER)]
+#[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
 class InjectRepository
 {
   public readonly DataSource $dataSource;
