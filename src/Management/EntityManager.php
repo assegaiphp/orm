@@ -410,7 +410,7 @@ class EntityManager implements IEntityStoreOwner
       return new UpdateResult(
         raw: $this->query->queryString(),
         affected: $this->query->rowCount(),
-        identifiers: $partialEntity,
+        identifiers: (object)$partialEntity,
         generatedMaps: $generatedMaps
       );
     }
@@ -715,7 +715,7 @@ class EntityManager implements IEntityStoreOwner
       throw new GeneralSQLQueryException($this->query);
     }
 
-    return $result->value()[0]['COUNT(*)'] ?? 0;
+    return $result->value()[0]?->total ?? 0;
   }
 
   /**
@@ -786,9 +786,8 @@ class EntityManager implements IEntityStoreOwner
     {
       $where = $where['condition'] ?? '';
     }
-    $statement
-      = $this
-      ->query
+    $statement =
+      $this->query
       ->select()
       ->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))
       ->from(tableReferences: $this->inspector->getTableName(entity: $entity))

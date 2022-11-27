@@ -20,6 +20,7 @@ class DataSource
   public readonly EntityManager $manager;
   public readonly PDO $db;
   public readonly DataSourceType $type;
+  public readonly array $entities;
 
   /**
    * @throws DataSourceException
@@ -64,6 +65,7 @@ class DataSource
         default => "mysql:host=$host;port=$port;dbname=$name"
       };
 
+      exit($dsn . PHP_EOL);
       $this->db = new PDO(dsn: $dsn, username: $options->username, password: $options->password);
     }
     else

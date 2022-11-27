@@ -22,6 +22,15 @@ final class SQLQueryResult
   /**
    * @return bool
    */
+  public function isSuccessful(): bool
+  {
+    return $this->isOK;
+  }
+
+  /**
+   * @return bool
+   * @deprecated 1.0.0 No longer used by internal code and not recommended. Use SQLQueryResult::isSuccessful() instead.
+   */
   public function isOK(): bool
   {
     return $this->isOK;
@@ -50,7 +59,7 @@ final class SQLQueryResult
   public function toArray(): array
   {
     return [
-      'isOK'    => $this->isOK(),
+      'isOK'    => $this->isSuccessful(),
       'value'   => $this->value(),
       'errors'  => $this->errors
     ];

@@ -18,7 +18,7 @@ class SchemaOptions
    * @param bool $synchronize
    */
   public function __construct(
-    protected string $dbName = 'navigator',
+    protected string $dbName = '',
     protected SQLDialect $dialect = SQLDialect::MYSQL,
     public readonly ?string $entityPrefix = null,
     public readonly bool $logging = false,

@@ -232,7 +232,7 @@ class Repository implements IRepository
   {
     if (is_array($where))
     {
-      $where = FindOneOptions::fromArray($where);
+      $where = FindWhereOptions::fromArray($where);
     }
     return $this->manager->findBy(entityClass: $this->entityId, where: $where);
   }
@@ -268,7 +268,7 @@ class Repository implements IRepository
   {
     if (is_array($where))
     {
-      $where = FindOneOptions::fromArray($where);
+      $where = FindWhereOptions::fromArray($where);
     }
     return $this->manager->findAndCountBy(entityClass: $this->entityId, where: $where);
   }
