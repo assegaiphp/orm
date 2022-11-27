@@ -8,16 +8,16 @@
     "packages": [
         {
             "name": "assegaiphp/core",
-            "version": "0.2.0",
+            "version": "0.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/assegaiphp/core.git",
-                "reference": "e5d069caf48fffe7316f544c09b83cdc658d1686"
+                "reference": "47882bd51558b24e2ad7b6049abc744a720595f6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/assegaiphp/core/zipball/e5d069caf48fffe7316f544c09b83cdc658d1686",
-                "reference": "e5d069caf48fffe7316f544c09b83cdc658d1686",
+                "url": "https://api.github.com/repos/assegaiphp/core/zipball/47882bd51558b24e2ad7b6049abc744a720595f6",
+                "reference": "47882bd51558b24e2ad7b6049abc744a720595f6",
                 "shasum": ""
             },
             "require": {
@@ -48,9 +48,9 @@
             "description": "A progressive PHP framework for building efficient and scalable server-side applications.",
             "support": {
                 "issues": "https://github.com/assegaiphp/core/issues",
-                "source": "https://github.com/assegaiphp/core/tree/0.2.0"
+                "source": "https://github.com/assegaiphp/core/tree/0.2.1"
             },
-            "time": "2022-11-27T03:13:08+00:00"
+            "time": "2022-11-27T16:23:11+00:00"
         },
         {
             "name": "graham-campbell/result-type",

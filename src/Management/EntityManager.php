@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Management;
 
 use Assegai\Core\Config;
+use Assegai\Core\ModuleManager;
 use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
@@ -85,6 +86,10 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $this->defaultConverters[] = new GeneralConverters();
+    if ($customConvertors = ModuleManager::getInstance()->getConfig('convertors'))
+    {
+      $this->customConverters[] = $customConvertors;
+    }
   }
 
   /**
