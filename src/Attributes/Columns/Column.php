@@ -4,7 +4,7 @@ namespace Assegai\Orm\Attributes\Columns;
 
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
-use Assegai\Orm\Queries\Sql\DataType;
+use Assegai\Orm\Queries\Sql\ColumnType;
 use Attribute;
 
 /**
@@ -50,7 +50,7 @@ class Column
   public function __construct(
     public string                $name = '',
     public string                $alias = '',
-    public string                $type = DataType::INT,
+    public string                $type = ColumnType::INT,
     public null|string|array|int $lengthOrValues = null,
     // TODO: Rename $allowNull to $nullable
     public bool                  $allowNull = true,
@@ -70,7 +70,7 @@ class Column
   )
   {
     # Build definition string
-    if ($this->type === DataType::ENUM && !empty($this->enum))
+    if ($this->type === ColumnType::ENUM && !empty($this->enum))
     {
       if (enum_exists($this->enum))
       {
@@ -93,8 +93,8 @@ class Column
     if (is_null($sqlLengthOrValues))
     {
       $sqlLengthOrValues = match ($this->type) {
-        DataType::VARCHAR => '10',
-        DataType::DECIMAL => '16,2',
+        ColumnType::VARCHAR => '10',
+        ColumnType::DECIMAL => '16,2',
         default => null
       };
     }

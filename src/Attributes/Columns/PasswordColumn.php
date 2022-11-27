@@ -3,7 +3,7 @@
 namespace Assegai\Orm\Attributes\Columns;
 
 use Assegai\Core\Config;
-use Assegai\Orm\Queries\Sql\DataType;
+use Assegai\Orm\Queries\Sql\ColumnType;
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
@@ -26,7 +26,7 @@ final class PasswordColumn extends Column
     parent::__construct(
       name: $name,
       alias: $alias,
-      type: DataType::VARCHAR,
+      type: ColumnType::VARCHAR,
       lengthOrValues: 10,
       defaultValue: password_hash('liferaft', $this->passwordHashAlgorithm),
       comment: $comment

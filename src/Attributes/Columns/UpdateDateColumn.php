@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Columns;
 
-use Assegai\Orm\Queries\Sql\DataType;
+use Assegai\Orm\Queries\Sql\ColumnType;
 use Attribute;
 
 /**
@@ -20,7 +20,7 @@ class UpdateDateColumn extends Column
     parent::__construct(
       name: $name,
       alias: $alias,
-      type: DataType::DATETIME,
+      type: ColumnType::DATETIME,
       allowNull: false,
       defaultValue: 'CURRENT_TIMESTAMP',
       onUpdate: 'CURRENT_TIMESTAMP',
