@@ -31,7 +31,7 @@ class Repository implements IRepository
    */
   public function __construct(
     public readonly string $entityId,
-    protected readonly EntityManager $manager
+    public readonly EntityManager $manager
   )
   {
     if (EntityManager::isNotEntity(className: $this->entityId))
