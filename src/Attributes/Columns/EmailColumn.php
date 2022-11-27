@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Columns;
 
-use Assegai\Orm\Queries\Sql\DataType;
+use Assegai\Orm\Queries\Sql\ColumnType;
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
@@ -17,7 +17,7 @@ class EmailColumn extends Column
     parent::__construct(
       name: $name,
       alias: $alias,
-      type: DataType::VARCHAR,
+      type: ColumnType::VARCHAR,
       lengthOrValues: 60
     );
   }

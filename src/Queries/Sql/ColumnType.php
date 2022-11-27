@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-class DataType
+class ColumnType
 {
   /* Numeric Data Types */
   const TINYINT = 'TINYINT';
@@ -69,21 +69,21 @@ class DataType
     return in_array(
       $type,
       [
-        DataType::TINYINT,
-        DataType::TINYINT_UNSIGNED,
-        DataType::BOOLEAN,
-        DataType::SMALLINT,
-        DataType::SMALLINT_UNSIGNED,
-        DataType::MEDIUMINT,
-        DataType::MEDIUMINT_UNSIGNED,
-        DataType::INT,
-        DataType::INT_UNSIGNED,
-        DataType::BIGINT,
-        DataType::BIGINT_UNSIGNED,
-        DataType::DECIMAL,
-        DataType::FLOAT,
-        DataType::DOUBLE,
-        DataType::BIT,
+        ColumnType::TINYINT,
+        ColumnType::TINYINT_UNSIGNED,
+        ColumnType::BOOLEAN,
+        ColumnType::SMALLINT,
+        ColumnType::SMALLINT_UNSIGNED,
+        ColumnType::MEDIUMINT,
+        ColumnType::MEDIUMINT_UNSIGNED,
+        ColumnType::INT,
+        ColumnType::INT_UNSIGNED,
+        ColumnType::BIGINT,
+        ColumnType::BIGINT_UNSIGNED,
+        ColumnType::DECIMAL,
+        ColumnType::FLOAT,
+        ColumnType::DOUBLE,
+        ColumnType::BIT,
       ]
     );
   }
@@ -97,24 +97,24 @@ class DataType
     return in_array(
       $type,
       [
-        DataType::BINARY,
-        DataType::BLOB,
-        DataType::TEXT,
-        DataType::CHAR,
-        DataType::ENUM,
-        DataType::INET6,
-        DataType::JSON,
-        DataType::MEDIUMBLOB,
-        DataType::MEDIUMTEXT,
-        DataType::LONGBLOB,
-        DataType::LONGTEXT,
-        DataType::ROW,
-        DataType::TINYBLOB,
-        DataType::TINYTEXT,
-        DataType::VARBINARY,
-        DataType::VARCHAR,
-        DataType::SET,
-        DataType::UUID,
+        ColumnType::BINARY,
+        ColumnType::BLOB,
+        ColumnType::TEXT,
+        ColumnType::CHAR,
+        ColumnType::ENUM,
+        ColumnType::INET6,
+        ColumnType::JSON,
+        ColumnType::MEDIUMBLOB,
+        ColumnType::MEDIUMTEXT,
+        ColumnType::LONGBLOB,
+        ColumnType::LONGTEXT,
+        ColumnType::ROW,
+        ColumnType::TINYBLOB,
+        ColumnType::TINYTEXT,
+        ColumnType::VARBINARY,
+        ColumnType::VARCHAR,
+        ColumnType::SET,
+        ColumnType::UUID,
       ]
     );
   }
@@ -128,13 +128,13 @@ class DataType
     return in_array(
       $type,
       [
-        DataType::DATE,
-        DataType::TIME,
-        DataType::DATETIME,
-        DataType::TIMESTAMP,
-        DataType::YEAR,
-        DataType::AUTO_INCREMENT,
-        DataType::NULL,
+        ColumnType::DATE,
+        ColumnType::TIME,
+        ColumnType::DATETIME,
+        ColumnType::TIMESTAMP,
+        ColumnType::YEAR,
+        ColumnType::AUTO_INCREMENT,
+        ColumnType::NULL,
       ]
     );
   }
@@ -148,14 +148,14 @@ class DataType
     return in_array(
       $type,
       [
-        DataType::POINT,
-        DataType::LINESTRING,
-        DataType::POLYGON,
-        DataType::MULTIPOINT,
-        DataType::MULTILINESTRING,
-        DataType::MULTIPOLYGON,
-        DataType::GEOMETRYCOLLECTION,
-        DataType::GEOMETRY,
+        ColumnType::POINT,
+        ColumnType::LINESTRING,
+        ColumnType::POLYGON,
+        ColumnType::MULTIPOINT,
+        ColumnType::MULTILINESTRING,
+        ColumnType::MULTIPOLYGON,
+        ColumnType::GEOMETRYCOLLECTION,
+        ColumnType::GEOMETRY,
       ]
     );
   }
