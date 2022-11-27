@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Columns;
 
-use Assegai\Orm\Queries\Sql\SQLDataTypes;
+use Assegai\Orm\Queries\Sql\DataType;
 use Attribute;
 
 #[Attribute(Attribute::TARGET_PROPERTY)]
@@ -17,7 +17,7 @@ class PrimaryGeneratedColumn extends Column
     parent::__construct(
       name: $name,
       alias: $alias,
-      type: SQLDataTypes::BIGINT_UNSIGNED,
+      type: DataType::BIGINT_UNSIGNED,
       allowNull: false,
       signed: false,
       autoIncrement: true,

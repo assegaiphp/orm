@@ -25,7 +25,7 @@ class SQLColumnDefinition
    */
   public function __construct(
     private readonly string       $name,
-    private readonly string       $dataType = SQLDataTypes::INT,
+    private readonly string       $dataType = DataType::INT,
     private null|string|int|array $lengthOrValues = null,
     private mixed                 $defaultValue = null,
     private readonly bool         $allowNull = true,
@@ -42,8 +42,8 @@ class SQLColumnDefinition
     if (is_null($this->lengthOrValues))
     {
       $this->lengthOrValues = match($this->dataType) {
-        SQLDataTypes::VARCHAR => '10',
-        SQLDataTypes::DECIMAL => '16,2',
+        DataType::VARCHAR => '10',
+        DataType::DECIMAL => '16,2',
         default => null
       };
     }
@@ -51,10 +51,10 @@ class SQLColumnDefinition
     if (!is_null($this->lengthOrValues))
     {
       switch($this->dataType) {
-        case SQLDataTypes::TINYINT:
-        case SQLDataTypes::SMALLINT:
-        case SQLDataTypes::INT:
-        case SQLDataTypes::BIGINT:
+        case DataType::TINYINT:
+        case DataType::SMALLINT:
+        case DataType::INT:
+        case DataType::BIGINT:
           $queryString .= $this->dataType;
           if (!empty($this->lengthOrValues))
           {
@@ -65,10 +65,10 @@ class SQLColumnDefinition
             $queryString .= " ";
           }
           break;
-        case SQLDataTypes::TINYINT_UNSIGNED:
-        case SQLDataTypes::SMALLINT_UNSIGNED:
-        case SQLDataTypes::INT_UNSIGNED:
-        case SQLDataTypes::BIGINT_UNSIGNED:
+        case DataType::TINYINT_UNSIGNED:
+        case DataType::SMALLINT_UNSIGNED:
+        case DataType::INT_UNSIGNED:
+        case DataType::BIGINT_UNSIGNED:
           $queryString .= $this->dataType;
           if (!empty($this->lengthOrValues))
           {
@@ -80,12 +80,12 @@ class SQLColumnDefinition
             $queryString .= " ";
           }
           break;
-        case SQLDataTypes::VARCHAR:
+        case DataType::VARCHAR:
           $queryString .= $this->dataType . "(" . $this->lengthOrValues . ") ";
 
           break;
 
-        case SQLDataTypes::ENUM:
+        case DataType::ENUM:
           if (!is_array($this->lengthOrValues))
           {
             $this->lengthOrValues = [];
@@ -107,7 +107,7 @@ class SQLColumnDefinition
       $queryString .= "$this->dataType ";
     }
 
-    if (SQLDataTypes::isNumeric($this->dataType) && is_string($this->defaultValue))
+    if (DataType::isNumeric($this->dataType) && is_string($this->defaultValue))
     {
       $this->defaultValue = $this->allowNull || $this->autoIncrement ? null : 0;
     }
@@ -116,7 +116,7 @@ class SQLColumnDefinition
     {
       $temporalDatatypes = [
         // SQLDataTypes::DATE,
-        SQLDataTypes::DATETIME
+        DataType::DATETIME
       ];
       $stringExamptions = ['CURRENT_TIMESTAMP', 'CURRENT_DATE()', 'CURRENT_TIME()', 'JSON_ARRAY()'];
       $queryString .= "DEFAULT " . match(gettype($this->defaultValue)) {
@@ -134,7 +134,7 @@ class SQLColumnDefinition
 
       
     }
-    if ($this->autoIncrement && SQLDataTypes::isNumeric($this->dataType))
+    if ($this->autoIncrement && DataType::isNumeric($this->dataType))
     {
       $queryString .= "AUTO_INCREMENT ";
     }

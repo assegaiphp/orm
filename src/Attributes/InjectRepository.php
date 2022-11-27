@@ -8,6 +8,7 @@ use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Repository;
+use Assegai\Core\ModuleManager;
 use Attribute;
 use ReflectionClass;
 use ReflectionException;
@@ -46,8 +47,10 @@ class InjectRepository
       throw new ClassNotFoundException(className: Entity::class);
     }
 
+    $moduleManager = ModuleManager::getInstance();
+
     $driver = $entityAttribute->driver;
-    $database = $entityAttribute->database;
+    $database = $entityAttribute->database ?? $moduleManager->getConfig('database');
 
     $dataSourceOptions = new DataSourceOptions(
       entities: [$reflectionEntity->newInstance()],

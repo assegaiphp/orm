@@ -4,9 +4,13 @@ namespace Assegai\Orm\Attributes\Columns;
 
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
-use Assegai\Orm\Queries\Sql\SQLDataTypes;
+use Assegai\Orm\Queries\Sql\DataType;
 use Attribute;
 
+/**
+ * Since database tables consist of columns your entities must consist of columns too. Each entity class property
+ * you marked with #[Column()] will be mapped to a database table column.
+ */
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class Column
 {
@@ -22,13 +26,16 @@ class Column
   public string $sqlDefinition = '';
 
   /**
-   * @param string $name
+   * @param string $name Column name in the database table. By default, the column name is generated from the name of
+   * the property. You can change it by specifying your own name.
    * @param string $alias
-   * @param string $type
-   * @param string|array|int|null $lengthOrValues
-   * @param bool $allowNull
-   * @param bool $signed
-   * @param bool $zeroFilled
+   * @param string $type Column type.
+   * @param string|array|int|null $lengthOrValues Column type's length. For example if you want to create varchar(150)
+   * type you specify column type and length options.
+   * @param bool $allowNull Makes column NULL or NOT NULL in the database. By default, column is nullable: false.
+   * @param bool $signed Puts UNSIGNED attribute on to a numeric column. Used only in MySQL.
+   * @param bool $zeroFilled Puts ZEROFILL attribute on to a numeric column. Used only in MySQL. If true, MySQL
+   * automatically adds the UNSIGNED attribute to this column.
    * @param mixed|null $defaultValue
    * @param bool $autoIncrement
    * @param string $onUpdate
@@ -43,11 +50,14 @@ class Column
   public function __construct(
     public string                $name = '',
     public string                $alias = '',
-    public string                $type = SQLDataTypes::INT,
+    public string                $type = DataType::INT,
     public null|string|array|int $lengthOrValues = null,
+    // TODO: Rename $allowNull to $nullable
     public bool                  $allowNull = true,
+    // TODO: Refactor to use $unsigned instead
     public bool                  $signed = true,
     public bool                  $zeroFilled = false,
+    // TODO: Rename $defaultValue to $default
     public mixed                 $defaultValue = null,
     public bool                  $autoIncrement = false,
     public string                $onUpdate = '',
@@ -60,7 +70,7 @@ class Column
   )
   {
     # Build definition string
-    if ($this->type === SQLDataTypes::ENUM && !empty($this->enum))
+    if ($this->type === DataType::ENUM && !empty($this->enum))
     {
       if (enum_exists($this->enum))
       {
@@ -83,8 +93,8 @@ class Column
     if (is_null($sqlLengthOrValues))
     {
       $sqlLengthOrValues = match ($this->type) {
-        SQLDataTypes::VARCHAR => '10',
-        SQLDataTypes::DECIMAL => '16,2',
+        DataType::VARCHAR => '10',
+        DataType::DECIMAL => '16,2',
         default => null
       };
     }
