@@ -433,6 +433,10 @@ class EntityManager implements IEntityStoreOwner
       {
         if (!is_null($value))
         {
+          if ($value instanceof \UnitEnum && property_exists($value, 'value'))
+          {
+            $value = $value->value;
+          }
           $assignmentList[$prop] = $value;
         }
       }
