@@ -18,8 +18,8 @@ class PrimaryGeneratedColumn extends Column
       name: $name,
       alias: $alias,
       type: ColumnType::BIGINT_UNSIGNED,
-      allowNull: false,
-      signed: false,
+      nullable: false,
+      unsigned: true,
       autoIncrement: true,
       isPrimaryKey: true,
       comment: $comment
