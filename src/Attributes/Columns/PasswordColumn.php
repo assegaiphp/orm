@@ -28,7 +28,7 @@ final class PasswordColumn extends Column
       alias: $alias,
       type: ColumnType::VARCHAR,
       lengthOrValues: 10,
-      defaultValue: password_hash('liferaft', $this->passwordHashAlgorithm),
+      default: password_hash('password', $this->passwordHashAlgorithm),
       comment: $comment
     );
   }

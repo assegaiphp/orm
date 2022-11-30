@@ -15,8 +15,8 @@ final class SQLPrimaryGeneratedColumn extends SQLColumnDefinition
   {
     parent::__construct(
       name: $name,
-      dataType: ColumnType::BIGINT_UNSIGNED,
-      allowNull: false,
+      type: ColumnType::BIGINT_UNSIGNED,
+      nullable: false,
       autoIncrement: true,
       isPrimaryKey: true,
       comment: $comment,
