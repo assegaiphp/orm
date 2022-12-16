@@ -6,6 +6,7 @@ use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Attribute;
+use UnitEnum;
 
 /**
  * Since database tables consist of columns your entities must consist of columns too. Each entity class property
@@ -32,11 +33,11 @@ class Column
    * @param string $type Column type.
    * @param string|array|int|null $lengthOrValues Column type's length. For example if you want to create varchar(150)
    * type you specify column type and length options.
-   * @param bool $allowNull Makes column NULL or NOT NULL in the database. By default, column is nullable: false.
-   * @param bool $signed Puts UNSIGNED attribute on to a numeric column. Used only in MySQL.
+   * @param bool $nullable Makes column NULL or NOT NULL in the database. By default, column is nullable: false.
+   * @param bool $unsigned Puts UNSIGNED attribute on to a numeric column. Used only in MySQL.
    * @param bool $zeroFilled Puts ZEROFILL attribute on to a numeric column. Used only in MySQL. If true, MySQL
    * automatically adds the UNSIGNED attribute to this column.
-   * @param mixed|null $defaultValue
+   * @param mixed|null $default
    * @param bool $autoIncrement
    * @param string $onUpdate
    * @param bool $isUnique
@@ -52,13 +53,10 @@ class Column
     public string                $alias = '',
     public string                $type = ColumnType::INT,
     public null|string|array|int $lengthOrValues = null,
-    // TODO: Rename $allowNull to $nullable
-    public bool                  $allowNull = true,
-    // TODO: Refactor to use $unsigned instead
-    public bool                  $signed = true,
+    public bool                  $nullable = true,
+    public bool                  $unsigned = false,
     public bool                  $zeroFilled = false,
-    // TODO: Rename $defaultValue to $default
-    public mixed                 $defaultValue = null,
+    public mixed                 $default = null,
     public bool                  $autoIncrement = false,
     public string                $onUpdate = '',
     public bool                  $isUnique = false,
@@ -66,7 +64,7 @@ class Column
     public bool                  $isPrimaryKey = false,
     public string                $comment = '',
     public bool                  $canUpdate = true,
-    public string                $enum = ''
+    public string|UnitEnum       $enum = ''
   )
   {
     # Build definition string
@@ -75,7 +73,7 @@ class Column
       if (enum_exists($this->enum))
       {
         $this->lengthOrValues = [];
-        /** @var array $cases */
+        /** @var UnitEnum $enum */
         $cases = $this->enum::cases();
 
         foreach ($cases as $case)
@@ -101,10 +99,10 @@ class Column
 
     $this->sqlDefinition = new SQLColumnDefinition(
       name: $this->name,
-      dataType: $this->type,
+      type: $this->type,
       lengthOrValues: $sqlLengthOrValues,
-      defaultValue: $this->defaultValue,
-      allowNull: $this->allowNull,
+      defaultValue: $this->default,
+      nullable: $this->nullable,
       autoIncrement: $this->autoIncrement,
       onUpdate: $this->onUpdate,
       isUnique: $this->isUnique,
@@ -120,24 +118,24 @@ class Column
 
     $this->value = "$type$this->lengthOrValues ";
 
-    if (!$signed)                 { $this->value .= Column::UNSIGNED . ' '; }
-    if (!$allowNull)              { $this->value .= 'NOT '; }
+    if ($unsigned)                 { $this->value .= Column::UNSIGNED . ' '; }
+    if (!$nullable)              { $this->value .= 'NOT '; }
 
     $this->value .= 'NULL ';
 
-    if ($zeroFilled && !$signed)  { $this->value .= Column::ZEROFILL . ' '; }
-    if (isset($this->defaultValue))
+    if ($zeroFilled && $unsigned)  { $this->value .= Column::ZEROFILL . ' '; }
+    if (isset($this->default))
     {
-      if (is_object($this->defaultValue) && property_exists($this->defaultValue, 'value'))
+      if (is_object($this->default) && property_exists($this->default, 'value'))
       {
-        $this->defaultValue = $this->defaultValue->value;
+        $this->default = $this->default->value;
       }
-      else if(is_callable($this->defaultValue))
+      else if(is_callable($this->default))
       {
-        $this->defaultValue = call_user_func($this->defaultValue);
+        $this->default = call_user_func($this->default);
       }
 
-      $this->value .= "DEFAULT $this->defaultValue ";
+      $this->value .= "DEFAULT $this->default ";
     }
 
     if ($autoIncrement)           { $this->value .= "AUTO_INCREMENT "; }

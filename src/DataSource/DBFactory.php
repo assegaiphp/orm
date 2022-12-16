@@ -58,6 +58,7 @@ final class DBFactory
 
     if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
     {
+      self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
       if (empty($config))
@@ -120,6 +121,7 @@ final class DBFactory
 
     if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
     {
+      self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
       try
@@ -161,6 +163,7 @@ final class DBFactory
 
     if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
     {
+      self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
       try
@@ -194,6 +197,7 @@ final class DBFactory
 
     if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
     {
+      self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
       try
@@ -207,5 +211,21 @@ final class DBFactory
     }
 
     return DBFactory::$connections[$type][$dbName];
+  }
+
+  /**
+   * @param string $type
+   * @param string $dbName
+   * @return void
+   * @throws DataSourceConnectionException
+   */
+  private static function validateDatabaseDetails(string $type, string $dbName): void
+  {
+    $databases = Config::get('databases');
+
+    if (!isset($databases[$type]) || !isset($databases[$type][$dbName]))
+    {
+      throw new DataSourceConnectionException();
+    }
   }
 }

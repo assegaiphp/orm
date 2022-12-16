@@ -21,11 +21,10 @@ class CreateDateColumn extends Column
       name: $name,
       alias: $alias,
       type: ColumnType::DATETIME,
-      allowNull: false,
-      defaultValue: 'CURRENT_TIMESTAMP',
+      nullable: false,
+      default: 'CURRENT_TIMESTAMP',
       comment: $comment
     );
   }
 }
 
-?>

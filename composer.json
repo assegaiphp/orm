@@ -8,6 +8,11 @@
             "Assegai\\Orm\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Assegai\\Core\\": "../core/src/"
+        }
+    },
     "authors": [
         {
             "name": "Andrew Masiye",
@@ -15,13 +20,13 @@
         }
     ],
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.2",
         "ext-pdo": "*",
         "ext-curl": "*",
         "ext-intl": "*",
         "ext-pdo_mysql": "*",
         "ext-pdo_pgsql": "*",
         "ext-pdo_sqlite": "*",
-        "assegaiphp/core": "^0.2.0"
+        "assegaiphp/core": "^0.3.0"
     }
 }

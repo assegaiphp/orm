@@ -4,8 +4,15 @@ namespace Assegai\Orm\Management;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Attributes\Relations\JoinColumn;
+use Assegai\Orm\Attributes\Relations\JoinTable;
+use Assegai\Orm\Attributes\Relations\ManyToMany;
+use Assegai\Orm\Attributes\Relations\ManyToOne;
+use Assegai\Orm\Attributes\Relations\OneToMany;
+use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use DateTime;
 use ReflectionClass;
 use ReflectionException;
@@ -66,14 +73,30 @@ final class EntityInspector
   /**
    * Returns a list of class property names that are marked with the `Column` attribute.
    * @param object $entity
-   * @param array $exclude
+   * @param string[] $exclude
+   * @param string[] $relations
+   * @param RelationPropertyMetadata $relationProperties
    * @return array Returns a list of properties that are marked with the `Column` attribute.
    */
-  public function getColumns(object $entity, array $exclude = []): array
+  public function getColumns(
+    object $entity,
+    array $exclude = [],
+    array $relations = [],
+    array &$relationProperties = []
+  ): array
   {
     $columns = [];
     $reflectionClass = new ReflectionClass($entity);
     $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
+
+    try
+    {
+      $tableName = $this->getTableName($entity);
+    }
+    catch (ClassNotFoundException|ORMException $e)
+    {
+      die($e);
+    }
 
     foreach ($properties as $property)
     {
@@ -82,6 +105,7 @@ final class EntityInspector
         continue;
       }
 
+      $propertyName = $property->getName();
       $attributes = $property->getAttributes();
       foreach ($attributes as $attribute)
       {
@@ -90,18 +114,157 @@ final class EntityInspector
         {
           if ($attributeInstance->alias)
           {
-            $columns[$attributeInstance->alias] = $attributeInstance->name;
+            $columns[$attributeInstance->alias] = "$tableName." . $attributeInstance->name;
           }
           else if($attributeInstance->name)
           {
-            $columns[$property->getName()] = $attributeInstance->name;
+            $columns[$propertyName] = "$tableName." . $attributeInstance->name;
           }
           else
           {
-            $columns[] = $property->getName();
+            $columns[] = "$tableName." . $propertyName;
+          }
+        }
+
+        if ($relations)
+        {
+          if ($attributeInstance instanceof JoinColumn)
+          {
+            if ($attributeInstance->name)
+            {
+              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
+            }
+            else
+            {
+              $attributeInstance->effectiveColumnName = $this->getColumnName([$propertyName, 'Id']);
+              $columns[] = "$tableName." . $attributeInstance->effectiveColumnName;
+            }
+
+            if (!$relationProperties[$propertyName])
+            {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->joinColumn = $attributeInstance;
+          }
+          else if ($attributeInstance instanceof JoinTable)
+          {
+            if (!$relationProperties[$propertyName])
+            {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->joinTable = $attributeInstance;
+          }
+          else if ($attributeInstance instanceof OneToOne)
+          {
+            if (!isset($relationProperties[$propertyName]) || !$relationProperties[$propertyName])
+            {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+
+            # Instantiate relative
+            $entityRelative = new $attributeInstance->type;
+
+            # Get relative columns
+            $entityRelativeColumns = $this->getRelationColumns(entity: $entityRelative, exclude: $exclude);
+
+            # Add relative columns to column list
+            $columns = array_merge($columns, $entityRelativeColumns);
+          }
+          else if ($attributeInstance instanceof OneToMany)
+          {
+            if (!$relationProperties[$propertyName])
+            {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+          }
+          else if ($attributeInstance instanceof ManyToOne)
+          {
+            if (!$relationProperties[$propertyName])
+            {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+          }
+          else if ($attributeInstance instanceof ManyToMany)
+          {
+            if (!$relationProperties[$propertyName])
+            {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
           }
         }
       }
+    }
+
+    return $columns;
+  }
+
+  /**
+   * @param object $entity
+   * @param array $exclude
+   * @return array
+   */
+  private function getRelationColumns(object $entity, array $exclude = []): array
+  {
+
+    $columns = [];
+    $reflectionClass = new ReflectionClass($entity);
+    $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
+
+    try
+    {
+      $tableName = $this->getTableName($entity);
+      foreach ($properties as $property)
+      {
+        $propertyName = $property->getName();
+        $columnAttributes = $property->getAttributes(Column::class);
+
+        if (!$columnAttributes || in_array($propertyName, $exclude))
+        {
+          continue;
+        }
+
+        foreach ($columnAttributes as $columnAttribute)
+        {
+          $attributeInstance = $columnAttribute->newInstance();
+          if ($attributeInstance instanceof Column)
+          {
+            if ($attributeInstance->alias)
+            {
+              $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $attributeInstance->name;
+            }
+            else if($attributeInstance->name)
+            {
+              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
+            }
+            else
+            {
+              $columns["{$tableName}_" . $propertyName] = "$tableName." . $propertyName;
+            }
+          }
+        }
+      }
+    }
+    catch (ClassNotFoundException|ORMException $e)
+    {
+      die($e);
     }
 
     return $columns;
@@ -202,5 +365,22 @@ final class EntityInspector
     $tokens = explode('\\', $className);
     $className = array_pop($tokens);
     return strtolower(str_replace('Entity', '', $className));
+  }
+
+  /**
+   * @param string $name
+   * @return string
+   */
+  private function getColumnName(string|array $name): string
+  {
+    $output = $name;
+    if (is_array($output))
+    {
+      $output = implode(' ', $output);
+    }
+    $output = strtolower($output);
+    $output = ucwords(preg_replace('/[\W+]/', ' ', $output));
+    $output = str_replace(' ', '', $output);
+    return lcfirst($output);
   }
 }

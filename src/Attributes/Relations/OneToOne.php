@@ -3,7 +3,7 @@
 namespace Assegai\Orm\Attributes\Relations;
 
 use Assegai\Orm\Exceptions\ClassNotFoundException;
-use Assegai\Orm\Relations\RelationsOptions;
+use Assegai\Orm\Relations\RelationOptions;
 use Attribute;
 
 /**
@@ -19,19 +19,19 @@ class OneToOne
    * @param string $type
    * @param string|null $name
    * @param string|null $alias
-   * @param RelationsOptions|null $options
+   * @param RelationOptions|null $options
    * @throws ClassNotFoundException
    */
   public function __construct(
-    public string $type,
-    public ?string $name = null,
-    public ?string $alias = null,
-    public ?RelationsOptions $options = null
+    public readonly string $type,
+    public readonly ?string $name = null,
+    public readonly ?string $alias = null,
+    public ?RelationOptions $options = null
   )
   {
     if (is_null($this->options))
     {
-      $this->options = new RelationsOptions();
+      $this->options = new RelationOptions();
     }
 
     if (!class_exists($type))

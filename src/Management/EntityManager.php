@@ -19,10 +19,13 @@ use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\TypeConversionException;
 use Assegai\Orm\Interfaces\IEntityStoreOwner;
 use Assegai\Orm\Interfaces\IFactory;
+use Assegai\Orm\Metadata\EntityMetadata;
+use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
+use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
@@ -747,26 +750,73 @@ class EntityManager implements IEntityStoreOwner
   {
     $entity = $this->create(entityClass: $entityClass);
     $conditions = [];
+    $availableRelations = [];
 
     if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass))
     {
       $conditions = array_merge($findOptions->where->conditions ?? [], [$deleteColumnName => 'NULL']);
     }
 
+    $listOfRelations = match(gettype($findOptions->relations)) {
+      'object' => (array)$findOptions->relations,
+      'array' => $findOptions->relations,
+      default => []
+    };
+    $columns =
+      $this->inspector->getColumns(
+        entity: $entity,
+        exclude: $findOptions->exclude ?? [],
+        relations: $listOfRelations,
+        relationProperties: $availableRelations
+      );
+
     $statement
       = $this
       ->query
       ->select()
-      ->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $findOptions->exclude))
+      ->all(columns: $columns)
       ->from(tableReferences: $this->inspector->getTableName(entity: $entity));
 
     if (!empty($findOptions))
     {
+      # Resolve relations and joins
+      if ($findOptions->relations)
+      {
+//        $this->buildRelations();
+        foreach ($findOptions->relations as $key => $value)
+        {
+          /** @var RelationPropertyMetadata $relationProperty */
+          $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
+
+          if (property_exists($entity, $key))
+          {
+            # TODO: Resolve relations custom options
+          }
+
+          if (!$relationProperty->getEntity())
+          {
+            continue;
+          }
+
+          # If one-to-one
+          # LEFT JOIN
+          $tableName = $this->inspector->getTableName($entity);
+          $joinColumnName = $relationProperty->joinColumn->effectiveColumnName;
+          $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
+          $referencedTableName = $relationProperty->getEntity()->table;
+          $referencedTableAlias = $referencedTableName;
+          $statement =
+            $statement->leftJoin("$referencedTableName $referencedTableAlias")
+              ->on("{$tableName}.{$joinColumnName}={$referencedTableName}.{$referencedColumnName}");
+        }
+      }
+
+      # Resolve where conditions
       if ($conditions)
       {
-        $findOptions = new FindWhereOptions(conditions: $conditions);
+        $findWhereOptions = new FindWhereOptions(conditions: $conditions, entityClass: $entityClass);
       }
-      $statement = $statement->where(condition: $findOptions);
+      $statement = $statement->where(condition: $findWhereOptions ?? $findOptions);
     }
 
     $limit = $findOptions->limit ?? $_GET['limit'] ?? Config::get('DEFAULT_LIMIT') ?? 10;
@@ -779,7 +829,7 @@ class EntityManager implements IEntityStoreOwner
       throw new GeneralSQLQueryException($this->query);
     }
 
-    return $result->value();
+    return $this->processRelations($result->value(), $entityClass, $findOptions, $availableRelations);
   }
 
   /**
@@ -1167,5 +1217,108 @@ class EntityManager implements IEntityStoreOwner
     }
 
     return null;
+  }
+
+  private function buildRelations(
+    object $relations,
+    object $selection,
+    EntityMetadata $metadata,
+    string $alias,
+    ?string $embedPrefix
+  ): void
+  {
+    // TODO: Implement buildRelations() method.
+    if (!$relations)
+    {
+      return;
+    }
+
+    foreach ($relations as $relationName => $relationValue)
+    {
+      $propertyPath = $embedPrefix ? "$embedPrefix.$relationName" : $relationName;
+//      $embed = $metadata->em
+    }
+  }
+
+  /**
+   * @param array $data
+   * @param string $entityClass
+   * @param FindWhereOptions|FindOptions|null $findOptions
+   * @param RelationPropertyMetadata[] $relationInfo
+   * @return array
+   */
+  private function processRelations(
+    array $data,
+    string $entityClass,
+    FindWhereOptions|FindOptions|null $findOptions,
+    array $relationInfo
+  ): array
+  {
+    if (!$findOptions || !$findOptions->relations)
+    {
+      return $data;
+    }
+
+    $results = [];
+
+    foreach ($data as $datum)
+    {
+      foreach ($findOptions->relations as $relation)
+      {
+        $results[] = $this->restructureRelatedEntity($entityClass, $datum, $relation, $relationInfo[$relation]);
+      }
+    }
+
+    return $results;
+  }
+
+  /**
+   * @param string $entityClass
+   * @param object $entity
+   * @param string $relationName
+   * @param RelationPropertyMetadata $relationInfo
+   * @return object
+   */
+  private function restructureRelatedEntity(
+    string       $entityClass,
+    object       $entity,
+    string       $relationName,
+    RelationPropertyMetadata $relationInfo
+  ): object
+  {
+    $restructuredEntity = new stdClass();
+    $relation = new stdClass();
+//      $restructuredEntity = $this->create($entityClass);
+//      $relation = $this->create($relationInfo->relationAttribute->type);
+
+    # Foreach relation
+    foreach ($entity as $key => $value)
+    {
+      $tableName = $relationInfo->getEntity()->table;
+      $pattern = "/{$tableName}_|$relationName/";
+
+      if (preg_match($pattern, $key))
+      {
+        if (!$restructuredEntity->$relationName)
+        {
+          $restructuredEntity->$relationName = $relation;
+        }
+
+        $name = lcfirst(preg_replace($pattern, '$2', $key));
+        $relation->$name = $value;
+      }
+      else
+      {
+        $restructuredEntity->$key = $value;
+      }
+    }
+    $restructuredEntity->$relationName = $relation;
+
+    if (!$restructuredEntity->$relationName->id)
+    {
+      $restructuredEntity->$relationName = null;
+    }
+
+    return $restructuredEntity;
   }
 }

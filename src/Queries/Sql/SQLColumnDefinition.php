@@ -11,10 +11,10 @@ class SQLColumnDefinition
 
   /**
    * @param string $name
-   * @param string $dataType
+   * @param string $type
    * @param string|int|array|null $lengthOrValues
    * @param mixed|null $defaultValue
-   * @param bool $allowNull
+   * @param bool $nullable
    * @param bool $autoIncrement
    * @param string $onUpdate
    * @param bool $isUnique
@@ -25,10 +25,10 @@ class SQLColumnDefinition
    */
   public function __construct(
     private readonly string       $name,
-    private readonly string       $dataType = ColumnType::INT,
+    private readonly string       $type = ColumnType::INT,
     private null|string|int|array $lengthOrValues = null,
     private mixed                 $defaultValue = null,
-    private readonly bool         $allowNull = true,
+    private readonly bool         $nullable = true,
     private readonly bool         $autoIncrement = false,
     private readonly string       $onUpdate = "",
     private readonly bool         $isUnique = false,
@@ -41,7 +41,7 @@ class SQLColumnDefinition
     $queryString = !empty($this->name) ? "`$this->name` " : '';
     if (is_null($this->lengthOrValues))
     {
-      $this->lengthOrValues = match($this->dataType) {
+      $this->lengthOrValues = match($this->type) {
         ColumnType::VARCHAR => '10',
         ColumnType::DECIMAL => '16,2',
         default => null
@@ -50,12 +50,12 @@ class SQLColumnDefinition
 
     if (!is_null($this->lengthOrValues))
     {
-      switch($this->dataType) {
+      switch($this->type) {
         case ColumnType::TINYINT:
         case ColumnType::SMALLINT:
         case ColumnType::INT:
         case ColumnType::BIGINT:
-          $queryString .= $this->dataType;
+          $queryString .= $this->type;
           if (!empty($this->lengthOrValues))
           {
             $queryString .= "(" . $this->lengthOrValues . ") ";
@@ -69,7 +69,7 @@ class SQLColumnDefinition
         case ColumnType::SMALLINT_UNSIGNED:
         case ColumnType::INT_UNSIGNED:
         case ColumnType::BIGINT_UNSIGNED:
-          $queryString .= $this->dataType;
+          $queryString .= $this->type;
           if (!empty($this->lengthOrValues))
           {
             $length = $this->lengthOrValues;
@@ -81,7 +81,7 @@ class SQLColumnDefinition
           }
           break;
         case ColumnType::VARCHAR:
-          $queryString .= $this->dataType . "(" . $this->lengthOrValues . ") ";
+          $queryString .= $this->type . "(" . $this->lengthOrValues . ") ";
 
           break;
 
@@ -90,7 +90,7 @@ class SQLColumnDefinition
           {
             $this->lengthOrValues = [];
           }
-          $queryString .= $this->dataType . "(";
+          $queryString .= $this->type . "(";
           foreach ($this->lengthOrValues as $value)
           {
             $queryString .= "'$value', ";
@@ -99,17 +99,17 @@ class SQLColumnDefinition
           $queryString .= ") ";
           break;
   
-        default: $queryString .= "$this->dataType ";
+        default: $queryString .= "$this->type ";
       }
     }
     else
     {
-      $queryString .= "$this->dataType ";
+      $queryString .= "$this->type ";
     }
 
-    if (ColumnType::isNumeric($this->dataType) && is_string($this->defaultValue))
+    if (ColumnType::isNumeric($this->type) && is_string($this->defaultValue))
     {
-      $this->defaultValue = $this->allowNull || $this->autoIncrement ? null : 0;
+      $this->defaultValue = $this->nullable || $this->autoIncrement ? null : 0;
     }
 
     if (!is_null($this->defaultValue))
@@ -134,11 +134,11 @@ class SQLColumnDefinition
 
       
     }
-    if ($this->autoIncrement && ColumnType::isNumeric($this->dataType))
+    if ($this->autoIncrement && ColumnType::isNumeric($this->type))
     {
       $queryString .= "AUTO_INCREMENT ";
     }
-    $queryString .= $this->allowNull && !$this->isPrimaryKey ? "NULL " : "NOT NULL ";
+    $queryString .= $this->nullable && !$this->isPrimaryKey ? "NULL " : "NOT NULL ";
     if ($this->isPrimaryKey)
     {
       $queryString .= "PRIMARY KEY ";
