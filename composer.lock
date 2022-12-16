@@ -4,29 +4,31 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f06ed63cfbd8bce401e2ddc6f5a79407",
+    "content-hash": "6dab80e44a2140d7e8278d7855ff20e1",
     "packages": [
         {
             "name": "assegaiphp/core",
-            "version": "0.2.1",
+            "version": "0.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/assegaiphp/core.git",
-                "reference": "47882bd51558b24e2ad7b6049abc744a720595f6"
+                "reference": "6036e1f18cbf0158239e0ff81d8850f62293812e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/assegaiphp/core/zipball/47882bd51558b24e2ad7b6049abc744a720595f6",
-                "reference": "47882bd51558b24e2ad7b6049abc744a720595f6",
+                "url": "https://api.github.com/repos/assegaiphp/core/zipball/6036e1f18cbf0158239e0ff81d8850f62293812e",
+                "reference": "6036e1f18cbf0158239e0ff81d8850f62293812e",
                 "shasum": ""
             },
             "require": {
                 "ext-fileinfo": "*",
+                "php": ">=8.2",
                 "psr/log": "^3.0.0",
                 "twig/twig": "^3.0",
                 "vlucas/phpdotenv": "^5.4"
             },
             "require-dev": {
+                "assegaiphp/orm": "^0.2",
                 "codeception/codeception": "^4.2"
             },
             "type": "library",
@@ -48,9 +50,9 @@
             "description": "A progressive PHP framework for building efficient and scalable server-side applications.",
             "support": {
                 "issues": "https://github.com/assegaiphp/core/issues",
-                "source": "https://github.com/assegaiphp/core/tree/0.2.1"
+                "source": "https://github.com/assegaiphp/core/tree/0.3.0"
             },
-            "time": "2022-11-27T16:23:11+00:00"
+            "time": "2022-12-16T13:48:33+00:00"
         },
         {
             "name": "graham-campbell/result-type",
@@ -655,7 +657,7 @@
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=8.1",
+        "php": ">=8.2",
         "ext-pdo": "*",
         "ext-curl": "*",
         "ext-intl": "*",
@@ -664,5 +666,5 @@
         "ext-pdo_sqlite": "*"
     },
     "platform-dev": [],
-    "plugin-api-version": "2.2.0"
+    "plugin-api-version": "2.3.0"
 }

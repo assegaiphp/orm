@@ -22,11 +22,11 @@ final class SQLJoinExpression
     }
 
     $queryString = match($this->joinType) {
-      JoinType::LEFT_JOIN => "LEFT JOIN $joinTableReferences",
-      JoinType::RIGHT_JOIN => "RIGHT JOIN $joinTableReferences",
-      JoinType::INNER_JOIN => "INNER JOIN $joinTableReferences",
-      JoinType::OUTER_JOIN => "OUTER JOIN $joinTableReferences",
-      default => "JOIN $joinTableReferences"
+      JoinType::LEFT_JOIN => "LEFT JOIN $this->joinTableReferences",
+      JoinType::RIGHT_JOIN => "RIGHT JOIN $this->joinTableReferences",
+      JoinType::INNER_JOIN => "INNER JOIN $this->joinTableReferences",
+      JoinType::OUTER_JOIN => "OUTER JOIN $this->joinTableReferences",
+      default => "JOIN $this->joinTableReferences"
     };
 
     $this->query->appendQueryString(tail: $queryString);
