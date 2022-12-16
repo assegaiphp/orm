@@ -6,9 +6,9 @@ use Assegai\Orm\Enumerations\CascadeOption;
 use Assegai\Orm\Enumerations\DeferrableType;
 use Assegai\Orm\Enumerations\OnDeleteType;
 use Assegai\Orm\Enumerations\OnUpdateType;
-use Assegai\Orm\Enumerations\OrphanedRowActionType;
+use Assegai\Orm\Enumerations\OrphanedRowAction;
 
-class RelationsOptions
+class RelationOptions
 {
   /**
    * @param null|bool|CascadeOption|array $cascade Sets cascades options for the given relation.
@@ -44,19 +44,19 @@ class RelationsOptions
    * functionality.
    * This is useful for performance optimization since its disabling avoid multiple extra queries during entity save.
    *
-   * @param null|OrphanedRowActionType $orphanedRowAction  When a child row is removed from its parent, determines if
+   * @param null|OrphanedRowAction $orphanedRowAction  When a child row is removed from its parent, determines if
    * the child row should be orphaned (default) or deleted.
    */
   public function __construct(
-    public null|bool|CascadeOption|array $cascade = null,
-    public ?bool $isNullable = null,
-    public ?OnDeleteType $onDelete = null,
-    public ?OnUpdateType $onUpdate = null,
-    public ?DeferrableType $deferrable = null,
-    public ?bool $isPrimary = null,
-    public ?bool $createForeignKeyConstraints = null,
-    public ?bool $isEager = null,
-    public ?bool $isPersistent = null,
-    public ?OrphanedRowActionType $orphanedRowAction = null,
+    public readonly null|bool|CascadeOption|array $cascade = null,
+    public readonly ?bool $isNullable = null,
+    public readonly ?OnDeleteType $onDelete = null,
+    public readonly ?OnUpdateType $onUpdate = null,
+    public readonly ?DeferrableType $deferrable = null,
+    public readonly ?bool $isPrimary = null,
+    public readonly ?bool $createForeignKeyConstraints = null,
+    public readonly ?bool $isEager = null,
+    public readonly ?bool $isPersistent = null,
+    public readonly ?OrphanedRowAction $orphanedRowAction = null,
   ) { }
 }

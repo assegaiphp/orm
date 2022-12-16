@@ -2,20 +2,48 @@
 
 namespace Assegai\Orm\Management;
 
+use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Exceptions\ORMException;
+use ReflectionClass;
+use ReflectionException;
+
 /**
  *
  */
-final class FindWhereOptions
+final readonly class FindWhereOptions
 {
+  private ?string $tableName;
+
   /**
    * @param object|array $conditions
    * @param array $exclude
+   * @param string|null $entityClass
    */
   public function __construct(
-    public readonly object|array $conditions,
-    public readonly array $exclude = ['password'],
+    public object|array $conditions,
+    public array        $exclude = ['password'],
+    private ?string     $entityClass = null,
   )
   {
+    if ($this->entityClass)
+    {
+      try
+      {
+        $reflectionClass = new ReflectionClass($this->entityClass);
+        $entityAttributes = $reflectionClass->getAttributes(Entity::class);
+
+        foreach ($entityAttributes as $entityAttribute)
+        {
+          /** @var Entity $entityMetadata */
+          $entityMetadata = (object)$entityAttribute->getArguments();
+          $this->tableName = $entityMetadata->table;
+        }
+      }
+      catch (ReflectionException $e)
+      {
+        die(new ORMException($e->getMessage()));
+      }
+    }
   }
 
   /**
@@ -39,11 +67,19 @@ final class FindWhereOptions
 
     foreach ($this->conditions as $key => $value)
     {
+      $tableName = $this->tableName ?? '';
+      if ($tableName)
+      {
+        $tableName = $tableName . '.';
+      }
       $value = match (true) {
         (bool)preg_match('/[!@#$%^&*()_\-+=\/\\\[\],]+/', $value) => "'$value'",
         default => $value
       };
-      $output .= ((is_null($value) || $value === 'NULL') ? "$key IS $value" : "$key=$value") . ' AND ';
+      $output .= $tableName .
+        ((is_null($value) || $value === 'NULL')
+          ? "$key IS $value"
+          : "$key=$value") . ' AND ';
     }
 
     return trim($output, ' AND');
