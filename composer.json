@@ -27,6 +27,6 @@
         "ext-pdo_mysql": "*",
         "ext-pdo_pgsql": "*",
         "ext-pdo_sqlite": "*",
-        "assegaiphp/core": "^0.3.0"
+        "assegaiphp/core": ">=0.3.0"
     }
 }

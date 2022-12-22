@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6dab80e44a2140d7e8278d7855ff20e1",
+    "content-hash": "34ebf8ea5c998579cee2f1800ec17523",
     "packages": [
         {
             "name": "assegaiphp/core",
-            "version": "0.3.0",
+            "version": "0.3.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/assegaiphp/core.git",
-                "reference": "6036e1f18cbf0158239e0ff81d8850f62293812e"
+                "reference": "557d450f8007debe5019ccc7fd2c02915c11bcf1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/assegaiphp/core/zipball/6036e1f18cbf0158239e0ff81d8850f62293812e",
-                "reference": "6036e1f18cbf0158239e0ff81d8850f62293812e",
+                "url": "https://api.github.com/repos/assegaiphp/core/zipball/557d450f8007debe5019ccc7fd2c02915c11bcf1",
+                "reference": "557d450f8007debe5019ccc7fd2c02915c11bcf1",
                 "shasum": ""
             },
             "require": {
@@ -28,7 +28,7 @@
                 "vlucas/phpdotenv": "^5.4"
             },
             "require-dev": {
-                "assegaiphp/orm": "^0.2",
+                "assegaiphp/orm": "^0.3",
                 "codeception/codeception": "^4.2"
             },
             "type": "library",
@@ -50,9 +50,9 @@
             "description": "A progressive PHP framework for building efficient and scalable server-side applications.",
             "support": {
                 "issues": "https://github.com/assegaiphp/core/issues",
-                "source": "https://github.com/assegaiphp/core/tree/0.3.0"
+                "source": "https://github.com/assegaiphp/core/tree/0.3.1"
             },
-            "time": "2022-12-16T13:48:33+00:00"
+            "time": "2022-12-21T18:23:30+00:00"
         },
         {
             "name": "graham-campbell/result-type",
