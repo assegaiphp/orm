@@ -283,13 +283,14 @@ final class EntityInspector
   {
     $filterValues = $options['filter'] ?? true;
     $values = [];
-    $class = get_class($entity);
-    self::validateEntityName($class);
+    $entityClassname = get_class($entity);
+    self::validateEntityName($entityClassname);
     $columns = $this->getColumns(entity: $entity, exclude: $exclude);
 
     foreach ($columns as $index => $column)
     {
       $propName = is_numeric($index) ? $column : $index;
+      $propName = str_replace($this->getTableName($entity) . ".", '', $propName);
       $property = $entity->$propName;
 
       if (empty($property))
