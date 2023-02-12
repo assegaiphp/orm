@@ -28,5 +28,10 @@
         "ext-pdo_pgsql": "*",
         "ext-pdo_sqlite": "*",
         "assegaiphp/core": ">=0.3.0"
+    },
+    "require-dev": {
+        "codeception/codeception": "^5.0",
+        "codeception/module-phpbrowser": "*",
+        "codeception/module-asserts": "*"
     }
 }
