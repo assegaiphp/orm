@@ -1,4 +1,7 @@
 .idea
+.env
 .vscode
 /.dev/
 /vendor/
+/tests/Unit/config/
+/tests/Unit/database/

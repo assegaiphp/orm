@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a07f9b3cf7ac903bfb5cbac64ad084d0",
+    "content-hash": "e43b7562d796b6474e3f0d9cd91a2622",
     "packages": [
         {
             "name": "arubacao/tld-checker",
-            "version": "1.2.166",
+            "version": "1.2.167",
             "source": {
                 "type": "git",
                 "url": "https://github.com/arubacao/tld-checker.git",
-                "reference": "c16956167d34daa124a9dbd1544ac9cb77fb31b3"
+                "reference": "635a9e2fb941ed9681bf5b946a492672893fce09"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/arubacao/tld-checker/zipball/c16956167d34daa124a9dbd1544ac9cb77fb31b3",
-                "reference": "c16956167d34daa124a9dbd1544ac9cb77fb31b3",
+                "url": "https://api.github.com/repos/arubacao/tld-checker/zipball/635a9e2fb941ed9681bf5b946a492672893fce09",
+                "reference": "635a9e2fb941ed9681bf5b946a492672893fce09",
                 "shasum": ""
             },
             "require": {
@@ -65,9 +65,9 @@
             ],
             "support": {
                 "issues": "https://github.com/arubacao/tld-checker/issues",
-                "source": "https://github.com/arubacao/tld-checker/tree/1.2.166"
+                "source": "https://github.com/arubacao/tld-checker/tree/1.2.167"
             },
-            "time": "2023-02-05T04:01:37+00:00"
+            "time": "2023-02-12T04:01:48+00:00"
         },
         {
             "name": "assegaiphp/core",
@@ -1291,6 +1291,60 @@
                 "source": "https://github.com/Codeception/module-asserts/tree/3.0.0"
             },
             "time": "2022-02-16T19:48:08+00:00"
+        },
+        {
+            "name": "codeception/module-db",
+            "version": "3.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Codeception/module-db.git",
+                "reference": "0ff358215efef8513869d407bb3bb850187975a3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/Codeception/module-db/zipball/0ff358215efef8513869d407bb3bb850187975a3",
+                "reference": "0ff358215efef8513869d407bb3bb850187975a3",
+                "shasum": ""
+            },
+            "require": {
+                "codeception/codeception": "*@dev",
+                "ext-json": "*",
+                "ext-pdo": "*",
+                "php": "^8.0"
+            },
+            "conflict": {
+                "codeception/codeception": "<5.0"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Michael Bodnarchuk"
+                },
+                {
+                    "name": "Gintautas Miselis"
+                }
+            ],
+            "description": "DB module for Codeception",
+            "homepage": "https://codeception.com/",
+            "keywords": [
+                "codeception",
+                "database-testing",
+                "db-testing"
+            ],
+            "support": {
+                "issues": "https://github.com/Codeception/module-db/issues",
+                "source": "https://github.com/Codeception/module-db/tree/3.1.0"
+            },
+            "time": "2022-12-03T09:57:03+00:00"
         },
         {
             "name": "codeception/module-phpbrowser",
