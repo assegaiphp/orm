@@ -5,3 +5,4 @@
 /vendor/
 /tests/Unit/config/
 /tests/Unit/database/
+/config/
