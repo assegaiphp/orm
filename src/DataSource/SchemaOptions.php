@@ -7,7 +7,7 @@ use Assegai\Orm\Enumerations\SQLDialect;
 /**
  *
  */
-class SchemaOptions
+readonly class SchemaOptions
 {
   /**
    * @param string $dbName
@@ -18,27 +18,11 @@ class SchemaOptions
    * @param bool $synchronize
    */
   public function __construct(
-    protected string $dbName = '',
-    protected SQLDialect $dialect = SQLDialect::MYSQL,
-    public readonly ?string $entityPrefix = null,
-    public readonly bool $logging = false,
-    public readonly bool $dropSchema = false,
-    public readonly bool $synchronize = false,
+    public string     $dbName = '',
+    public SQLDialect $dialect = SQLDialect::MYSQL,
+    public ?string    $entityPrefix = null,
+    public bool       $logging = false,
+    public bool       $dropSchema = false,
+    public bool       $synchronize = false,
   ) { }
-
-  /**
-   * @return string
-   */
-  public function dbName(): string
-  {
-    return $this->dbName;
-  }
-
-  /**
-   * @return SQLDialect
-   */
-  public function dialect(): SQLDialect
-  {
-    return $this->dialect;
-  }
 }
