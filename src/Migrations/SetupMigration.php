@@ -12,8 +12,6 @@ use Assegai\Orm\Exceptions\ORMException;
  */
 class SetupMigration extends Migration
 {
-  private const TABLE_NAME = '__assegai_schema_migrations';
-
   /**
    * @inheritDoc
    * @param DataSource $dataSource
@@ -38,7 +36,7 @@ class SetupMigration extends Migration
    */
   public function down(DataSource $dataSource): void
   {
-    $dropTableResult = Schema::dropTableIfExists(SchemaMigrationsEntity::class);
+    $dropTableResult = Schema::dropIfExists(SchemaMigrationsEntity::class);
 
     if (false === $dropTableResult)
     {
