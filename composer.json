@@ -6,7 +6,8 @@
     "autoload": {
         "psr-4": {
             "Assegai\\Orm\\": "src/"
-        }
+        },
+        "files": ["src/Util/Functions.php"]
     },
     "autoload-dev": {
         "psr-4": {
