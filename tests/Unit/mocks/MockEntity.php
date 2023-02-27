@@ -8,7 +8,10 @@ use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Traits\ChangeRecorderTrait;
 
-#[Entity(table: 'mocks')]
+#[Entity(
+  table: 'mocks',
+  database: 'assegai_test_db',
+)]
 class MockEntity
 {
   use ChangeRecorderTrait;
