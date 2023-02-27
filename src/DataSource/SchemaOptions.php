@@ -16,13 +16,19 @@ readonly class SchemaOptions
    * @param bool $logging
    * @param bool $dropSchema
    * @param bool $synchronize
+   * @param bool $checkIfExists
+   * @param bool $isTemporary
+   * @param SQLCharacterSet|null $characterSet
    */
   public function __construct(
-    public string     $dbName = '',
-    public SQLDialect $dialect = SQLDialect::MYSQL,
-    public ?string    $entityPrefix = null,
-    public bool       $logging = false,
-    public bool       $dropSchema = false,
-    public bool       $synchronize = false,
+    public string           $dbName = '',
+    public SQLDialect       $dialect = SQLDialect::MYSQL,
+    public ?string          $entityPrefix = null,
+    public bool             $logging = false,
+    public bool             $dropSchema = false,
+    public bool             $synchronize = false,
+    public bool             $checkIfExists = false,
+    public bool             $isTemporary = false,
+    public ?SQLCharacterSet $characterSet = null,
   ) { }
 }
