@@ -40,3 +40,58 @@ function array_find_last(array $arr, callable $callback): mixed
   $reversedArray = array_reverse($arr);
   return array_find($reversedArray, $callback);
 }
+
+/***********************
+ *       Strings       *
+ ***********************/
+
+/**
+ * Converts a string to Pascal Case format.
+ *
+ * @param string $string The string to be converted.
+ *
+ * @return string The string in Pascal Case format.
+ */
+function strtopascal(string $string): string
+{
+  $words = preg_split('/[\s\-\W_]+/', $string);
+  $words = array_map(fn($word) => ucfirst($word), $words);
+
+  return implode('', $words);
+}
+
+/**
+ * Converts a string to Camel Case format.
+ *
+ * @param string $string The string to be converted.
+ *
+ * @return string The string in Camel Case format
+ */
+function strtocamel(string $string): string
+{
+  return lcfirst(strtopascal($string));
+}
+
+/**
+ * Converts a string to snake_case.
+ *
+ * @param string $name The string to be converted.
+ *
+ * @return string The string in snake_case.
+ */
+function strtosnake(string $string): string
+{
+  return mb_strtolower(preg_replace('/[\s\-\W]+/', '_', $string));
+}
+
+/**
+ * Converts a string to Kebab Case.
+ *
+ * @param string $string The string to be converted.
+ *
+ * @return string The string in Kebab Case.
+ */
+function strtokebab(string $string): string
+{
+  return mb_strtolower(preg_replace('/[\s_\W]+/', '-', $string));
+}
