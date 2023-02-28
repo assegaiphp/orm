@@ -17,7 +17,7 @@ class EntityInspectorCest
   protected ?object $invalidEntity = null;
 
   protected const TABLE_NAME = 'mocks';
-  protected const DATABASE_NAME = 'assegaiphp_test_db';
+  protected const DATABASE_NAME = 'assegai_test_db';
 
   public function _before(UnitTester $I)
   {
@@ -57,7 +57,7 @@ class EntityInspectorCest
   {
     $metaData = EntityInspector::getMetaData($this->entity);
     $I->assertEquals('mocks', $metaData->table);
-    $I->assertEquals('assegaiphp_test_db', $metaData->database);
+    $I->assertEquals('assegai_test_db', $metaData->database);
   }
 
   public function tryToGetColumnPropertiesFromAnEntityInstance(UnitTester $I): void
