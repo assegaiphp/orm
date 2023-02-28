@@ -4,8 +4,9 @@ namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Enumerations\SQLDialect;
+use Stringable;
 
-class SQLColumnDefinition
+class SQLColumnDefinition implements Stringable
 {
   private string $queryString = "";
 
@@ -24,7 +25,7 @@ class SQLColumnDefinition
    * @param SQLDialect $dialect
    */
   public function __construct(
-    private readonly string       $name,
+    public readonly string        $name,
     private readonly string       $type = ColumnType::INT,
     private null|string|int|array $lengthOrValues = null,
     private mixed                 $defaultValue = null,
@@ -131,14 +132,15 @@ class SQLColumnDefinition
           }),
         default   => $this->defaultValue
       } . " ";
-
-      
     }
+
     if ($this->autoIncrement && ColumnType::isNumeric($this->type))
     {
       $queryString .= "AUTO_INCREMENT ";
     }
+
     $queryString .= $this->nullable && !$this->isPrimaryKey ? "NULL " : "NOT NULL ";
+
     if ($this->isPrimaryKey)
     {
       $queryString .= "PRIMARY KEY ";
@@ -157,6 +159,7 @@ class SQLColumnDefinition
     {
       $queryString .= "COMMENT $this->comment ";
     }
+
     $queryString = str_replace('((', '(', $queryString);
     $queryString = str_replace('))', ')', $queryString);
     
