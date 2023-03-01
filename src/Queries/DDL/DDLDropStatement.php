@@ -8,12 +8,14 @@ use Stringable;
 readonly class DDLDropStatement implements Stringable
 {
   /**
-   * @param SQLColumnDefinition $columnDefinition
+   * Constructs the DDLDropStatement
+   *
    * @param string $columnName
+   * @param SQLColumnDefinition|null $columnDefinition
    */
   public function __construct(
-    public SQLColumnDefinition $columnDefinition,
-    public string $columnName
+    public string $columnName,
+    public ?SQLColumnDefinition $columnDefinition = null
   )
   {
   }
@@ -23,7 +25,7 @@ readonly class DDLDropStatement implements Stringable
    */
   public function __toString(): string
   {
-    $columnName = $this->columnDefinition->name ?? $this->columnName;
-    return "DROP COLUMN $columnName";
+    $columnName = $this?->columnDefinition->name ?? $this->columnName;
+    return "DROP COLUMN `$columnName`";
   }
 }

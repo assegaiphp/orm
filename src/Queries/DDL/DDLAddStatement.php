@@ -11,9 +11,13 @@ use Stringable;
  */
 readonly class DDLAddStatement implements Stringable
 {
+  /**
+   * @param string $columnName
+   * @param SQLColumnDefinition $columnDefinition
+   */
   public function __construct(
+    public string $columnName,
     public SQLColumnDefinition $columnDefinition,
-    public string $columnName
   )
   {}
 

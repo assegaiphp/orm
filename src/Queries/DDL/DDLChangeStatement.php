@@ -8,11 +8,12 @@ use Stringable;
 readonly class DDLChangeStatement implements Stringable
 {
   /**
+   * @param string $columnName
    * @param SQLColumnDefinition $columnDefinition
    */
   public function __construct(
+    public string $columnName,
     public SQLColumnDefinition $columnDefinition,
-    public string $columnName
   )
   {}
 
@@ -21,6 +22,18 @@ readonly class DDLChangeStatement implements Stringable
    */
   public function __toString(): string
   {
-    return "CHANGE COLUMN $this->columnDefinition";
+    if ($this->columnDefinition->name)
+    {
+      return "CHANGE COLUMN $this->columnDefinition";
+    }
+
+    $columnName = $this->columnDefinition->name;
+
+    if (empty($columnName))
+    {
+      $columnName = $this->columnName;
+    }
+
+    return "CHANGE COLUMN `$columnName` $this->columnDefinition";
   }
 }
