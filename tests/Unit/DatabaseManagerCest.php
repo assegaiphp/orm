@@ -7,6 +7,7 @@ use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\DataSource\SQLCharacterSet;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\ORM\Exceptions\DataSourceException;
+use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Management\DatabaseManager;
 use Tests\Support\UnitTester;
 
@@ -63,9 +64,11 @@ class DatabaseManagerCest
 
   public function testTheDropMethod(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheResetMethod(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 }

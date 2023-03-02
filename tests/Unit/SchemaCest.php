@@ -8,6 +8,7 @@ use Assegai\Orm\DataSource\Schema;
 use Assegai\Orm\DataSource\SchemaOptions;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
+use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\EntityInspector;
 use PDO;
@@ -126,21 +127,26 @@ class SchemaCest
 
   public function testTheTruncateMethod(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheDropMethod(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheDropifexists(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheExistsMethod(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheHascolumnsMethod(UnitTester $I): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 }
