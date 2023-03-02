@@ -2,7 +2,6 @@
 
 namespace Assegai\Orm\DataSource;
 
-use Assegai\Core\Util\Debug\Log;
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
@@ -12,7 +11,6 @@ use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Interfaces\IDataObject;
 use Assegai\Orm\Management\ColumnInspector;
-use Assegai\Orm\Management\DatabaseManager;
 use Assegai\Orm\Management\EntityInspector;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Interfaces\ISchema;
@@ -199,11 +197,12 @@ class Schema implements ISchema
    */
   public static function truncate(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
-    EntityInspector::validateEntityName($entityClass);
+    $entityInspector = EntityInspector::getInstance();
+    $entityInspector->validateEntityName($entityClass);
     $reflection = new ReflectionClass($entityClass);
     $entityInstance = $reflection->newInstance();
     $dbName = $options ? ("`$options->dbName`." ?? '') : '';
-    $tableName = EntityInspector::getInstance()->getTableName($entityInstance);
+    $tableName = $entityInspector->getTableName($entityInstance);
     $query = "TRUNCATE TABLE $dbName`$tableName`";
 
     $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
@@ -273,7 +272,9 @@ class Schema implements ISchema
       $query = "DROP TABLE";
 
       $query .= match ($options->dialect) {
-        default => ' IF EXISTS',
+        SQLDialect::MYSQL,
+        SQLDialect::MARIADB => ' IF EXISTS',
+        default => '',
       };
       $query .= " `$tableName`";
 
@@ -369,7 +370,7 @@ class Schema implements ISchema
 
     $createDefinitions = trim($createDefinitions, ",\t\n\r\0\x0B");
 
-    return "CREATE{$temporary}TABLE{$ifExists}`$options->dbName`.`$tableName` " .
+    return "CREATE{$temporary}TABLE$ifExists`$options->dbName`.`$tableName` " .
       "($createDefinitions) ENGINE=InnoDB " .
       "DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
   }
@@ -386,7 +387,8 @@ class Schema implements ISchema
   {
     # For each entity property, if it has a column attribute, compare column definitions with current table schema
     $columnInspector = ColumnInspector::getInstance();
-    $entityAttribute = EntityInspector::getMetaData($entityReflection->newInstance());
+    $entityInspector = EntityInspector::getInstance();
+    $entityAttribute = $entityInspector->getMetaData($entityReflection->newInstance());
 
     $changes = new SchemaChangeManifest($entityAttribute);
     /** @var Column[] $entityColumnAttributes */

@@ -193,7 +193,7 @@ class EntityManager implements IEntityStoreOwner
    */
   public static function validateEntityName(string $entityClass): void
   {
-    EntityInspector::validateEntityName(entityClass: $entityClass);
+    EntityInspector::getInstance()->validateEntityName(entityClass: $entityClass);
   }
 
   /**
