@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection PhpMultipleClassDeclarationsInspection */
 
 namespace Assegai\Orm\Attributes\Columns;
 
@@ -15,6 +15,7 @@ use UnitEnum;
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class Column
 {
+  // TODO: Move this constants to an appropriate class/enum
   const SIGNED = 'SIGNED';
   const UNSIGNED = 'UNSIGNED';
   const ZEROFILL = 'ZEROFILL';
@@ -24,7 +25,7 @@ class Column
   const CURRENT_TIMESTAMP = 'CURRENT_TIMESTAMP';
 
   public string $value;
-  public string $sqlDefinition = '';
+  public SQLColumnDefinition|string $sqlDefinition = '';
 
   /**
    * @param string $name Column name in the database table. By default, the column name is generated from the name of
