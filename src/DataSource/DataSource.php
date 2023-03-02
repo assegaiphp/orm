@@ -15,12 +15,12 @@ use PDO;
 use ReflectionClass;
 use ReflectionException;
 
-class DataSource
+readonly class DataSource
 {
-  public readonly EntityManager $manager;
-  public readonly PDO $db;
-  public readonly DataSourceType $type;
-  public readonly array $entities;
+  public EntityManager $manager;
+  public PDO $db;
+  public DataSourceType $type;
+  public array $entities;
 
   /**
    * @throws DataSourceException
@@ -44,6 +44,11 @@ class DataSource
       throw new DataSourceException("DataSourceOptions not set");
     }
 
+    if (is_array($options))
+    {
+      $options = (object)$options;
+    }
+
     $this->type = $options->type;
 
     // TODO: #80 Check if the specified databases is in config @amasiye
@@ -65,7 +70,6 @@ class DataSource
         default => "mysql:host=$host;port=$port;dbname=$name"
       };
 
-      exit($dsn . PHP_EOL);
       $this->db = new PDO(dsn: $dsn, username: $options->username, password: $options->password);
     }
     else
@@ -80,7 +84,7 @@ class DataSource
       };
     }
 
-    $this->manager = count($options->entities) === 1
+    $this->manager = isset($options->entities) && count($options->entities) === 1
       ? new EntityManager(
         connection: $this,
         query: new SQLQuery(db: $this->db,fetchClass: $options->entities[0]::class, fetchMode: PDO::FETCH_CLASS)
