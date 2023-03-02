@@ -2,12 +2,13 @@
 
 namespace Assegai\Orm\DataSource;
 
+use Assegai\Orm\Enumerations\SchemaEngineType;
 use Assegai\Orm\Enumerations\SQLDialect;
 
 /**
  *
  */
-class SchemaOptions
+readonly class SchemaOptions
 {
   /**
    * @param string $dbName
@@ -16,29 +17,21 @@ class SchemaOptions
    * @param bool $logging
    * @param bool $dropSchema
    * @param bool $synchronize
+   * @param bool $checkIfExists
+   * @param bool $isTemporary
+   * @param SQLCharacterSet|null $characterSet
+   * @param SchemaEngineType|null $engine
    */
   public function __construct(
-    protected string $dbName = '',
-    protected SQLDialect $dialect = SQLDialect::MYSQL,
-    public readonly ?string $entityPrefix = null,
-    public readonly bool $logging = false,
-    public readonly bool $dropSchema = false,
-    public readonly bool $synchronize = false,
+    public string             $dbName = '',
+    public SQLDialect         $dialect = SQLDialect::MYSQL,
+    public ?string            $entityPrefix = null,
+    public bool               $logging = false,
+    public bool               $dropSchema = false,
+    public bool               $synchronize = false,
+    public bool               $checkIfExists = false,
+    public bool               $isTemporary = false,
+    public ?SQLCharacterSet   $characterSet = null,
+    public ?SchemaEngineType  $engine = null,
   ) { }
-
-  /**
-   * @return string
-   */
-  public function dbName(): string
-  {
-    return $this->dbName;
-  }
-
-  /**
-   * @return SQLDialect
-   */
-  public function dialect(): SQLDialect
-  {
-    return $this->dialect;
-  }
 }

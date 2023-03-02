@@ -35,7 +35,7 @@ interface ISchema
    * @param SchemaOptions|null $options
    * @return bool|null
    */
-  public static function renameTable(string $from, string $to, ?SchemaOptions $options = null): ?bool;
+  public static function rename(string $from, string $to, ?SchemaOptions $options = null): ?bool;
 
   /**
    * @param string $entityClass
@@ -63,28 +63,27 @@ interface ISchema
    * @param SchemaOptions|null $options
    * @return bool|null
    */
-  public static function dropTable(string $entityClass, ?SchemaOptions $options = null): ?bool;
+  public static function drop(string $entityClass, ?SchemaOptions $options = null): ?bool;
 
   /**
    * @param string $entityClass
    * @param SchemaOptions|null $options
    * @return bool|null
    */
-  public static function dropTableIfExists(string $entityClass, ?SchemaOptions $options = null): ?bool;
+  public static function dropIfExists(string $entityClass, ?SchemaOptions $options = null): ?bool;
 
   /**
-   * @param PDO|DataSource $dataSource
-   * @param string $databaseName
-   * @return bool
-   */
-  public static function dbExists(PDO|DataSource $dataSource, string $databaseName): bool;
-
-  /**
-   * @param PDO|DataSource $dataSource
-   * @param string $databaseName
    * @param string $tableName
-   * @param SQLDialect $dialect
+   * @param DataSource $dataSource
    * @return bool
    */
-  public static function dbTableExists(PDO|DataSource $dataSource, string $databaseName, string $tableName, SQLDialect $dialect = SQLDialect::MYSQL): bool;
+  public static function exists(string $tableName, DataSource $dataSource): bool;
+
+  /**
+   * Checks if the
+   * @param string $tableName
+   * @param string[] $columnNames
+   * @return bool
+   */
+  public static function hasColumns(string $tableName, array $columnNames): bool;
 }

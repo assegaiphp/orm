@@ -56,6 +56,7 @@ final class EntityInspector
    */
   public static function validateEntityName(string $entityClass): void
   {
+    // TODO: change static methods to instance methods
     if (!class_exists($entityClass))
     {
       throw new ClassNotFoundException(className: $entityClass);
@@ -68,6 +69,34 @@ final class EntityInspector
     {
       throw new ORMException(message: "Missing Entity attribute for $entityClass");
     }
+  }
+
+  /**
+   * @param object $entity
+   * @return Entity
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  public static function getMetaData(object $entity): Entity
+  {
+    // TODO: change static methods to instance methods
+    self::validateEntityName(get_class($entity));
+    $className = get_class($entity);
+
+    $entityReflection = new ReflectionClass($className);
+    $entityAttributesReflections = $entityReflection->getAttributes(Entity::class);
+
+    if (empty($entityAttributesReflections))
+    {
+      throw new ORMException("Entity attribute not found on class $className.");
+    }
+
+    $entityAttributeReflection = $entityAttributesReflections[0];
+    /** @var Entity $entityAttributeInstance */
+    $entityAttributeInstance = $entityAttributeReflection->newInstance();
+
+    return $entityAttributeInstance;
   }
 
   /**
@@ -283,13 +312,14 @@ final class EntityInspector
   {
     $filterValues = $options['filter'] ?? true;
     $values = [];
-    $class = get_class($entity);
-    self::validateEntityName($class);
+    $entityClassname = get_class($entity);
+    self::validateEntityName($entityClassname);
     $columns = $this->getColumns(entity: $entity, exclude: $exclude);
 
     foreach ($columns as $index => $column)
     {
       $propName = is_numeric($index) ? $column : $index;
+      $propName = str_replace($this->getTableName($entity) . ".", '', $propName);
       $property = $entity->$propName;
 
       if (empty($property))
@@ -334,10 +364,11 @@ final class EntityInspector
   }
 
   /**
+   * Returns the table name for the specified entity.
    * @param object $entity
-   * @return string
-   * @throws ClassNotFoundException
-   * @throws ORMException
+   * @return string The name of the table associated with the entity.
+   * @throws ClassNotFoundException If the entity does not have the required attributes.
+   * @throws ORMException If the entity attributes have invalid values.
    */
   public function getTableName(object $entity): string
   {
@@ -357,11 +388,23 @@ final class EntityInspector
   }
 
   /**
-   * @param string $className
-   * @return string
+   * Returns the database table name associated with a given class name.
+   * The `getTableNameFromClassName` method retrieves the database table name associated with a given class name.
+   * It takes a `String` parameter `className` that represents the name of the class for which the table name should
+   * be retrieved. The method returns a `String` representing the name of the database table associated with the given
+   * class name.
+   * If the `className` parameter is empty or `null`, the method throws an `IllegalArgumentException`.
+   *
+   * @param string $className The name of the class for which to retrieve the associated table name
+   * @return string Returns the name of the database table associated with the class name.
+   * @throws ORMException If the given class name is empty or null.
    */
   private function getTableNameFromClassName(string $className): string
   {
+    if (empty($className))
+    {
+      throw new ORMException("Class name cannot be empty.");
+    }
     $tokens = explode('\\', $className);
     $className = array_pop($tokens);
     return strtolower(str_replace('Entity', '', $className));

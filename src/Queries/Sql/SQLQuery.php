@@ -31,7 +31,8 @@ final class SQLQuery
     private readonly array  $fetchClassParams = [],
     private readonly array  $passwordHashFields = ['password'],
     private string          $passwordHashAlgorithm = ''
-  ) {
+  )
+  {
     if (empty($this->passwordHashAlgorithm))
     {
       $this->passwordHashAlgorithm = Config::get('default_password_hash_algo') ?? '2y';
@@ -289,7 +290,7 @@ final class SQLQuery
     catch (PDOException)
     {
       list($sqlCode, $driverCode, $message) = $statement->errorInfo();
-      if (Config::environment('ENVIRONMENT') === 'PROD')
+      if (Config::environment() === 'PROD')
       {
         $message = 'Bad Request';
       }
