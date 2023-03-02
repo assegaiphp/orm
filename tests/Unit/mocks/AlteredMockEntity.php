@@ -20,12 +20,9 @@ class AlteredMockEntity
   #[PrimaryGeneratedColumn]
   public int $id = 0;
 
-  #[Column(type: ColumnType::VARCHAR, nullable: false)]
+  #[Column(type: ColumnType::VARCHAR, nullable: true)]
   public string $name = '';
 
   #[EmailColumn]
   public string $email = '';
-
-  #[Column(type: ColumnType::TEXT)]
-  public string $description = '';
 }
