@@ -22,18 +22,18 @@ readonly class DDLChangeStatement implements Stringable
    */
   public function __toString(): string
   {
+    $columnName = $this->columnDefinition->name;
+
     if ($this->columnDefinition->name)
     {
-      return "CHANGE COLUMN $this->columnDefinition";
+      return "CHANGE COLUMN `$columnName` $this->columnDefinition";
     }
-
-    $columnName = $this->columnDefinition->name;
 
     if (empty($columnName))
     {
       $columnName = $this->columnName;
     }
 
-    return "CHANGE COLUMN `$columnName` $this->columnDefinition";
+    return "CHANGE COLUMN `$columnName` `$columnName` $this->columnDefinition";
   }
 }
