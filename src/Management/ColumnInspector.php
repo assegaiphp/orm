@@ -69,7 +69,7 @@ class ColumnInspector
       throw new ORMException("Invalid property. $propertyReflection->name does not have a Column attribute");
     }
 
-    $attributes = $propertyReflection->getAttributes(Column::class);
+    $attributes = array_filter($propertyReflection->getAttributes(), fn($attribute) => is_a($attribute->getName(), Column::class, true) || is_subclass_of($attribute->getName(), Column::class, true));
     return $attributes[0]->newInstance();
   }
 
@@ -81,8 +81,20 @@ class ColumnInspector
    */
   public function propertyHasColumnAttribute(ReflectionProperty $property): bool
   {
-    $attributes = $property->getAttributes(Column::class);
-    return !empty($attributes);
+    $attributes = $property->getAttributes();
+
+    foreach ($attributes as $attribute)
+    {
+      if (
+        is_a($attribute->getName(), Column::class, true) ||
+        is_subclass_of($attribute->getName(), Column::class, true)
+      )
+      {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
