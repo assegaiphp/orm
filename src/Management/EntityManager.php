@@ -25,7 +25,6 @@ use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
-use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
@@ -36,6 +35,7 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 use stdClass;
+use UnitEnum;
 
 /**
  *
@@ -78,11 +78,14 @@ class EntityManager implements IEntityStoreOwner
   )
   {
     $this->query = $query ?? new SQLQuery(db: $connection->db);
+
+    // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
     if (!$this->inspector)
     {
       $this->inspector = EntityInspector::getInstance();
     }
 
+    // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
     if (!$this->typeResolver)
     {
       $this->typeResolver = TypeResolver::getInstance();
@@ -256,7 +259,7 @@ class EntityManager implements IEntityStoreOwner
 
     if ($entity instanceof Entity)
     {
-      $object = (object) $entity;
+      $object = $entity;
 
       foreach ($entities as $item)
       {
@@ -395,7 +398,7 @@ class EntityManager implements IEntityStoreOwner
       {
         $conditionString .= "$key=" . match (true) {
           is_numeric($value) => $value,
-          $value instanceof \UnitEnum && property_exists($value, 'value') => $value->value,
+          $value instanceof UnitEnum && property_exists($value, 'value') => $value->value,
           default => "'$value'"
         };
       }
@@ -414,8 +417,6 @@ class EntityManager implements IEntityStoreOwner
       foreach ($partialEntity as $partialItem)
       {
         $result = $this->update(entityClass: $entityClass, partialEntity: $partialItem, conditions: $conditions);
-        $raw .= $result->raw . PHP_EOL;
-        $affected += $result->affected;
         $generatedMaps = $result->generatedMaps;
       }
 
@@ -436,7 +437,7 @@ class EntityManager implements IEntityStoreOwner
       {
         if (!is_null($value))
         {
-          if ($value instanceof \UnitEnum && property_exists($value, 'value'))
+          if ($value instanceof UnitEnum && property_exists($value, 'value'))
           {
             $value = $value->value;
           }
@@ -807,7 +808,7 @@ class EntityManager implements IEntityStoreOwner
           $referencedTableAlias = $referencedTableName;
           $statement =
             $statement->leftJoin("$referencedTableName $referencedTableAlias")
-              ->on("{$tableName}.{$joinColumnName}={$referencedTableName}.{$referencedColumnName}");
+              ->on("$tableName.$joinColumnName=$referencedTableName.$referencedColumnName");
         }
       }
 
@@ -944,6 +945,12 @@ class EntityManager implements IEntityStoreOwner
     return (object)$found[0];
   }
 
+  /**
+   * Sets the list of custom converters to use for type conversion.
+   *
+   * @param array $converters
+   * @return void
+   */
   public function useConverters(array $converters): void
   {
     $this->customConverters = $converters;

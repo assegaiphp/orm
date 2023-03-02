@@ -56,6 +56,7 @@ final class EntityInspector
    */
   public static function validateEntityName(string $entityClass): void
   {
+    // TODO: change static methods to instance methods
     if (!class_exists($entityClass))
     {
       throw new ClassNotFoundException(className: $entityClass);
@@ -79,6 +80,7 @@ final class EntityInspector
    */
   public static function getMetaData(object $entity): Entity
   {
+    // TODO: change static methods to instance methods
     self::validateEntityName(get_class($entity));
     $className = get_class($entity);
 
