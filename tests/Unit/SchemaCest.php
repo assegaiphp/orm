@@ -79,6 +79,7 @@ class SchemaCest
 
   /**
    * @throws ORMException
+   * @noinspection SpellCheckingInspection
    */
   public function testTheCreateifnotexistsMethod(UnitTester $I): void
   {
@@ -127,26 +128,33 @@ class SchemaCest
 
   public function testTheTruncateMethod(UnitTester $I): void
   {
+    // TODO: Implement the testTheTruncateMethod() method.
     throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheDropMethod(UnitTester $I): void
   {
+    // TODO: Implement the testTheDropMethod() method.
     throw new NotImplementedException(__METHOD__);
   }
 
+  /** @noinspection SpellCheckingInspection */
   public function testTheDropifexists(UnitTester $I): void
   {
+    // TODO: Implement the testTheDropifexists() method.
     throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheExistsMethod(UnitTester $I): void
   {
+    // TODO: Implement the testTheExistsMethod() method.
     throw new NotImplementedException(__METHOD__);
   }
 
+  /** @noinspection SpellCheckingInspection */
   public function testTheHascolumnsMethod(UnitTester $I): void
   {
+    // TODO: Implement the testTheHascolumnsMethod() method.
     throw new NotImplementedException(__METHOD__);
   }
 }
