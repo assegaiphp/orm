@@ -14,6 +14,7 @@ use Assegai\Orm\Management\ColumnInspector;
 use Assegai\Orm\Management\EntityInspector;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Interfaces\ISchema;
+use Assegai\Orm\Metadata\SchemaMetadata;
 use Assegai\Orm\Metadata\SQLTableDescription;
 use Assegai\Orm\Migrations\SchemaChangeManifest;
 use Assegai\Orm\Queries\DDL\DDLAddStatement;
@@ -178,11 +179,45 @@ class Schema implements ISchema
   /**
    * @inheritDoc
    */
-  public static function info(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?string
+  public static function info(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?SchemaMetadata
   {
-    // TODO: Implement info() method.
-    $result = false;
-    return $result;
+    $info = null;
+    $entityInstance = self::getEntityInstance($entityClass);
+    $entityInspector = EntityInspector::getInstance();
+
+    $tableName = $entityInspector->getTableName($entityInstance);
+
+    # Describe the current table schema
+    $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
+    $statement = $db->query("DESCRIBE `$tableName`");
+
+    if (false === $statement->execute())
+    {
+      throw new ORMException("Failed to execute 'DESCRIBE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
+    }
+
+    $tableFields = $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
+
+    if (empty($tableFields))
+    {
+      return null;
+    }
+
+    $statement = $db->query("SHOW CREATE TABLE `$tableName`");
+
+    if (false === $statement->execute())
+    {
+      throw new ORMException("Failed to execute 'SHOW CREATE TABLE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
+    }
+
+    $result = $statement->fetchColumn(1);
+
+    if (!is_string($result))
+    {
+      // TODO: handle case where result is not a string
+    }
+
+    return new SchemaMetadata(tableFields: $tableFields, ddlStatement: $result);
   }
 
   /**
@@ -235,10 +270,12 @@ class Schema implements ISchema
 
     try
     {
+      $entityInspector = EntityInspector::getInstance();
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
-      $instance = $reflection->newInstance();
-      $tableName = $instance->tableName();
-      $query = "DROP TABLE $tableName";
+      $entityInstance = $reflection->newInstance();
+      $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+      $tableName = $entityInspector->getTableName($entityInstance);
+      $query = "DROP TABLE $dbName`$tableName`";
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
       $statement = $db->prepare(query: $query);
@@ -266,9 +303,11 @@ class Schema implements ISchema
 
     try
     {
+      $entityInspector = EntityInspector::getInstance();
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
-      $instance = $reflection->newInstance();
-      $tableName = $instance->tableName();
+      $entityInstance = $reflection->newInstance();
+      $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+      $tableName = $entityInspector->getTableName($entityInstance);
       $query = "DROP TABLE";
 
       $query .= match ($options->dialect) {
@@ -276,7 +315,7 @@ class Schema implements ISchema
         SQLDialect::MARIADB => ' IF EXISTS',
         default => '',
       };
-      $query .= " `$tableName`";
+      $query .= " $dbName`$tableName`";
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
       $statement = $db->prepare(query: $query);
@@ -290,10 +329,8 @@ class Schema implements ISchema
   }
 
   /**
-   * @param PDO|DataSource $dataSource
-   * @param string $databaseName
    * @param string $tableName
-   * @param SQLDialect $dialect
+   * @param DataSource $dataSource
    * @return bool
    * @throws GeneralSQLQueryException
    */
@@ -318,7 +355,7 @@ class Schema implements ISchema
    * @param string[] $columnNames
    * @return bool
    */
-  public static function hasColumns(string $tableName, array $columnNames): bool
+  public static function hasColumns(string $tableName, array $columnNames, DataSource $dataSource): bool
   {
     // TODO: Implement hasColumn() method.
     throw new NotImplementedException(__METHOD__);
@@ -503,5 +540,22 @@ class Schema implements ISchema
     // TODO: Compare field extra to column attribute extra details
 
     return false;
+  }
+
+  /**
+   * @param string $entityClass
+   * @return object
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private static function getEntityInstance(string $entityClass): object
+  {
+    # Get the entity table
+    $entityInspector = EntityInspector::getInstance();
+    $entityInspector->validateEntityName($entityClass);
+
+    $entityReflection = new ReflectionClass($entityClass);
+    return $entityReflection->newInstance();
   }
 }
