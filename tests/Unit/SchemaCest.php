@@ -18,6 +18,7 @@ use Assegai\Orm\Exceptions\ORMException;
 use PDO;
 use ReflectionException;
 use Tests\Support\UnitTester;
+use TypeError;
 use Unit\mocks\AlteredMockEntity;
 use Unit\mocks\MockEntity;
 
@@ -229,8 +230,14 @@ class SchemaCest
     $blankTableDoesNotExist = Schema::exists($noTableName, $this->dataSource);
     $I->assertFalse($blankTableDoesNotExist);
 
-    $nullTableDoesNotExist = Schema::exists($nullTableName, $this->dataSource);
-    $I->assertFalse($nullTableDoesNotExist);
+    try
+    {
+      Schema::exists($nullTableName, $this->dataSource);
+    }
+    catch (TypeError $error)
+    {
+      $I->assertStringContainsString('must be of type string, null given', $error->getMessage());
+    }
   }
 
   /** @noinspection SpellCheckingInspection */
@@ -239,15 +246,15 @@ class SchemaCest
     $tableName = 'mocks';
 
     $validColumnNames = ['name', 'id'];
-    $validColumnNamesExist = Schema::hasColumns($tableName, $validColumnNames);
+    $validColumnNamesExist = Schema::hasColumns($tableName, $validColumnNames, $this->dataSource);
     $I->assertTrue($validColumnNamesExist);
 
     $nonExistentColumnNames = ['this_column_does_not_exist', 'neither_does_this'];
-    $nonExistentColumnNamesExist = Schema::hasColumns($tableName, $nonExistentColumnNames);
+    $nonExistentColumnNamesExist = Schema::hasColumns($tableName, $nonExistentColumnNames, $this->dataSource);
     $I->assertFalse($nonExistentColumnNamesExist);
 
     $listOfValidAndInvalidColumnNames = array_merge($validColumnNames, $nonExistentColumnNames);
-    $mixedListOfColumnNamesExist = Schema::hasColumns($tableName, $listOfValidAndInvalidColumnNames);
+    $mixedListOfColumnNamesExist = Schema::hasColumns($tableName, $listOfValidAndInvalidColumnNames, $this->dataSource);
     $I->assertFalse($mixedListOfColumnNamesExist);
 
     $emptyColumnName = ['', null];
