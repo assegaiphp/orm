@@ -23,6 +23,8 @@ class Column
   const CURRENT_DATE = 'CURRENT_DATE()';
   const CURRENT_TIME = 'CURRENT_TIME()';
   const CURRENT_TIMESTAMP = 'CURRENT_TIMESTAMP';
+  const DEFAULT_LENGTH_CHAR = 30;
+  const DEFAULT_LENGTH_VARCHAR = 255;
 
   public string $value;
   public SQLColumnDefinition|string $sqlDefinition = '';
@@ -92,7 +94,7 @@ class Column
     if (is_null($sqlLengthOrValues))
     {
       $sqlLengthOrValues = match ($this->type) {
-        ColumnType::VARCHAR => '10',
+        ColumnType::VARCHAR => strval(self::DEFAULT_LENGTH_VARCHAR),
         ColumnType::DECIMAL => '16,2',
         default => null
       };
