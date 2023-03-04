@@ -6,7 +6,7 @@ use Assegai\Core\Util\Debug\Log;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Exceptions\DataSourceException;
-use \PDO;
+use PDO;
 use PDOException;
 
 /**

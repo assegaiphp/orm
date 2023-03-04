@@ -53,7 +53,7 @@ class DatabaseManagerCest
   /**
    * @throws DataSourceException
    */
-  public function testTheCreateMethod(UnitTester $I): void
+  public function testTheSetupMethod(UnitTester $I): void
   {
     $expectedDatabaseName = "balloons_db";
     $nonExistentDatabaseTableName = "shields_db";
@@ -84,9 +84,21 @@ class DatabaseManagerCest
     $I->assertFalse($this->databaseManager->exists($this->dataSource, $dbName));
   }
 
+  /**
+   * @param UnitTester $I
+   * @return void
+   * @throws DataSourceException
+   */
   public function testTheResetMethod(UnitTester $I): void
   {
-    throw new NotImplementedException(__METHOD__);
+    $expectedDatabaseName = "assegai_reset_db";
+    $nonExistentDatabaseTableName = "shields_db";
+    $this->databaseManager->setup($this->dataSource, $expectedDatabaseName);
+
+    $this->databaseManager->reset($this->dataSource, $expectedDatabaseName);
+
+    $I->assertTrue($this->databaseManager->exists($this->dataSource, $expectedDatabaseName));
+    $I->assertFalse($this->databaseManager->exists($this->dataSource, $nonExistentDatabaseTableName));
   }
 
   private function createDatabase(string $dbName): void
