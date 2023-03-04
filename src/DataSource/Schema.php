@@ -3,17 +3,18 @@
 namespace Assegai\Orm\DataSource;
 
 use Assegai\Orm\Attributes\Columns\Column;
+use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
-use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Interfaces\IDataObject;
 use Assegai\Orm\Management\ColumnInspector;
 use Assegai\Orm\Management\EntityInspector;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Interfaces\ISchema;
+use Assegai\Orm\Metadata\SchemaMetadata;
 use Assegai\Orm\Metadata\SQLTableDescription;
 use Assegai\Orm\Migrations\SchemaChangeManifest;
 use Assegai\Orm\Queries\DDL\DDLAddStatement;
@@ -147,18 +148,8 @@ class Schema implements ISchema
     $entityReflection = new ReflectionClass($entityClass);
     $entityInstance = $entityReflection->newInstance();
 
-    $tableName = $entityInspector->getTableName($entityInstance);
-
-    # Describe the current table schema
     $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
-    $statement = $db->query("DESCRIBE `$tableName`");
-
-    if (false === $statement->execute())
-    {
-      throw new ORMException("Failed to execute 'DESCRIBE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
-    }
-
-    $tableFields = $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
+    $tableFields = self::getTableDescriptions($entityInstance, $db);
 
     if (empty($tableFields))
     {
@@ -177,12 +168,50 @@ class Schema implements ISchema
 
   /**
    * @inheritDoc
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
    */
-  public static function info(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?string
+  public static function info(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?SchemaMetadata
   {
-    // TODO: Implement info() method.
-    $result = false;
-    return $result;
+    $entityInstance = self::getEntityInstance($entityClass);
+    $entityInspector = EntityInspector::getInstance();
+
+    $tableName = $entityInspector->getTableName($entityInstance);
+
+    # Describe the current table schema
+    $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
+    $tableFields = self::getTableDescriptions($entityInstance, $db);
+
+    if (empty($tableFields))
+    {
+      return null;
+    }
+
+    $statement = $db->query("SHOW CREATE TABLE `$tableName`");
+
+    if (false === $statement->execute())
+    {
+      throw new ORMException("Failed to execute 'SHOW CREATE TABLE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
+    }
+
+    $result = $statement->fetchColumn(1);
+
+    if (!is_string($result))
+    {
+      if (!empty($statement->errorInfo()))
+      {
+        $message = print_r($statement->errorInfo(), true);
+      }
+      else
+      {
+        $message = "Invalid DDL statement for table `$tableName`";
+      }
+
+      throw new ORMException($message);
+    }
+
+    return new SchemaMetadata(tableFields: $tableFields, ddlStatement: $result);
   }
 
   /**
@@ -235,10 +264,12 @@ class Schema implements ISchema
 
     try
     {
+      $entityInspector = EntityInspector::getInstance();
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
-      $instance = $reflection->newInstance();
-      $tableName = $instance->tableName();
-      $query = "DROP TABLE $tableName";
+      $entityInstance = $reflection->newInstance();
+      $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+      $tableName = $entityInspector->getTableName($entityInstance);
+      $query = "DROP TABLE $dbName`$tableName`";
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
       $statement = $db->prepare(query: $query);
@@ -266,9 +297,11 @@ class Schema implements ISchema
 
     try
     {
+      $entityInspector = EntityInspector::getInstance();
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
-      $instance = $reflection->newInstance();
-      $tableName = $instance->tableName();
+      $entityInstance = $reflection->newInstance();
+      $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+      $tableName = $entityInspector->getTableName($entityInstance);
       $query = "DROP TABLE";
 
       $query .= match ($options->dialect) {
@@ -276,7 +309,7 @@ class Schema implements ISchema
         SQLDialect::MARIADB => ' IF EXISTS',
         default => '',
       };
-      $query .= " `$tableName`";
+      $query .= " $dbName`$tableName`";
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
       $statement = $db->prepare(query: $query);
@@ -290,10 +323,8 @@ class Schema implements ISchema
   }
 
   /**
-   * @param PDO|DataSource $dataSource
-   * @param string $databaseName
    * @param string $tableName
-   * @param SQLDialect $dialect
+   * @param DataSource $dataSource
    * @return bool
    * @throws GeneralSQLQueryException
    */
@@ -314,14 +345,77 @@ class Schema implements ISchema
   }
 
   /**
-   * @param string $tableName
-   * @param string[] $columnNames
-   * @return bool
+   * Checks whether a table has the given columns.
+   *
+   * @param string $tableName The name of the table to check.
+   * @param array $columnNames An array of column names to check for.
+   * @param DataSource $dataSource The data source to use.
+   *
+   * @return bool True if the table has all the given columns, false otherwise.
+   * @throws ORMException when SQL statement execution fails.
+   * @noinspection SqlResolve
    */
-  public static function hasColumns(string $tableName, array $columnNames): bool
+  public static function hasColumns(string $tableName, array $columnNames, DataSource $dataSource): bool
   {
-    // TODO: Implement hasColumn() method.
-    throw new NotImplementedException(__METHOD__);
+    $columnNamesString = implode( ', ', array_map(fn($name) => "'$name'", $columnNames) );
+    $totalColumNames = count($columnNames);
+
+    if (empty($tableName) || empty($totalColumNames))
+    {
+      return false;
+    }
+
+    $databaseName = $dataSource->getDatabaseName();
+
+    $sql = match ($dataSource->type) {
+      DataSourceType::SQLITE => <<<EOF
+SELECT COUNT(*) AS column_count
+FROM pragma_table_info('$databaseName')
+WHERE name IN ($columnNamesString)
+HAVING COUNT(*) = $totalColumNames
+EOF,
+
+      DataSourceType::POSTGRESQL => <<<EOF
+SELECT COUNT(*) AS column_count
+FROM information_schema.columns
+WHERE table_name = '$databaseName'
+  AND column_name IN ($columnNamesString)
+HAVING COUNT(*) = $totalColumNames;
+EOF,
+
+      default => <<<EOF
+SELECT COUNT(*) as total_fields
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = '$databaseName'
+    AND TABLE_NAME = '$tableName'
+    AND COLUMN_NAME IN ($columnNamesString)
+HAVING COUNT(*) = $totalColumNames
+EOF
+    };
+
+    $statement = $dataSource->db->query($sql);
+
+    if (false === $statement)
+    {
+      throw new ORMException(print_r($dataSource->db->errorInfo(), true));
+    }
+
+    $columns = self::getColumnNames($tableName, $dataSource, $databaseName);
+
+    if (!$columnNames)
+    {
+      return false;
+    }
+
+    foreach($columnNames as $columnName)
+    {
+      if (!in_array($columnName, $columns))
+      {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -503,5 +597,79 @@ class Schema implements ISchema
     // TODO: Compare field extra to column attribute extra details
 
     return false;
+  }
+
+  /**
+   * @param string $entityClass
+   * @return object
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private static function getEntityInstance(string $entityClass): object
+  {
+    # Get the entity table
+    $entityInspector = EntityInspector::getInstance();
+    $entityInspector->validateEntityName($entityClass);
+
+    $entityReflection = new ReflectionClass($entityClass);
+    return $entityReflection->newInstance();
+  }
+
+  /**
+   * @param string $tableName
+   * @param DataSource $dataSource
+   * @param string|null $databaseName
+   * @return array
+   * @throws ORMException
+   */
+  private static function getColumnNames(string $tableName, DataSource $dataSource, ?string $databaseName = null): array
+  {
+    $columnNames = [];
+    $dbName = $databaseName ?? $dataSource->getDatabaseName();
+
+    $query = "DESCRIBE `$dbName`.`$tableName`";
+
+    $statement = $dataSource->db->query($query);
+
+    if (false === $statement)
+    {
+      throw new ORMException("Failed to describe `$dbName`.`$tableName`: " . print_r($dataSource->db->errorInfo(), true));
+    }
+
+    /** @var SQLTableDescription[] $tableFields */
+    $tableFields = $statement->fetchAll(PDO::FETCH_CLASS,SQLTableDescription::class);
+
+    foreach ($tableFields as $tableField)
+    {
+      $columnNames[] = $tableField->Field;
+    }
+
+    return $columnNames;
+  }
+
+  /**
+   * @param object $entityInstance
+   * @param SchemaOptions $options
+   * @return SQLTableDescription
+   * @throws ClassNotFoundException
+   * @throws DataSourceConnectionException
+   * @throws ORMException
+   */
+  private static function getTableDescriptions(object $entityInstance, PDO|IDataObject $connection): array
+  {
+    $entityInspector = EntityInspector::getInstance();
+
+    $tableName = $entityInspector->getTableName($entityInstance);
+
+    # Describe the current table schema
+    $statement = $connection->query("DESCRIBE `$tableName`");
+
+    if (false === $statement->execute())
+    {
+      throw new ORMException("Failed to execute 'DESCRIBE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
+    }
+
+    return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
   }
 }

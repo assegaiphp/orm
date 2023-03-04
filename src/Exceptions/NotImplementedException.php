@@ -8,6 +8,6 @@ class NotImplementedException extends ORMException
   {
     $this->code = 501;
     $this->error = 'Not Implemented';
-    parent::__construct(sprintf("%s not yet implemented", $feature));
+    parent::__construct(sprintf("%s not yet been implemented", $feature));
   }
 }
