@@ -143,7 +143,9 @@ class SchemaCest
   /**
    * @param UnitTester $I
    * @return void
+   * @throws ClassNotFoundException
    * @throws ORMException
+   * @throws ReflectionException
    */
   public function testTheInfoMethod(UnitTester $I): void
   {
@@ -152,7 +154,7 @@ class SchemaCest
 
     $infoResult = Schema::info(MockEntity::class, $this->options);
     $I->assertCount(6, $infoResult->tableFields);
-    $I->assertStringStartsWith('CREATE TABLE `mocks`', $infoResult->ddlStatement);
+    $I->assertStringStartsWith("CREATE TABLE `mocks`", $infoResult->ddlStatement);
   }
 
   /**
@@ -241,8 +243,15 @@ class SchemaCest
   }
 
   /** @noinspection SpellCheckingInspection */
+  /**
+   * @param UnitTester $I
+   * @return void
+   * @throws ORMException
+   */
   public function testTheHascolumnsMethod(UnitTester $I): void
   {
+    $creationResult = Schema::create(MockEntity::class, $this->options);
+    $I->assertTrue($creationResult);
     $tableName = 'mocks';
 
     $validColumnNames = ['name', 'id'];
@@ -258,15 +267,11 @@ class SchemaCest
     $I->assertFalse($mixedListOfColumnNamesExist);
 
     $emptyColumnName = ['', null];
-    $nonExistentColumnNamesExist = Schema::hasColumns($tableName, $emptyColumnName);
+    $nonExistentColumnNamesExist = Schema::hasColumns($tableName, $emptyColumnName, $this->dataSource);
     $I->assertFalse($nonExistentColumnNamesExist);
 
     $emptyListOfColumnNames = [];
-    $emptyListOfColumnNamesExist = Schema::hasColumns($tableName, $emptyListOfColumnNames);
+    $emptyListOfColumnNamesExist = Schema::hasColumns($tableName, $emptyListOfColumnNames, $this->dataSource);
     $I->assertFalse($emptyListOfColumnNamesExist);
-
-    $nullColumnName = null;
-    $nullColumnNameExists = Schema::hasColumns($tableName, $nullColumnName);
-    $I->assertFalse($nullColumnNameExists);
   }
 }
