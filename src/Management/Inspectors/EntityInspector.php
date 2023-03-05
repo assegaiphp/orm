@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegai\Orm\Management;
+namespace Assegai\Orm\Management\Inspectors;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;

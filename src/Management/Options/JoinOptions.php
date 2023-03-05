@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegai\Orm\Management;
+namespace Assegai\Orm\Management\Options;
 
 use stdClass;
 

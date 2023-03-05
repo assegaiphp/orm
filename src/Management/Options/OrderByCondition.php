@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegai\Orm\Management;
+namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Enumerations\NullType;
 use Assegai\Orm\Enumerations\OrderType;

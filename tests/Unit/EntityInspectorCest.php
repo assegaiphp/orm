@@ -5,7 +5,7 @@ namespace Tests\Unit;
 
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
-use Assegai\Orm\Management\EntityInspector;
+use Assegai\Orm\Management\Inspectors\EntityInspector;
 use Exception;
 use ReflectionException;
 use Tests\Support\UnitTester;

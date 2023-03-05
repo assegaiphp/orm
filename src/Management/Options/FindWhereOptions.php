@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegai\Orm\Management;
+namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\ORMException;
