@@ -4,20 +4,28 @@ namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Traits\ExecutableTrait;
 
+/**
+ * The SQLAlterTableOption class provides methods for altering a table in a SQL database.
+ */
 final class SQLAlterTableOption
 {
   use ExecutableTrait;
 
-  public function __construct(
-    private SQLQuery $query
-  )
+  /**
+   * Constructs an instance of the SQLAlterTableOption.
+   *
+   * @param SQLQuery $query The SQLQuery instance used to construct queries.
+   */
+  public function __construct(private readonly SQLQuery $query)
   {
   }
 
   /**
-   * @param SQLColumnDefinition $dataType
-   * @param bool $first Specifies that the new column should be positioned first within a table row.
-   * @param null|string $afterColumn Specifies the column after which to position the new column within a table row.
+   * Adds a new column to the table.
+   *
+   * @param SQLColumnDefinition $dataType The definition of the new column.
+   * @param bool|null $first Specifies that the new column should be positioned first within a table row.
+   * @param string|null $afterColumn Specifies the column after which to position the new column within a table row.
    * @return SQLAlterTableOption
    */
   public function addColumn(SQLColumnDefinition $dataType, ?bool $first = false, ?string $afterColumn = null): SQLAlterTableOption
@@ -35,8 +43,10 @@ final class SQLAlterTableOption
   }
 
   /**
-   * @param SQLColumnDefinition $dataType
-   * @return $this
+   * Modifies an existing column in the table.
+   *
+   * @param SQLColumnDefinition $dataType The new definition of the column.
+   * @return SQLAlterTableOption
    */
   public function modifyColumn(SQLColumnDefinition $dataType): SQLAlterTableOption
   {
@@ -45,9 +55,11 @@ final class SQLAlterTableOption
   }
 
   /**
-   * @param string $oldColumnName
-   * @param string $newColumnName
-   * @return $this
+   * Renames an existing column in the table.
+   *
+   * @param string $oldColumnName The name of the column to be renamed.
+   * @param string $newColumnName The new name for the column.
+   * @return SQLAlterTableOption
    */
   public function renameColumn(string $oldColumnName, string $newColumnName): SQLAlterTableOption
   {
@@ -56,8 +68,10 @@ final class SQLAlterTableOption
   }
 
   /**
-   * @param string $columnName
-   * @return $this
+   * Drops a column from the table.
+   *
+   * @param string $columnName The name of the column to be dropped.
+   * @return SQLAlterTableOption
    */
   public function dropColumn(string $columnName): SQLAlterTableOption
   {

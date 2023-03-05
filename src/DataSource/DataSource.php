@@ -108,4 +108,24 @@ readonly class DataSource
 
     return new Repository(entityId: $entityName, manager: $this->manager);
   }
+
+  /**
+   * Retrieves the name of the current database.
+   *
+   * @return string|null The name of the current database, or null if it cannot be determined.
+   */
+  public function getDatabaseName(): ?string
+  {
+    // Execute a SQL query to retrieve the current database name.
+    $databaseName = $this->db->query('SELECT DATABASE()')->fetchColumn();
+
+    // If the query fails, return null to indicate that the database name cannot be determined.
+    if (false === $databaseName)
+    {
+      return null;
+    }
+
+    // Return the database name as a string.
+    return (string)$databaseName;
+  }
 }

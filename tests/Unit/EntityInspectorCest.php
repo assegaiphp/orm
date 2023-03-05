@@ -3,9 +3,11 @@
 
 namespace Tests\Unit;
 
+use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
-use Assegai\Orm\Management\EntityInspector;
+use Assegai\Orm\Management\Inspectors\EntityInspector;
 use Exception;
+use ReflectionException;
 use Tests\Support\UnitTester;
 use Unit\mocks\MockEntity;
 use Unit\mocks\NotAMockEntity;
@@ -38,31 +40,46 @@ class EntityInspectorCest
     $I->assertNotNull($instance);
   }
 
+  /**
+   * @throws ORMException
+   * @throws ClassNotFoundException
+   */
   public function tryToValidateEntityNames(UnitTester $I): void
   {
     $validEntityName = MockEntity::class;
     $invalidEntityClassName = NotAMockEntity::class;
-    EntityInspector::validateEntityName($validEntityName);
+    $this->inspector->validateEntityName($validEntityName);
 
     try
     {
-      EntityInspector::validateEntityName($invalidEntityClassName);
+      $this->inspector->validateEntityName($invalidEntityClassName);
     }
     catch (Exception $exception)
     {
     }
   }
 
+  /**
+   * @param UnitTester $I
+   * @return void
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
   public function tryToGetMetaDataFromAnEntityInstance(UnitTester $I): void
   {
-    $metaData = EntityInspector::getMetaData($this->entity);
+    $metaData = $this->inspector->getMetaData($this->entity);
     $I->assertEquals('mocks', $metaData->table);
     $I->assertEquals('assegai_test_db', $metaData->database);
   }
 
+  /**
+   * @param UnitTester $I
+   * @return void
+   */
   public function tryToGetColumnPropertiesFromAnEntityInstance(UnitTester $I): void
   {
-    $columnProperties = EntityInspector::getInstance()->getColumns($this->entity);
+    $columnProperties = $this->inspector->getColumns($this->entity);
     $I->assertArrayHasKey('id', $columnProperties);
     $I->assertArrayHasKey('createdAt', $columnProperties);
     $I->assertArrayNotHasKey('rank', $columnProperties);
@@ -75,6 +92,13 @@ class EntityInspectorCest
     # TODO: Test relationProperties option
   }
 
+  /**
+   * @param UnitTester $I
+   * @return void
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
   public function tryToGetPropertyValuesFromAnEntityInstance(UnitTester $I): void
   {
     $expectedName = 'Shaka';
@@ -86,6 +110,12 @@ class EntityInspectorCest
     $I->assertFalse(in_array('Caesar', $entityValues));
   }
 
+  /**
+   * @param UnitTester $I
+   * @return void
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   */
   public function tryToGetTheTableNameOfAnEntityInstance(UnitTester $I): void
   {
     $tableName = $this->inspector->getTableName($this->entity);

@@ -5,26 +5,32 @@ namespace Assegai\Orm\Management;
 use Assegai\Core\Config;
 use Assegai\Core\ModuleManager;
 use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
+use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ContainerException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
+use Assegai\Orm\Exceptions\NotFoundException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
-use Assegai\Orm\Exceptions\NotFoundException;
-use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\TypeConversionException;
 use Assegai\Orm\Interfaces\IEntityStoreOwner;
 use Assegai\Orm\Interfaces\IFactory;
+use Assegai\Orm\Management\Inspectors\EntityInspector;
+use Assegai\Orm\Management\Options\FindManyOptions;
+use Assegai\Orm\Management\Options\FindOneOptions;
+use Assegai\Orm\Management\Options\FindOptions;
+use Assegai\Orm\Management\Options\FindWhereOptions;
+use Assegai\Orm\Management\Options\RemoveOptions;
 use Assegai\Orm\Metadata\EntityMetadata;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
-use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
+use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
@@ -193,7 +199,7 @@ class EntityManager implements IEntityStoreOwner
    */
   public static function validateEntityName(string $entityClass): void
   {
-    EntityInspector::validateEntityName(entityClass: $entityClass);
+    EntityInspector::getInstance()->validateEntityName(entityClass: $entityClass);
   }
 
   /**

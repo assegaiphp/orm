@@ -5,7 +5,7 @@ namespace Assegai\Orm\Metadata;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\InheritancePattern;
 use Assegai\Orm\Enumerations\TableType;
-use Assegai\Orm\Management\OrderByCondition;
+use Assegai\Orm\Management\Options\OrderByCondition;
 use Closure;
 
 /**
@@ -17,7 +17,13 @@ class EntityMetadata
    * @var TableMetadataArgs $tableMetadataArgs Metadata arguments used to build this entity metadata.
    */
   public readonly TableMetadataArgs $tableMetadataArgs;
+  /**
+   * @var EntityMetadata $closureJunctionTable
+   */
   public readonly EntityMetadata $closureJunctionTable;
+  /**
+   * @var EntityMetadata $parentEntityMetadata
+   */
   public readonly EntityMetadata $parentEntityMetadata;
   /**
    * @var EntityMetadata[] $childEntityMetadata
@@ -42,7 +48,8 @@ class EntityMetadata
   public readonly ?string $database;
   public readonly ?string $schema;
   /**
-   * @var OrderByCondition[]|null $orderBy Specifies a default order by used for queries from this table when no explicit order by is specified.
+   * @var OrderByCondition[]|null $orderBy Specifies a default order by used for
+   * queries from this table when no explicit order by is specified.
    */
   public readonly ?array $orderBy;
   public readonly bool $hasNonNullableRelations;
@@ -175,7 +182,7 @@ class EntityMetadata
   {
     foreach ($this->allEmbeddeds as $embedded)
     {
-
+      // TODO implement the findEmbeddedWithPropertyPath() method.
     }
     return null;
   }

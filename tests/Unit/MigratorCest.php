@@ -8,6 +8,7 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\ORM\Exceptions\DataSourceException;
 use Assegai\Orm\Exceptions\IOException;
 use Assegai\Orm\Exceptions\MigrationException;
+use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Migrations\Migration;
 use Assegai\Orm\Migrations\Migrator;
 use Tests\Support\UnitTester;
@@ -79,13 +80,16 @@ class MigratorCest
 
   public function testTheRunMethod(): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheRedoMethod(): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 
   public function testTheRevertMethod(): void
   {
+    throw new NotImplementedException(__METHOD__);
   }
 }

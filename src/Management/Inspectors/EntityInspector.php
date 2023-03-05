@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegai\Orm\Management;
+namespace Assegai\Orm\Management\Inspectors;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;
@@ -54,9 +54,8 @@ final class EntityInspector
    * @throws ClassNotFoundException
    * @throws ORMException
    */
-  public static function validateEntityName(string $entityClass): void
+  public function validateEntityName(string $entityClass): void
   {
-    // TODO: change static methods to instance methods
     if (!class_exists($entityClass))
     {
       throw new ClassNotFoundException(className: $entityClass);
@@ -78,10 +77,9 @@ final class EntityInspector
    * @throws ORMException
    * @throws ReflectionException
    */
-  public static function getMetaData(object $entity): Entity
+  public function getMetaData(object $entity): Entity
   {
-    // TODO: change static methods to instance methods
-    self::validateEntityName(get_class($entity));
+    $this->validateEntityName(get_class($entity));
     $className = get_class($entity);
 
     $entityReflection = new ReflectionClass($className);
@@ -313,7 +311,7 @@ final class EntityInspector
     $filterValues = $options['filter'] ?? true;
     $values = [];
     $entityClassname = get_class($entity);
-    self::validateEntityName($entityClassname);
+    $this->validateEntityName($entityClassname);
     $columns = $this->getColumns(entity: $entity, exclude: $exclude);
 
     foreach ($columns as $index => $column)
@@ -374,7 +372,7 @@ final class EntityInspector
   {
     $tableName = '';
 
-    self::validateEntityName(get_class($entity));
+    $this->validateEntityName(get_class($entity));
     $reflectionClass = new ReflectionClass($entity);
     $attributes = $reflectionClass->getAttributes(Entity::class);
 

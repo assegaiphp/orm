@@ -7,7 +7,12 @@ modules:
     enabled:
         - Asserts
         - Db:
-              dsn: "mysql:host=%DB_HOST%;dbname=%DB_NAME%"
+              dsn: "mysql:host=%DB_HOST%;port=%DB_PORT%;dbname=%DB_NAME%"
               user: "%DB_USER%"
               password: "%DB_PASS%"
+              databases:
+                zulu_db:
+                  dsn: "mysql:host=%DB_HOST%;port=%DB_PORT%;dbname=%DB_NAME%"
+                  user: "%DB_USER%"
+                  password: "%DB_PASS%"
 step_decorators: ~

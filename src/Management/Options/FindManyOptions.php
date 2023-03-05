@@ -1,6 +1,6 @@
 <?php
 
-namespace Assegai\Orm\Management;
+namespace Assegai\Orm\Management\Options;
 
 /**
  * Defines the search criteria for finding many entities.
