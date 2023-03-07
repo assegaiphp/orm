@@ -25,6 +25,15 @@ class Column
   const CURRENT_TIMESTAMP = 'CURRENT_TIMESTAMP';
   const DEFAULT_LENGTH_CHAR = 30;
   const DEFAULT_LENGTH_VARCHAR = 255;
+  const DEFAULT_LENGTH_BINARY = 1;
+  const DEFAULT_LENGTH_VARBINARY = 255;
+  const DEFAULT_LENGTH_TINYBLOB = 255;
+  const DEFAULT_LENGTH_BLOB = 65535;
+  const DEFAULT_LENGTH_TEXT = 65535;
+  const DEFAULT_LENGTH_MEDIUMBLOB = 16777215;
+  const DEFAULT_LENGTH_MEDIUMTEXT = 16777215;
+  const DEFAULT_LENGTH_LONGBLOB = 4294967295;
+  const DEFAULT_LENGTH_LONGTEXT = 4294967295;
 
   public string $value;
   public SQLColumnDefinition|string $sqlDefinition = '';
@@ -54,7 +63,7 @@ class Column
   public function __construct(
     public string                $name = '',
     public string                $alias = '',
-    public string                $type = ColumnType::INT,
+    public ColumnType            $type = ColumnType::INT,
     public null|string|array|int $lengthOrValues = null,
     public bool                  $nullable = true,
     public bool                  $unsigned = false,
@@ -119,7 +128,7 @@ class Column
       default => empty($this->lengthOrValues) ? '' : '(' . $this->lengthOrValues  . ')'
     };
 
-    $this->value = "$type$this->lengthOrValues ";
+    $this->value = "$type->value$this->lengthOrValues ";
 
     if ($unsigned)                 { $this->value .= Column::UNSIGNED . ' '; }
     if (!$nullable)              { $this->value .= 'NOT '; }
@@ -147,5 +156,93 @@ class Column
     if (isset($alias))            { $this->value .= "AS $alias"; }
 
     $this->value = trim($this->value);
+  }
+
+  /**
+   * @return string
+   */
+  public function getFieldType(): string
+  {
+    return str_replace('()', '', match($this->type) {
+      ColumnType::TEXT,
+      ColumnType::DECIMAL,
+      ColumnType::ENUM => strtolower($this->type->value) . '(' . $this->getValuesAsString() . ')',
+      default => strtolower($this->type->value) . '(' . $this->getLength() . ')'
+    });
+  }
+
+  /**
+   * @return string
+   */
+  public function getFieldExtra(): string
+  {
+    return match(true) {
+      $this->type->isNumeric() => match(true) {
+        $this->autoIncrement => 'auto_increment',
+        default => '',
+      },
+      $this->type->isDateTime() => empty($this->onUpdate)
+        ? 'DEFAULT_GENERATED'
+        : 'DEFAULT_GENERATED on update ' . $this->onUpdate,
+      default => ''
+    };
+  }
+
+  /**
+   * @return int|null
+   */
+  public function getLength(): ?int
+  {
+    $length = $this->lengthOrValues;
+    if (!is_numeric($length))
+    {
+      $length = null;
+    }
+
+    if (is_string($length))
+    {
+      $length = (int)$length;
+    }
+
+    return $length ?? match ($this->type) {
+      ColumnType::CHAR => self::DEFAULT_LENGTH_CHAR,
+      ColumnType::VARCHAR => self::DEFAULT_LENGTH_VARCHAR,
+      ColumnType::BINARY => self::DEFAULT_LENGTH_BINARY,
+      ColumnType::VARBINARY => self::DEFAULT_LENGTH_VARBINARY,
+      ColumnType::TINYBLOB => self::DEFAULT_LENGTH_TINYBLOB,
+      ColumnType::BLOB => self::DEFAULT_LENGTH_BLOB,
+      ColumnType::TEXT => self::DEFAULT_LENGTH_TEXT,
+      ColumnType::MEDIUMBLOB => self::DEFAULT_LENGTH_MEDIUMBLOB,
+      ColumnType::MEDIUMTEXT => self::DEFAULT_LENGTH_MEDIUMTEXT,
+      ColumnType::LONGBLOB => self::DEFAULT_LENGTH_LONGBLOB,
+      ColumnType::LONGTEXT => self::DEFAULT_LENGTH_LONGTEXT,
+      default => null
+    };
+  }
+
+  /**
+   * @return array|null
+   */
+  public function getValues(): ?array
+  {
+    if ($this->type === ColumnType::ENUM)
+    {
+      return $this->enum::cases();
+    }
+
+    return null;
+  }
+
+  /**
+   * @return string
+   */
+  public function getValuesAsString(): string
+  {
+    if (!$this->getValues())
+    {
+      return '';
+    }
+
+    return implode(',', array_map(fn($case) => "'$case->value'" ?? "'$case'", $this->getValues()));
   }
 }

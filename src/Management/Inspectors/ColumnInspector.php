@@ -117,9 +117,9 @@ class ColumnInspector
   public function getType(Column $column): string
   {
     $type = match ($column->type) {
-      ColumnType::VARCHAR => ColumnType::VARCHAR . "(" . $column->lengthOrValues . ")",
-      ColumnType::BOOLEAN => ColumnType::TINYINT . "(1)",
-      ColumnType::ENUM => ColumnType::ENUM . '(' . (is_string($column->enum) ? $column->enum : implode(',', array_map(fn($color) => $color->value, $column->enum::cases()))) . ')',
+      ColumnType::VARCHAR => ColumnType::VARCHAR->value . "(" . $column->lengthOrValues . ")",
+      ColumnType::BOOLEAN => ColumnType::TINYINT->value . "(1)",
+      ColumnType::ENUM => ColumnType::ENUM->value . '(' . (is_string($column->enum) ? $column->enum : implode(',', array_map(fn($color) => $color->value, $column->enum::cases()))) . ')',
       default => $column->type
     };
     return strtolower($type);
