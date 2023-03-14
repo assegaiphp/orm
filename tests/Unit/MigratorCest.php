@@ -3,6 +3,7 @@
 
 namespace Tests\Unit;
 
+use Assegai\Core\Util\Paths;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\ORM\Exceptions\DataSourceException;
@@ -11,6 +12,7 @@ use Assegai\Orm\Exceptions\MigrationException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Migrations\Migration;
 use Assegai\Orm\Migrations\Migrator;
+use Codeception\Attribute\Incomplete;
 use Tests\Support\UnitTester;
 
 class MigratorCest
@@ -28,20 +30,25 @@ class MigratorCest
    */
   public function _before(UnitTester $I): void
   {
-    $config = require(__DIR__ . '/config/default.php');
+    $configFilename = Paths::join(__DIR__, 'config', 'default.php');
+    $config = require($configFilename);
 
-    if ($dbConfig = $config['databases']['mysql'])
+    if (is_array($config))
     {
-      $datasource = new DataSource([
-        'database' => $dbConfig['name'],
-        'type' => DataSourceType::MARIADB,
-        'host' => $dbConfig['host'],
-        'port' => 3306,
-        'username' => $dbConfig['user'],
-        'password' => $dbConfig['pass'],
-      ]);
+      $allMySQLDatabases = $config['databases']['mysql'];
+      foreach ($allMySQLDatabases as $databaseName => $dbConfig)
+      {
+        $datasource = new DataSource([
+          'database' => $databaseName,
+          'type' => $dbConfig['type'] ?? DataSourceType::MARIADB,
+          'host' => $dbConfig['host'] ?? 'localhost',
+          'port' => $dbConfig['port'] ?? 3306,
+          'username' => $dbConfig['user'] ?? '',
+          'password' => $dbConfig['pass'] ?? '',
+        ]);
 
-      $this->migrator = new Migrator($datasource, self::MIGRATIONS_DIR);
+        $this->migrator = new Migrator($datasource, self::MIGRATIONS_DIR);
+      }
     }
   }
 
@@ -67,7 +74,7 @@ class MigratorCest
     $I->wantToTest("generating a migration file from a snake-case name");
     $migrationName = "create_test_table";
     $filename =
-      self::MIGRATIONS_DIR . DIRECTORY_SEPARATOR . $this->migrator->generateMigrationFileName('create_test_table');
+      Paths::join(self::MIGRATIONS_DIR, $this->migrator->generateMigrationFileName('create_test_table'));
 
     $this->migrator->generate($migrationName, getcwd() . '/tests/Unit');
     $I->assertFileExists($filename);
@@ -78,18 +85,18 @@ class MigratorCest
     # Delete generated files
   }
 
+  #[Incomplete]
   public function testTheRunMethod(): void
   {
-    throw new NotImplementedException(__METHOD__);
   }
 
+  #[Incomplete]
   public function testTheRedoMethod(): void
   {
-    throw new NotImplementedException(__METHOD__);
   }
 
+  #[Incomplete]
   public function testTheRevertMethod(): void
   {
-    throw new NotImplementedException(__METHOD__);
   }
 }
