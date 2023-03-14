@@ -95,3 +95,45 @@ function strtokebab(string $string): string
 {
   return mb_strtolower(preg_replace('/[\s_\W]+/', '-', $string));
 }
+
+/***********************
+ *     Directories     *
+ ***********************/
+
+/**
+ * Empties a directory of all its contents.
+ *
+ * @param string $directory_path The path to the directory to be emptied.
+ * @return bool True if the directory was successfully emptied, false otherwise.
+ */
+function empty_directory(string $directory_path): bool
+{
+  if (!is_dir($directory_path))
+  {
+    return false;
+  }
+
+  $items = scandir($directory_path);
+
+  foreach ($items as $item)
+  {
+    if ($item === '.' || $item === '..')
+    {
+      continue;
+    }
+
+    $path = $directory_path . DIRECTORY_SEPARATOR . $item;
+
+    if (is_dir($path))
+    {
+      empty_directory($path);
+      rmdir($path);
+    }
+    else
+    {
+      unlink($path);
+    }
+  }
+
+  return true;
+}
