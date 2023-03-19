@@ -2,15 +2,22 @@
 
 namespace Assegai\Orm\Migrations;
 
+use Assegai\Core\Util\Debug\Log;
+use Assegai\Core\Util\Paths;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\IOException;
 use Assegai\Orm\Exceptions\MigrationException;
+use PDO;
 
 /**
  * Class for handling the processing of 'Migration' objects
  */
 readonly class Migrator
 {
+  const MIGRATION_TABLE_NAME = '__assegai_schema_migrations';
+
+  public MigrationsList $migrationsList;
+
   /**
    * Migrator constructor.
    *
@@ -26,6 +33,8 @@ readonly class Migrator
     {
       throw new IOException("Directory not found: " . $this->migrationsDirectory);
     }
+
+    $this->migrationsList = new MigrationsList($this->dataSource);
   }
 
   /**
@@ -33,10 +42,25 @@ readonly class Migrator
    *
    * @param Migration $migration The migration to run
    * @return void
+   * @throws MigrationException if an error occurs while updating the migrations table
    */
   public function run(Migration $migration): void
   {
     $migration->up($this->dataSource);
+
+    # Record migration
+    $migrationName = $migration->getName();
+    if (empty($migrationName))
+    {
+      throw new MigrationException("Migration name cannot be empty.");
+    }
+    $migrationInsertionSql = "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES('$migrationName', NOW())";
+    $statement = $this->dataSource->db->query($migrationInsertionSql);
+
+    if (false === $statement)
+    {
+      throw new MigrationException("Failed to record migration run: $migrationName");
+    }
   }
 
   /**
@@ -44,10 +68,20 @@ readonly class Migrator
    *
    * @param Migration $migration The migration to revert
    * @return void
+   * @throws MigrationException if an error occurs while updating the migrations table
    */
   public function revert(Migration $migration): void
   {
     $migration->down($this->dataSource);
+    $migrationName = $migration->getName();
+
+    $migrationDeletionSql = "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration='$migrationName'";
+    $statement = $this->dataSource->db->query($migrationDeletionSql);
+
+    if (false === $statement || false === $statement->execute())
+    {
+      throw new MigrationException("Failed to record migration reversion: $migrationName.");
+    }
   }
 
   /**
@@ -85,6 +119,7 @@ readonly class Migrator
 <?php
 
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\Migrations\Migration;
 
 class $classname extends Migration
 {
@@ -124,13 +159,18 @@ EOF;
    *
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
+   * @throws MigrationException if an error occurs while updating the migration table
    */
   public function runAll(?string $migrationsDirectory = null): void
   {
     $migrations = $this->getMigrations($migrationsDirectory);
+    $ranMigrations = $this->getRanMigrations();
     foreach ($migrations as $migration)
     {
-      $this->run($migration);
+      if ($this->canRunMigration($migration, $ranMigrations))
+      {
+        $this->run($migration);
+      }
     }
   }
 
@@ -139,42 +179,65 @@ EOF;
    *
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
+   * @throws MigrationException if an error occurs while updating the migration table
    */
   public function revertAll(?string $migrationsDirectory = null): void
   {
     $migrations = array_reverse($this->getMigrations($migrationsDirectory));
+    $ranMigrations = $this->getRanMigrations();
     foreach ($migrations as $migration)
     {
-      $this->revert($migration);
+      if ($this->canRevertMigration($migration, $ranMigrations))
+      {
+        $this->revert($migration);
+      }
     }
   }
 
   /**
    * Helper method to retrieve all migrations in the migrations directory
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
-   * @return array Array of Migration objects
+   * @return Migration[] Array of Migration objects
    */
   private function getMigrations(?string $migrationsDirectory = null): array
   {
     $migrations = [];
+    $migrationsDirectory = $migrationsDirectory ?? $this->migrationsDirectory;
     // code to retrieve all migrations in the migrations directory and store them in the $migrations array
 
-    $fileNames = scandir($migrationsDirectory ?? $this->migrationsDirectory);
+    $fileNames = scandir($migrationsDirectory);
     $fileNames = array_slice($fileNames, 2);
 
     foreach ($fileNames as $fileName)
     {
-      $path = $this->migrationsDirectory . DIRECTORY_SEPARATOR . $fileName;
-      $instance = require($path);
+      $path = Paths::join($migrationsDirectory, $fileName);
+      if (!is_file($path))
+      {
+        Log::warn(__METHOD__, "File not found: $fileName");
+        continue;
+      }
 
-      error_log(var_export([
-        'path' => $path,
-        'instance' => $instance,
-      ], true) . PHP_EOL);
-//      if ($instance instanceof Migration)
-//      {
-//
-//      }
+      $pathDidLoad = require($path);
+      if (boolval($pathDidLoad) === false)
+      {
+        Log::warn(__METHOD__, "Failed to load migration file $path");
+        continue;
+      }
+
+      $migrationFileContent = file_get_contents($path);
+      $migrationClassname = extract_class_name($migrationFileContent);
+      if (false === $migrationClassname)
+      {
+        Log::warn(__METHOD__, "Failed to extract a class name from $path");
+        continue;
+      }
+
+      $migrationInstance = new $migrationClassname;
+
+      if ($migrationInstance instanceof Migration)
+      {
+        $migrations[$fileName] = $migrationInstance;
+      }
     }
 
     return $migrations;
@@ -218,5 +281,64 @@ EOF;
   public function generateMigrationNamePrefix(?int $timestamp = null): string
   {
     return date('Y_m_d_His_', $timestamp);
+  }
+
+  /**
+   * @return string[] A list of migrations that have been run
+   * @throws MigrationException if an error occurs while loading ran migration records
+   */
+  private function getRanMigrations(): array
+  {
+    $ranMigrations = [];
+
+    $sql = "SELECT * FROM " . self::MIGRATION_TABLE_NAME;
+
+    $statement = $this->dataSource->db->query($sql);
+
+    if (false === $statement || false === $statement->execute())
+    {
+      throw new MigrationException("Failed to load ran migrations");
+    }
+
+    $results = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+    /** @var [migration, ran_on] $record */
+    foreach ($results as $record)
+    {
+      $key = $record['migration'];
+      $ranMigrations[$key] = $record['ran_on'];
+    }
+
+    return $ranMigrations;
+  }
+
+  /**
+   * @param Migration $migration
+   * @param array $ranMigrations
+   * @return bool
+   */
+  private function canRunMigration(Migration $migration, array $ranMigrations): bool
+  {
+    return key_exists($migration->getName(), $ranMigrations) === false;
+  }
+
+  /**
+   * @param Migration $migration
+   * @param array $ranMigrations
+   * @return bool
+   */
+  private function canRevertMigration(Migration $migration, array $ranMigrations): bool
+  {
+    return key_exists($migration->getName(), $ranMigrations);
+  }
+
+  /**
+   * @return SchemaMigrationsEntity Returns a string representation of the list of migrations.
+   * @throws MigrationException
+   */
+  public function getListOfMigrationsAsString(): string
+  {
+    $this->migrationsList->loadList();
+    return $this->migrationsList;
   }
 }
