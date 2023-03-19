@@ -4,6 +4,7 @@ namespace Assegai\Orm\Migrations;
 
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\MigrationException;
+use Assegai\Orm\Exceptions\NotImplementedException;
 use PDO;
 use Stringable;
 
@@ -54,6 +55,26 @@ class MigrationsList implements Stringable
   }
 
   /**
+   * @param string $name
+   * @return SchemaMigrationsEntity|null
+   */
+  public function getByName(string $name): ?SchemaMigrationsEntity
+  {
+    throw new NotImplementedException(__METHOD__);
+    return null;
+  }
+
+  /**
+   * @param string $ranOn
+   * @return SchemaMigrationsEntity|null
+   */
+  public function getByRunTime(string $ranOn): ?SchemaMigrationsEntity
+  {
+    throw new NotImplementedException(__METHOD__);
+    return null;
+  }
+
+  /**
    * Returns the list of migrations as a string.
    *
    * @return string A string representation of the list of migrations.
@@ -77,5 +98,23 @@ class MigrationsList implements Stringable
     $output .= str_repeat('-', $ruleLength) . PHP_EOL;
 
     return $output;
+  }
+
+  /**
+   * @return SchemaMigrationsEntity|null
+   */
+  public function getLastRun(): ?SchemaMigrationsEntity
+  {
+    throw new NotImplementedException(__METHOD__);
+    return null;
+  }
+
+  /**
+   * @return SchemaMigrationsEntity|null
+   */
+  public function getFirstRun(): ?SchemaMigrationsEntity
+  {
+    throw new NotImplementedException(__METHOD__);
+    return null;
   }
 }
