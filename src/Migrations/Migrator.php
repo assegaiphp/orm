@@ -16,13 +16,14 @@ readonly class Migrator
 {
   const MIGRATION_TABLE_NAME = '__assegai_schema_migrations';
 
-  public MigrationsList $migrationsList;
+  public MigrationsList $ranMigrationsList;
 
   /**
    * Migrator constructor.
    *
-   * @param string $migrationsDirectory Directory containing all migrations
-   * @throws IOException
+   * @param DataSource $dataSource The DataSource to be used for migrations.
+   * @param string $migrationsDirectory Directory containing all migrations.
+   * @throws IOException if the migrations directory does not exist
    */
   public function __construct(
     private DataSource $dataSource,
@@ -34,13 +35,13 @@ readonly class Migrator
       throw new IOException("Directory not found: " . $this->migrationsDirectory);
     }
 
-    $this->migrationsList = new MigrationsList($this->dataSource);
+    $this->ranMigrationsList = new MigrationsList($this->dataSource);
   }
 
   /**
    * Method to run a specified migration
    *
-   * @param Migration $migration The migration to run
+   * @param Migration $migration The migration to run.
    * @return void
    * @throws MigrationException if an error occurs while updating the migrations table
    */
@@ -135,7 +136,7 @@ class $classname extends Migration
 EOF;
 
     // Write the migration class file
-    $filepath = $targetDirectory . DIRECTORY_SEPARATOR . $filename;
+    $filepath = Paths::join($targetDirectory, $filename);
     if (!file_put_contents($filepath, $content))
     {
       throw new MigrationException("Could not create migration file $filepath.");
@@ -145,21 +146,46 @@ EOF;
   /**
    * Method to redo a specified migration
    *
-   * @param Migration $migration The migration to redo
+   * @param Migration|null $migration The migration to redo
+   * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
+   * @throws MigrationException if an error occurs while updating the migrations table
    */
-  public function redo(Migration $migration): void
+  public function redo(?Migration $migration = null, ?string $migrationsDirectory = null): void
   {
+    if (is_null($migration))
+    {
+      $this->ranMigrationsList->loadList();
+      $migration = $this->ranMigrationsList->getLastRun();
+
+      if (is_null($migration))
+      {
+        return;
+      }
+
+      $migrationFiles = $this->getMigrations($migrationsDirectory);
+
+      # Search migrations files for file with same name as $migration->name
+      foreach ($migrationFiles as $migrationFile)
+      {
+        if ($migrationFile->getName() === $migration->name)
+        {
+          $migration = $migrationFile;
+          break;
+        }
+      }
+    }
+
     $this->revert($migration);
     $this->run($migration);
   }
 
   /**
-   * Method to run all migrations in the migrations directory
+   * Method to run all migrations in the migrations directory.
    *
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
-   * @throws MigrationException if an error occurs while updating the migration table
+   * @throws MigrationException if an error occurs while updating the migration table.
    */
   public function runAll(?string $migrationsDirectory = null): void
   {
@@ -284,6 +310,8 @@ EOF;
   }
 
   /**
+   * Returns a list of migrations that have been run.
+   *
    * @return string[] A list of migrations that have been run
    * @throws MigrationException if an error occurs while loading ran migration records
    */
@@ -313,9 +341,11 @@ EOF;
   }
 
   /**
-   * @param Migration $migration
-   * @param array $ranMigrations
-   * @return bool
+   * Checks if a migration can be run.
+   *
+   * @param Migration $migration The migration to run
+   * @param array $ranMigrations A list of migrations that have been run
+   * @return bool Returns true if the migration was run successfully, false otherwise.
    */
   private function canRunMigration(Migration $migration, array $ranMigrations): bool
   {
@@ -323,9 +353,11 @@ EOF;
   }
 
   /**
-   * @param Migration $migration
-   * @param array $ranMigrations
-   * @return bool
+   * Checks if a migration can be reverted.
+   *
+   * @param Migration $migration The migration to revert.
+   * @param array $ranMigrations A list of migrations that have been run.
+   * @return bool Returns true if the migration was reverted successfully, false otherwise.
    */
   private function canRevertMigration(Migration $migration, array $ranMigrations): bool
   {
@@ -333,12 +365,14 @@ EOF;
   }
 
   /**
+   * Returns a string representation of the list of migrations.
+   *
    * @return SchemaMigrationsEntity Returns a string representation of the list of migrations.
-   * @throws MigrationException
+   * @throws MigrationException if an error occurs while loading the list of migrations.
    */
   public function getListOfMigrationsAsString(): string
   {
-    $this->migrationsList->loadList();
-    return $this->migrationsList;
+    $this->ranMigrationsList->loadList();
+    return $this->ranMigrationsList;
   }
 }
