@@ -5,4 +5,5 @@
 /vendor/
 /tests/Unit/config/
 /tests/Unit/database/
+/tests/Unit/static_migrations/
 /config/
