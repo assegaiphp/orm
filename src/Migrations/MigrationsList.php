@@ -4,7 +4,6 @@ namespace Assegai\Orm\Migrations;
 
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\MigrationException;
-use Assegai\Orm\Exceptions\NotImplementedException;
 use PDO;
 use Stringable;
 
@@ -41,7 +40,7 @@ class MigrationsList implements Stringable
       $databaseName = "`$databaseName`.";
     }
 
-    $sql = "SELECT * FROM $databaseName`__assegai_schema_migrations` ORDER BY `ran_on` DESC";
+    $sql = "SELECT `__assegai_schema_migrations`.`migration` as name, `__assegai_schema_migrations`.`ran_on` as ranOn FROM $databaseName`__assegai_schema_migrations` ORDER BY `ran_on` DESC";
     $statement = $this->dataSource->db->query($sql);
 
     if (false === $statement || false === $statement->execute())
@@ -55,23 +54,25 @@ class MigrationsList implements Stringable
   }
 
   /**
-   * @param string $name
-   * @return SchemaMigrationsEntity|null
+   * Returns a migration that matches the given name.
+   *
+   * @param string $name The name of the migration.
+   * @return SchemaMigrationsEntity|null Returns a migration that matches the given name or null if none is found.
    */
   public function getByName(string $name): ?SchemaMigrationsEntity
   {
-    throw new NotImplementedException(__METHOD__);
-    return null;
+    return array_find($this->listOfMigrations, fn($migration) => $migration->name === $name);
   }
 
   /**
-   * @param string $ranOn
-   * @return SchemaMigrationsEntity|null
+   * Returns a migration that ran on the given timestamp.
+   * @param string $ranOn The timestamp of the migration to search for.
+   * @return SchemaMigrationsEntity|null Returns a migration that matches the given ranOn timestamp or null if none
+   * is found.
    */
   public function getByRunTime(string $ranOn): ?SchemaMigrationsEntity
   {
-    throw new NotImplementedException(__METHOD__);
-    return null;
+    return array_find($this->listOfMigrations, fn($migration) => $migration->ranOn === $ranOn);
   }
 
   /**
@@ -105,16 +106,27 @@ class MigrationsList implements Stringable
    */
   public function getLastRun(): ?SchemaMigrationsEntity
   {
-    throw new NotImplementedException(__METHOD__);
-    return null;
+    if (empty($this->listOfMigrations))
+    {
+      return null;
+    }
+
+    return $this->listOfMigrations[0];
   }
 
   /**
-   * @return SchemaMigrationsEntity|null
+   * Returns the first migration that was run.
+   *
+   * @return SchemaMigrationsEntity|null Returns the first migration that was run or null if there are no migrations.
    */
   public function getFirstRun(): ?SchemaMigrationsEntity
   {
-    throw new NotImplementedException(__METHOD__);
-    return null;
+    if (empty($this->listOfMigrations))
+    {
+      return null;
+    }
+
+    $lastKey = end($this->listOfMigrations);
+    return $this->listOfMigrations[$lastKey];
   }
 }
