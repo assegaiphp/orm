@@ -11,7 +11,7 @@ use Assegai\Orm\Exceptions\IOException;
 use Assegai\Orm\Exceptions\MigrationException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Migrations\Migrator;
-use Codeception\Attribute\Incomplete;
+use Codeception\Attribute\Skip;
 use Codeception\Scenario;
 use Tests\Support\UnitTester;
 
@@ -124,7 +124,6 @@ QUERY
   }
 
   // tests
-
   /**
    * @param UnitTester $I
    * @return void
@@ -146,7 +145,7 @@ QUERY
    * @return void
    * @throws MigrationException
    */
-  public function testTheRunAllMethod(UnitTester $I): void
+  public function testTheRunMethod(UnitTester $I): void
   {
     $this->migrator->runAll($this->staticMigrationsDirectory);
     $staticMigrationFiles = scandir($this->staticMigrationsDirectory);
@@ -154,11 +153,20 @@ QUERY
     $I->seeNumRecords($totalMigrations, self::MIGRATIONS_SCHEMA_TABLE_NAME);
   }
 
-  #[Incomplete]
+  /**
+   * @param UnitTester $I
+   * @return void
+   * @throws MigrationException
+   */
   public function testTheRedoMethod(UnitTester $I): void
   {
+    $staticMigrationFiles = scandir($this->staticMigrationsDirectory);
+    $totalMigrations = count($staticMigrationFiles) - 2;
+    $this->migrator->redo(migrationsDirectory: $this->staticMigrationsDirectory);
+    $I->seeNumRecords($totalMigrations, self::MIGRATIONS_SCHEMA_TABLE_NAME);
   }
 
+  #[Skip]
   /**
    * @param UnitTester $I
    * @return void
