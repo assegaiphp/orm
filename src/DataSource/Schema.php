@@ -592,9 +592,15 @@ EOF
       return true;
     }
 
-    // TODO: Compare field type to column attribute type and lengthOrValues
+    if ($tableField->Type !== $columnAttribute->getFieldType())
+    {
+      return true;
+    }
 
-    // TODO: Compare field extra to column attribute extra details
+    if ($tableField->Extra !== $columnAttribute->getFieldExtra())
+    {
+      return true;
+    }
 
     return false;
   }

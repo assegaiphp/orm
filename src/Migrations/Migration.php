@@ -33,12 +33,8 @@ abstract class Migration implements IMigration
    *
    * @return string The name of the migration.
    */
-  protected function getName(): string
+  public function getName(): string
   {
-    // Get the path information of the current file.
-    $info = pathinfo(__FILE__);
-
-    // Return the file name of the current migration class.
-    return $info['filename'];
+    return get_called_class();
   }
 }

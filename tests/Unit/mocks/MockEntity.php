@@ -24,4 +24,7 @@ class MockEntity
 
   #[Column(type: ColumnType::TEXT)]
   public string $description = '';
+
+  #[Column(name: 'color_type', type: ColumnType::ENUM, default: MockColorType::RED, enum: MockColorType::class)]
+  public MockColorType $colorType = MockColorType::RED;
 }

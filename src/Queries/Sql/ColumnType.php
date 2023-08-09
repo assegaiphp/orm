@@ -2,161 +2,176 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-class ColumnType
+enum ColumnType: string
 {
   /* Numeric Data Types */
-  const TINYINT = 'TINYINT';
-  const TINYINT_UNSIGNED = 'TINYINT UNSIGNED';
-  const BOOLEAN = 'BOOLEAN';
-  const SMALLINT = 'SMALLINT';
-  const SMALLINT_UNSIGNED = 'SMALLINT UNSIGNED';
-  const MEDIUMINT = 'MEDIUMINT';
-  const MEDIUMINT_UNSIGNED = 'MEDIUMINT UNSIGNED';
-  const INT = 'INT';
-  const INT_UNSIGNED = 'INT UNSIGNED';
-  const BIGINT = 'BIGINT';
-  const BIGINT_UNSIGNED = 'BIGINT UNSIGNED';
-  const DECIMAL = 'DECIMAL';
-  const FLOAT = 'FLOAT';
-  const DOUBLE = 'DOUBLE';
-  const BIT = 'BIT';
+  case TINYINT = 'TINYINT';
+  case TINYINT_UNSIGNED = 'TINYINT UNSIGNED';
+  case BOOLEAN = 'BOOLEAN';
+  case SMALLINT = 'SMALLINT';
+  case SMALLINT_UNSIGNED = 'SMALLINT UNSIGNED';
+  case MEDIUMINT = 'MEDIUMINT';
+  case MEDIUMINT_UNSIGNED = 'MEDIUMINT UNSIGNED';
+  case INT = 'INT';
+  case INT_UNSIGNED = 'INT UNSIGNED';
+  case BIGINT = 'BIGINT';
+  case BIGINT_UNSIGNED = 'BIGINT UNSIGNED';
+  case DECIMAL = 'DECIMAL';
+  case FLOAT = 'FLOAT';
+  case DOUBLE = 'DOUBLE';
+  case BIT = 'BIT';
 
   /* String Data Types */
-  const BINARY = 'BINARY';
-  const BLOB = 'BLOB';
-  const TEXT = 'TEXT';
-  const CHAR = 'CHAR';
-  const ENUM = 'ENUM';
-  const INET6 = 'INET6';
-  const JSON = 'JSON';
-  const MEDIUMBLOB = 'MEDIUMBLOB';
-  const MEDIUMTEXT = 'MEDIUMTEXT';
-  const LONGBLOB = 'LONGBLOB';
-  const LONGTEXT = 'LONGTEXT';
-  const ROW = 'ROW';
-  const TINYBLOB = 'TINYBLOB';
-  const TINYTEXT = 'TINYTEXT';
-  const VARBINARY = 'VARBINARY';
-  const VARCHAR = 'VARCHAR';
-  const SET = 'SET';
-  const UUID = 'UUID';
+  case BINARY = 'BINARY';
+  case BLOB = 'BLOB';
+  case TEXT = 'TEXT';
+  case CHAR = 'CHAR';
+  case ENUM = 'ENUM';
+  case INET6 = 'INET6';
+  case JSON = 'JSON';
+  case MEDIUMBLOB = 'MEDIUMBLOB';
+  case MEDIUMTEXT = 'MEDIUMTEXT';
+  case LONGBLOB = 'LONGBLOB';
+  case LONGTEXT = 'LONGTEXT';
+  case ROW = 'ROW';
+  case TINYBLOB = 'TINYBLOB';
+  case TINYTEXT = 'TINYTEXT';
+  case VARBINARY = 'VARBINARY';
+  case VARCHAR = 'VARCHAR';
+  case SET = 'SET';
+  case UUID = 'UUID';
 
   /* Date and Time Data Types */
-  const DATE = 'DATE';
-  const TIME = 'TIME';
-  const DATETIME = 'DATETIME';
-  const TIMESTAMP = 'TIMESTAMP';
-  const YEAR = 'YEAR';
-  const AUTO_INCREMENT = 'AUTO_INCREMENT';
-  const NULL = 'NULL';
+  case DATE = 'DATE';
+  case TIME = 'TIME';
+  case DATETIME = 'DATETIME';
+  case TIMESTAMP = 'TIMESTAMP';
+  case YEAR = 'YEAR';
+  case AUTO_INCREMENT = 'AUTO_INCREMENT';
+  case NULL = 'NULL';
 
   /* Geometry and Spatial Data Types */
-  const POINT = 'POINT';
-  const LINESTRING = 'LINESTRING';
-  const POLYGON = 'POLYGON';
-  const MULTIPOINT = 'MULTIPOINT';
-  const MULTILINESTRING = 'MULTILINESTRING';
-  const MULTIPOLYGON = 'MULTIPOLYGON';
-  const GEOMETRYCOLLECTION = 'GEOMETRYCOLLECTION';
-  const GEOMETRY = 'GEOMETRY';
+  case POINT = 'POINT';
+  case LINESTRING = 'LINESTRING';
+  case POLYGON = 'POLYGON';
+  case MULTIPOINT = 'MULTIPOINT';
+  case MULTILINESTRING = 'MULTILINESTRING';
+  case MULTIPOLYGON = 'MULTIPOLYGON';
+  case GEOMETRYCOLLECTION = 'GEOMETRYCOLLECTION';
+  case GEOMETRY = 'GEOMETRY';
 
   /**
    * @param string $type
    * @return bool
    */
-  public static function isNumeric(string $type): bool
+  public function isNumeric(): bool
   {
-    return in_array(
-      $type,
-      [
-        ColumnType::TINYINT,
-        ColumnType::TINYINT_UNSIGNED,
-        ColumnType::BOOLEAN,
-        ColumnType::SMALLINT,
-        ColumnType::SMALLINT_UNSIGNED,
-        ColumnType::MEDIUMINT,
-        ColumnType::MEDIUMINT_UNSIGNED,
-        ColumnType::INT,
-        ColumnType::INT_UNSIGNED,
-        ColumnType::BIGINT,
-        ColumnType::BIGINT_UNSIGNED,
-        ColumnType::DECIMAL,
-        ColumnType::FLOAT,
-        ColumnType::DOUBLE,
-        ColumnType::BIT,
-      ]
-    );
+    return match($this) {
+      self::TINYINT,
+      self::TINYINT_UNSIGNED,
+      self::BOOLEAN,
+      self::SMALLINT,
+      self::SMALLINT_UNSIGNED,
+      self::MEDIUMINT,
+      self::MEDIUMINT_UNSIGNED,
+      self::INT,
+      self::INT_UNSIGNED,
+      self::BIGINT,
+      self::BIGINT_UNSIGNED,
+      self::DECIMAL,
+      self::FLOAT,
+      self::DOUBLE,
+      self::BIT => true,
+      default => false
+    };
   }
 
   /**
    * @param string $type
    * @return bool
    */
-  public static function isString(string $type): bool
+  public function isString(): bool
   {
-    return in_array(
-      $type,
-      [
-        ColumnType::BINARY,
-        ColumnType::BLOB,
-        ColumnType::TEXT,
-        ColumnType::CHAR,
-        ColumnType::ENUM,
-        ColumnType::INET6,
-        ColumnType::JSON,
-        ColumnType::MEDIUMBLOB,
-        ColumnType::MEDIUMTEXT,
-        ColumnType::LONGBLOB,
-        ColumnType::LONGTEXT,
-        ColumnType::ROW,
-        ColumnType::TINYBLOB,
-        ColumnType::TINYTEXT,
-        ColumnType::VARBINARY,
-        ColumnType::VARCHAR,
-        ColumnType::SET,
-        ColumnType::UUID,
-      ]
-    );
+    return match ($this) {
+      self::BINARY,
+      self::BLOB,
+      self::TEXT,
+      self::CHAR,
+      self::ENUM,
+      self::INET6,
+      self::JSON,
+      self::MEDIUMBLOB,
+      self::MEDIUMTEXT,
+      self::LONGBLOB,
+      self::LONGTEXT,
+      self::ROW,
+      self::TINYBLOB,
+      self::TINYTEXT,
+      self::VARBINARY,
+      self::VARCHAR,
+      self::SET,
+      self::UUID => true,
+      default => false
+    };
   }
 
   /**
    * @param string $type
    * @return bool
    */
-  public static function isDateTime(string $type): bool
+  public function isDateTime(): bool
   {
-    return in_array(
-      $type,
-      [
-        ColumnType::DATE,
-        ColumnType::TIME,
-        ColumnType::DATETIME,
-        ColumnType::TIMESTAMP,
-        ColumnType::YEAR,
-        ColumnType::AUTO_INCREMENT,
-        ColumnType::NULL,
-      ]
-    );
+    return match($this) {
+      self::DATE,
+      self::TIME,
+      self::DATETIME,
+      self::TIMESTAMP,
+      self::YEAR,
+      self::AUTO_INCREMENT,
+      self::NULL => true,
+      default => false
+    };
   }
 
   /**
    * @param string $type
    * @return bool
    */
-  public static function isGeoSpatial(string $type): bool
+  public function isGeoSpatial(string $type): bool
   {
-    return in_array(
-      $type,
-      [
-        ColumnType::POINT,
-        ColumnType::LINESTRING,
-        ColumnType::POLYGON,
-        ColumnType::MULTIPOINT,
-        ColumnType::MULTILINESTRING,
-        ColumnType::MULTIPOLYGON,
-        ColumnType::GEOMETRYCOLLECTION,
-        ColumnType::GEOMETRY,
-      ]
-    );
+    return match($this) {
+      self::POINT,
+      self::LINESTRING,
+      self::POLYGON,
+      self::MULTIPOINT,
+      self::MULTILINESTRING,
+      self::MULTIPOLYGON,
+      self::GEOMETRYCOLLECTION,
+      self::GEOMETRY => true,
+      default => false
+    };
+  }
+
+  public function defaultValue(): mixed
+  {
+    return match (true) {
+      $this->isNumeric() => match ($this) {
+        self::TINYINT => 4,
+        self::SMALLINT => 6,
+        self::MEDIUMINT => 9,
+        self::INT => 11,
+        self::BIGINT => 20,
+        self::DECIMAL => '10,0',
+        self::BIT => 8,
+        default => null
+      },
+      $this->isString() => match ($this) {
+        self::CHAR => 191,
+        self::VARCHAR => 255,
+        self::TEXT => 65535,
+        default => null,
+      },
+      default => null
+    };
   }
 }

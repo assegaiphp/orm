@@ -25,18 +25,18 @@ class SQLColumnDefinition implements Stringable
    * @param SQLDialect $dialect
    */
   public function __construct(
-    public readonly string        $name,
-    private readonly string       $type = ColumnType::INT,
-    private null|string|int|array $lengthOrValues = null,
-    private mixed                 $defaultValue = null,
-    private readonly bool         $nullable = true,
-    private readonly bool         $autoIncrement = false,
-    private readonly string       $onUpdate = "",
-    private readonly bool         $isUnique = false,
-    private readonly string       $uniqueKey = "",
-    private readonly bool         $isPrimaryKey = false,
-    private readonly string       $comment = "",
-    private readonly SQLDialect   $dialect = SQLDialect::MYSQL,
+    public readonly string          $name,
+    private readonly ColumnType     $type = ColumnType::INT,
+    private null|string|int|array   $lengthOrValues = null,
+    private mixed                   $defaultValue = null,
+    private readonly bool           $nullable = true,
+    private readonly bool           $autoIncrement = false,
+    private readonly string         $onUpdate = "",
+    private readonly bool           $isUnique = false,
+    private readonly string         $uniqueKey = "",
+    private readonly bool           $isPrimaryKey = false,
+    private readonly string         $comment = "",
+    private readonly SQLDialect     $dialect = SQLDialect::MYSQL,
   )
   {
     $queryString = !empty($this->name) ? "`$this->name` " : '';
@@ -82,7 +82,7 @@ class SQLColumnDefinition implements Stringable
           }
           break;
         case ColumnType::VARCHAR:
-          $queryString .= $this->type . "(" . $this->lengthOrValues . ") ";
+          $queryString .= $this->type->value . "(" . $this->lengthOrValues . ") ";
 
           break;
 
@@ -91,7 +91,7 @@ class SQLColumnDefinition implements Stringable
           {
             $this->lengthOrValues = [];
           }
-          $queryString .= $this->type . "(";
+          $queryString .= $this->type->value . "(";
           foreach ($this->lengthOrValues as $value)
           {
             $queryString .= "'$value', ";
@@ -100,15 +100,15 @@ class SQLColumnDefinition implements Stringable
           $queryString .= ") ";
           break;
   
-        default: $queryString .= "$this->type ";
+        default: $queryString .= "{$this->type->value} ";
       }
     }
     else
     {
-      $queryString .= "$this->type ";
+      $queryString .= "{$this->type->value} ";
     }
 
-    if (ColumnType::isNumeric($this->type) && is_string($this->defaultValue))
+    if ($this->type->isNumeric() && is_string($this->defaultValue))
     {
       $this->defaultValue = $this->nullable || $this->autoIncrement ? null : 0;
     }
@@ -134,7 +134,7 @@ class SQLColumnDefinition implements Stringable
       } . " ";
     }
 
-    if ($this->autoIncrement && ColumnType::isNumeric($this->type))
+    if ($this->autoIncrement && $this->type->isNumeric())
     {
       $queryString .= "AUTO_INCREMENT ";
     }

@@ -22,4 +22,13 @@ interface IMigration
    * @return void
    */
   public function down(DataSource $dataSource): void;
+
+  /**
+   * Get the name of the migration.
+   *
+   * This method retrieves the name of the migration by extracting the file name of the current migration class file.
+   *
+   * @return string The name of the migration.
+   */
+  public function getName(): string;
 }

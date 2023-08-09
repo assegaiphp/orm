@@ -25,6 +25,7 @@ use Unit\mocks\MockEntity;
 class SchemaCest
 {
   protected ?object $entity = null;
+  protected int $totalEntityProperties = 0;
   protected ?SchemaOptions $options = null;
   protected ?DataSource $dataSource = null;
   protected const DB_NAME = 'assegai_test_db';
@@ -48,6 +49,7 @@ class SchemaCest
     $dbConfig['name'] = self::DB_NAME;
 
     $this->entity = new MockEntity();
+    $this->totalEntityProperties = count(get_object_vars($this->entity));
     $this->options = new SchemaOptions(dbName: $dbConfig['name'],dialect: SQLDialect::MYSQL);
     $this->dataSource = new DataSource(new DataSourceOptions(
       entities: [],
@@ -153,7 +155,7 @@ class SchemaCest
     $I->assertTrue($creationResult);
 
     $infoResult = Schema::info(MockEntity::class, $this->options);
-    $I->assertCount(6, $infoResult->tableFields);
+    $I->assertCount($this->totalEntityProperties, $infoResult->tableFields);
     $I->assertStringStartsWith("CREATE TABLE `mocks`", $infoResult->ddlStatement);
   }
 
