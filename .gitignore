@@ -7,3 +7,4 @@
 /tests/Unit/database/
 /tests/Unit/static_migrations/
 /config/
+/*.phar
