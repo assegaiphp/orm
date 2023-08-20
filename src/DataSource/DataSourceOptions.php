@@ -6,13 +6,13 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Stringable;
 
 /**
- *
+ * Class DataSourceOptions. Represents the options for a DataSource.
  */
 readonly class DataSourceOptions implements Stringable
 {
   /**
    * @param array $entities
-   * @param string $database
+   * @param string $name
    * @param DataSourceType $type
    * @param string $host
    * @param int $port
@@ -22,15 +22,15 @@ readonly class DataSourceOptions implements Stringable
    * @param SQLCharacterSet|null $charSet
    */
   public function __construct(
-    public array              $entities,
-    public string             $database,
-    public DataSourceType     $type = DataSourceType::MYSQL,
-    public string             $host = 'localhost',
-    public int                $port = 3306,
-    public ?string            $username = null,
-    public ?string            $password = null,
-    public bool               $synchronize = false,
-    public ?SQLCharacterSet   $charSet = SQLCharacterSet::UTF8MB4
+    public array            $entities,
+    public string           $name,
+    public DataSourceType   $type = DataSourceType::MYSQL,
+    public string           $host = 'localhost',
+    public int              $port = 3306,
+    public ?string          $username = null,
+    public ?string          $password = null,
+    public bool             $synchronize = false,
+    public ?SQLCharacterSet $charSet = SQLCharacterSet::UTF8MB4
   )
   {
   }
@@ -42,7 +42,7 @@ readonly class DataSourceOptions implements Stringable
   {
     return [
       'entities' => $this->entities,
-      'database' => $this->database,
+      'database' => $this->name,
       'type' => $this->type,
       'host' => $this->host,
       'port' => $this->port,
@@ -60,7 +60,7 @@ readonly class DataSourceOptions implements Stringable
   {
     return new self(
       entities: $props['entities'] ?? [],
-      database: $props['database'] ?? '',
+      name: $props['database'] ?? '',
       type: $props['type'] ?? DataSourceType::MYSQL,
       host: $props['host'] ?? 'localhost',
       port: $props['port'] ?? 3306,

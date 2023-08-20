@@ -31,7 +31,7 @@ class EntityManagerCest
 
     $this->dataSourceOptions = new DataSourceOptions(
       entities: [],
-      database: $databaseConfig['name'] ?? '',
+      name: $databaseConfig['name'] ?? '',
       type: DataSourceType::MARIADB,
       host: $databaseConfig['host'] ?? 'localhost',
       port: $databaseConfig['port'] ?? 3306,

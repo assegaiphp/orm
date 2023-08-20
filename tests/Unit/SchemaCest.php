@@ -53,7 +53,7 @@ class SchemaCest
     $this->options = new SchemaOptions(dbName: $dbConfig['name'],dialect: SQLDialect::MYSQL);
     $this->dataSource = new DataSource(new DataSourceOptions(
       entities: [],
-      database: $dbConfig['name'],
+      name: $dbConfig['name'],
       type: DataSourceType::MARIADB,
       host: $dbConfig['host'],
       port: $dbConfig['port'],

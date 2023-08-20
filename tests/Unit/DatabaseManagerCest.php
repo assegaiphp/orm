@@ -28,7 +28,7 @@ class DatabaseManagerCest
 
     $this->dataSourceOptions = new DataSourceOptions(
       entities: [],
-      database: $databaseConfig['name'] ?? '',
+      name: $databaseConfig['name'] ?? '',
       type: DataSourceType::MARIADB,
       host: $databaseConfig['host'] ?? 'localhost',
       port: $databaseConfig['port'] ?? 3306,
@@ -104,7 +104,7 @@ class DatabaseManagerCest
   private function createDatabase(string $dbName): void
   {
     $sql = "CREATE DATABASE IF NOT EXISTS `$dbName` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci";
-    $statement = $this->dataSource->db->query($sql);
+    $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement->execute())
     {
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS `$dbName`.`bantu` (
   deleted_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 MYSQL;
-    $statement = $this->dataSource->db->query($sql);
+    $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement->execute())
     {
