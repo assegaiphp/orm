@@ -50,11 +50,11 @@ class InjectRepository
     $moduleManager = ModuleManager::getInstance();
 
     $driver = $entityAttribute->driver;
-    $database = $entityAttribute->database ?? $moduleManager->getConfig('database');
+    $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source');
 
     $dataSourceOptions = new DataSourceOptions(
       entities: [$reflectionEntity->newInstance()],
-      database: $database,
+      database: $dataSourceName,
       type: $driver,
     );
 
