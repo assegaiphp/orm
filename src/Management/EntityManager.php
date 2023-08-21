@@ -83,7 +83,7 @@ class EntityManager implements IEntityStoreOwner
     protected ?TypeResolver $typeResolver = null,
   )
   {
-    $this->query = $query ?? new SQLQuery(db: $connection->db);
+    $this->query = $query ?? new SQLQuery(db: $connection->getClient());
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
     if (!$this->inspector)
@@ -124,7 +124,7 @@ class EntityManager implements IEntityStoreOwner
   public function query(string $query, array $parameters = []): PDOStatement|false
   {
     // TODO: Add support for all raw query parameters e.g. mode, ...fetch_mode_args
-    return $this->connection->db->query($query);
+    return $this->connection->getClient()->query($query);
   }
 
   /**

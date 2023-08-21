@@ -20,10 +20,12 @@ class InjectRepository
   public readonly Repository $repository;
 
   /**
-   * @param string $entity
-   * @throws ClassNotFoundException
-   * @throws ORMException
-   * @throws ReflectionException
+   * Constructs an InjectRepository attribute.
+   *
+   * @param string $entity The entity class name.
+   * @throws ClassNotFoundException If the entity is not found.
+   * @throws ORMException If the entity is not an entity.
+   * @throws ReflectionException If the entity is not found.
    */
   public function __construct(public readonly string $entity)
   {
@@ -50,11 +52,11 @@ class InjectRepository
     $moduleManager = ModuleManager::getInstance();
 
     $driver = $entityAttribute->driver;
-    $database = $entityAttribute->database ?? $moduleManager->getConfig('database');
+    $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source');
 
     $dataSourceOptions = new DataSourceOptions(
       entities: [$reflectionEntity->newInstance()],
-      database: $database,
+      name: $dataSourceName,
       type: $driver,
     );
 

@@ -14,6 +14,7 @@ use Tests\Support\UnitTester;
 
 class DatabaseManagerCest
 {
+  const DATA_SOURCE_NAME = 'assegai_test_db';
   protected ?DataSourceOptions $dataSourceOptions = null;
   protected ?DataSource $dataSource = null;
   protected ?DatabaseManager $databaseManager = null;
@@ -24,12 +25,13 @@ class DatabaseManagerCest
   public function _before(UnitTester $I): void
   {
     $config = require(__DIR__ . '/config/default.php');
-    $databaseConfig = $config['databases']['mysql'];
+    $databaseConfig = $config['databases']['mysql'][self::DATA_SOURCE_NAME];
+    $databaseType = DataSourceType::MYSQL;
 
     $this->dataSourceOptions = new DataSourceOptions(
-      entities: [],
-      database: $databaseConfig['name'] ?? '',
-      type: DataSourceType::MARIADB,
+      entities: $databaseConfig['entities'] ?? [],
+      name: self::DATA_SOURCE_NAME,
+      type: $databaseType,
       host: $databaseConfig['host'] ?? 'localhost',
       port: $databaseConfig['port'] ?? 3306,
       username: $databaseConfig['user'] ?? 'root',
@@ -104,7 +106,7 @@ class DatabaseManagerCest
   private function createDatabase(string $dbName): void
   {
     $sql = "CREATE DATABASE IF NOT EXISTS `$dbName` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci";
-    $statement = $this->dataSource->db->query($sql);
+    $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement->execute())
     {
@@ -129,7 +131,7 @@ CREATE TABLE IF NOT EXISTS `$dbName`.`bantu` (
   deleted_at TIMESTAMP NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 MYSQL;
-    $statement = $this->dataSource->db->query($sql);
+    $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement->execute())
     {

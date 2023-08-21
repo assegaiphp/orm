@@ -56,7 +56,7 @@ readonly class Migrator
       throw new MigrationException("Migration name cannot be empty.");
     }
     $migrationInsertionSql = "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES('$migrationName', NOW())";
-    $statement = $this->dataSource->db->query($migrationInsertionSql);
+    $statement = $this->dataSource->getClient()->query($migrationInsertionSql);
 
     if (false === $statement)
     {
@@ -77,7 +77,7 @@ readonly class Migrator
     $migrationName = $migration->getName();
 
     $migrationDeletionSql = "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration='$migrationName'";
-    $statement = $this->dataSource->db->query($migrationDeletionSql);
+    $statement = $this->dataSource->getClient()->query($migrationDeletionSql);
 
     if (false === $statement || false === $statement->execute())
     {
@@ -321,7 +321,7 @@ EOF;
 
     $sql = "SELECT * FROM " . self::MIGRATION_TABLE_NAME;
 
-    $statement = $this->dataSource->db->query($sql);
+    $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement || false === $statement->execute())
     {

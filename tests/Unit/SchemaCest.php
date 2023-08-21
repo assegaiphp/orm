@@ -28,7 +28,7 @@ class SchemaCest
   protected int $totalEntityProperties = 0;
   protected ?SchemaOptions $options = null;
   protected ?DataSource $dataSource = null;
-  protected const DB_NAME = 'assegai_test_db';
+  protected const DATASOURCE_NAME = 'assegai_test_db';
   protected const TABLE_NAME = 'mocks';
 
   /**
@@ -45,25 +45,25 @@ class SchemaCest
       require __DIR__ . "/mocks/$classname.php";
     });
 
-    $dbConfig = Config::get('databases')['mysql'][self::DB_NAME];
-    $dbConfig['name'] = self::DB_NAME;
+    $dbConfig = Config::get('databases')['mysql'][self::DATASOURCE_NAME];
+    $databaseType = DataSourceType::MYSQL;
 
     $this->entity = new MockEntity();
     $this->totalEntityProperties = count(get_object_vars($this->entity));
-    $this->options = new SchemaOptions(dbName: $dbConfig['name'],dialect: SQLDialect::MYSQL);
+    $this->options = new SchemaOptions(dbName: self::DATASOURCE_NAME,dialect: SQLDialect::MYSQL);
     $this->dataSource = new DataSource(new DataSourceOptions(
       entities: [],
-      database: $dbConfig['name'],
-      type: DataSourceType::MARIADB,
+      name: self::DATASOURCE_NAME,
+      type: $databaseType,
       host: $dbConfig['host'],
       port: $dbConfig['port'],
       username: $dbConfig['user'],
       password: $dbConfig['password'],
     ));
-    $dsn = 'mysql:host=' . $dbConfig['host'] . ';port=' . $dbConfig['port'] . ';dbname' . $dbConfig['name'];
+    $dsn = 'mysql:host=' . $dbConfig['host'] . ';port=' . $dbConfig['port'] . ';dbname' . self::DATASOURCE_NAME;
     $connection = new PDO($dsn, $dbConfig['user'], $dbConfig['password']);
 
-    $dbName = self::DB_NAME;
+    $dbName = self::DATASOURCE_NAME;
     $tableName = self::TABLE_NAME;
     $statement = $connection->exec("DROP TABLE IF EXISTS `$dbName`.`$tableName`");
 
@@ -119,7 +119,7 @@ class SchemaCest
     $I->assertTrue($creationResult);
 
     $renameResult = Schema::rename(self::TABLE_NAME, 'socks', new SchemaOptions(
-      dbName: self::DB_NAME
+      dbName: self::DATASOURCE_NAME
     ));
     $I->assertTrue($renameResult);
   }

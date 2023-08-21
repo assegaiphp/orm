@@ -393,11 +393,11 @@ HAVING COUNT(*) = $totalColumNames
 EOF
     };
 
-    $statement = $dataSource->db->query($sql);
+    $statement = $dataSource->getClient()->query($sql);
 
     if (false === $statement)
     {
-      throw new ORMException(print_r($dataSource->db->errorInfo(), true));
+      throw new ORMException(print_r($dataSource->getClient()->errorInfo(), true));
     }
 
     $columns = self::getColumnNames($tableName, $dataSource, $databaseName);
@@ -636,11 +636,11 @@ EOF
 
     $query = "DESCRIBE `$dbName`.`$tableName`";
 
-    $statement = $dataSource->db->query($query);
+    $statement = $dataSource->getClient()->query($query);
 
     if (false === $statement)
     {
-      throw new ORMException("Failed to describe `$dbName`.`$tableName`: " . print_r($dataSource->db->errorInfo(), true));
+      throw new ORMException("Failed to describe `$dbName`.`$tableName`: " . print_r($dataSource->getClient()->errorInfo(), true));
     }
 
     /** @var SQLTableDescription[] $tableFields */

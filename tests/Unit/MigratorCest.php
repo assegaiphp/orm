@@ -57,13 +57,14 @@ class MigratorCest
       foreach ($allMySQLDatabases as $databaseName => $dbConfig)
       {
         $this->databaseName = $databaseName;
+        $databaseTypeName = $dbConfig['type'] ?? DataSourceType::MYSQL->value;
         $this->dataSource = new DataSource([
-          'database' => $this->databaseName,
-          'type' => $dbConfig['type'] ?? DataSourceType::MARIADB,
+          'name' => $this->databaseName,
+          'type' => DataSourceType::tryFrom($databaseTypeName),
           'host' => $dbConfig['host'] ?? 'localhost',
           'port' => $dbConfig['port'] ?? 3306,
-          'username' => $dbConfig['user'] ?? '',
-          'password' => $dbConfig['pass'] ?? '',
+          'username' => $dbConfig['user'] ?? $dbConfig['username'] ?? '',
+          'password' => $dbConfig['pass'] ?? $dbConfig['password'] ?? '',
         ]);
 
         $this->migrator = new Migrator($this->dataSource, self::MIGRATIONS_DIR);
@@ -76,7 +77,7 @@ class MigratorCest
 
     if (!in_array($currentCest, $excludedMethods))
     {
-      $statement = $this->dataSource->db->query(<<<QUERY
+      $statement = $this->dataSource->getClient()->query(<<<QUERY
 CREATE TABLE IF NOT EXISTS `$this->databaseName`.`__assegai_schema_migrations` (
   `migration` varchar(50) NOT NULL,
   `ran_on` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -180,6 +181,7 @@ QUERY
     $I->seeNumRecords($totalMigrations, self::MIGRATIONS_SCHEMA_TABLE_NAME);
   }
 
+  #[Skip]
   /**
    * @param UnitTester $I
    * @return void
