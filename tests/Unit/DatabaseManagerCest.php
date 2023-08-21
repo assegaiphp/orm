@@ -14,6 +14,7 @@ use Tests\Support\UnitTester;
 
 class DatabaseManagerCest
 {
+  const DATA_SOURCE_NAME = 'assegai_test_db';
   protected ?DataSourceOptions $dataSourceOptions = null;
   protected ?DataSource $dataSource = null;
   protected ?DatabaseManager $databaseManager = null;
@@ -24,12 +25,13 @@ class DatabaseManagerCest
   public function _before(UnitTester $I): void
   {
     $config = require(__DIR__ . '/config/default.php');
-    $databaseConfig = $config['databases']['mysql'];
+    $databaseConfig = $config['databases']['mysql'][self::DATA_SOURCE_NAME];
+    $databaseType = DataSourceType::MYSQL;
 
     $this->dataSourceOptions = new DataSourceOptions(
-      entities: [],
-      name: $databaseConfig['name'] ?? '',
-      type: DataSourceType::MARIADB,
+      entities: $databaseConfig['entities'] ?? [],
+      name: self::DATA_SOURCE_NAME,
+      type: $databaseType,
       host: $databaseConfig['host'] ?? 'localhost',
       port: $databaseConfig['port'] ?? 3306,
       username: $databaseConfig['user'] ?? 'root',

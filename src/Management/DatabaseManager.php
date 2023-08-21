@@ -58,12 +58,12 @@ final class DatabaseManager
 
       try
       {
-        $result = $dataSource->db->exec($statement);
+        $result = $dataSource->getClient()->exec($statement);
 
         if ($result === false)
         {
           throw new DataSourceException("Failed to created database: $databaseName" .
-            PHP_EOL . print_r($dataSource->db->errorInfo(), true));
+            PHP_EOL . print_r($dataSource->getClient()->errorInfo(), true));
         }
       }
       catch (PDOException $exception)
@@ -92,14 +92,14 @@ final class DatabaseManager
       try
       {
         $result = match ($dataSource->type) {
-          DataSourceType::MSSQL => $dataSource->db->exec("DROP DATABASE $databaseName"),
-          default => $dataSource->db->exec("DROP DATABASE IF EXISTS $databaseName")
+          DataSourceType::MSSQL => $dataSource->getClient()->exec("DROP DATABASE $databaseName"),
+          default => $dataSource->getClient()->exec("DROP DATABASE IF EXISTS $databaseName")
         };
 
         if ($result === false)
         {
           throw new DataSourceException("Failed to created database: $databaseName" .
-            PHP_EOL . print_r($dataSource->db->errorInfo(), true));
+            PHP_EOL . print_r($dataSource->getClient()->errorInfo(), true));
         }
       }
       catch (PDOException $exception)
@@ -135,7 +135,7 @@ final class DatabaseManager
     try
     {
       $query = "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?";
-      $statement = $dataSource->db->prepare($query);
+      $statement = $dataSource->getClient()->prepare($query);
       $statement->execute([$databaseName]);
       $result = $statement->fetch(PDO::FETCH_ASSOC);
 

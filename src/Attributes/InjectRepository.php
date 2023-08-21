@@ -20,10 +20,12 @@ class InjectRepository
   public readonly Repository $repository;
 
   /**
-   * @param string $entity
-   * @throws ClassNotFoundException
-   * @throws ORMException
-   * @throws ReflectionException
+   * Constructs an InjectRepository attribute.
+   *
+   * @param string $entity The entity class name.
+   * @throws ClassNotFoundException If the entity is not found.
+   * @throws ORMException If the entity is not an entity.
+   * @throws ReflectionException If the entity is not found.
    */
   public function __construct(public readonly string $entity)
   {
@@ -54,7 +56,7 @@ class InjectRepository
 
     $dataSourceOptions = new DataSourceOptions(
       entities: [$reflectionEntity->newInstance()],
-      database: $dataSourceName,
+      name: $dataSourceName,
       type: $driver,
     );
 

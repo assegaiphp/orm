@@ -9,7 +9,7 @@ use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Interfaces\IDataSourceService;
 use ReflectionClass;
 
-#[Injectable, DataSourceConfig(name: '')]
+#[Injectable, DataSourceConfig(type: DataSourceType::MYSQL, name: '', entities: [])]
 class AbstractDataSourceService implements IDataSourceService
 {
   /**
@@ -44,7 +44,7 @@ class AbstractDataSourceService implements IDataSourceService
       $this->dataSource = new DataSource(
         new DataSourceOptions(
           entities: $attributeInstance->entities,
-          database: $attributeInstance->name,
+          name: $attributeInstance->name,
           type: $type,
           host: $attributeInstance->host,
           port: $attributeInstance->port,
