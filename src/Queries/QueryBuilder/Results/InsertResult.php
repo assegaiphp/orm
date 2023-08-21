@@ -2,7 +2,9 @@
 
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
-class InsertResult
+use Assegai\Orm\Interfaces\QueryResultInterface;
+
+readonly class InsertResult implements QueryResultInterface
 {
   /**
    * @param object|null $identifiers Contains inserted entity id. Has entity-like structure (not just column database name and values).
@@ -10,10 +12,53 @@ class InsertResult
    * @param object|null $generatedMaps Generated values returned by a database. Has entity-like structure (not just column database name and values).
    */
   public function __construct(
-    public readonly ?object $identifiers,
-    public readonly mixed      $raw,
-    public readonly ?object $generatedMaps,
+    public ?object $identifiers,
+    public mixed   $raw,
+    public ?object $generatedMaps,
+    protected array $errors = []
   )
   {
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function isOk(): bool
+  {
+    return empty($this->errors);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function isError(): bool
+  {
+    return !$this->isOk();
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function getErrors(): array
+  {
+    return $this->errors;
+  }
+
+  /**
+   * Returns the inserted entity id. Has entity-like structure (not just column database name and values).
+   *
+   * @return null|object The inserted entity id. Has entity-like structure (not just column database name and values).
+   */
+  public function getData(): ?object
+  {
+    return $this->identifiers;
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function getRaw(): mixed
+  {
+    return $this->raw;
   }
 }
