@@ -40,8 +40,9 @@ class MigrationsList implements Stringable
       $databaseName = "`$databaseName`.";
     }
 
-    $sql = "SELECT `__assegai_schema_migrations`.`migration` as name, `__assegai_schema_migrations`.`ran_on` as ranOn FROM $databaseName`__assegai_schema_migrations` ORDER BY `ran_on` DESC";
-    $statement = $this->dataSource->db->query($sql);
+    $migrationsTableName = '__assegai_schema_migrations';
+    $sql = "SELECT `$migrationsTableName`.`migration` as name, `$migrationsTableName`.`ran_on` as ranOn FROM $databaseName`$migrationsTableName` ORDER BY `ran_on` DESC";
+    $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement || false === $statement->execute())
     {
