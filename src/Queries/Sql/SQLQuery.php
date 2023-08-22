@@ -8,21 +8,41 @@ use PDO;
 use PDOException;
 use stdClass;
 
+/**
+ * Class SQLQuery. Represents a SQL query.
+ */
 final class SQLQuery
 {
+  /**
+   * @var string The raw SQL query as a string.
+   */
   private string $queryString;
+  /**
+   * @var string The type of the query.
+   */
   private string $type;
+  /**
+   * @var array The parameters of the query.
+   */
   private array $params;
+  /**
+   * @var int|null The last inserted id.
+   */
   private ?int $lastInsertId = null;
+  /**
+   * @var int|null The number of rows affected by the query.
+   */
   private ?int $rowCount = null;
 
   /**
-   * @param PDO $db
-   * @param string $fetchClass
-   * @param int $fetchMode
-   * @param array $fetchClassParams
-   * @param array $passwordHashFields
-   * @param string $passwordHashAlgorithm
+   * Constructs a new SQLQuery instance.
+   *
+   * @param PDO $db The PDO instance.
+   * @param string $fetchClass The class to use for fetching data.
+   * @param int $fetchMode The fetch mode to use.
+   * @param array $fetchClassParams The parameters to pass to the fetch class.
+   * @param array $passwordHashFields The fields to hash.
+   * @param string $passwordHashAlgorithm The algorithm to use for hashing.
    */
   public function __construct(
     private readonly PDO   $db,
@@ -46,6 +66,18 @@ final class SQLQuery
   }
 
   /**
+   * Returns the connection to the database.
+   *
+   * @return PDO Returns the connection to the database.
+   */
+  public function getConnection(): PDO
+  {
+    return $this->db;
+  }
+
+  /**
+   * Initializes the query.
+   *
    * @return void
    */
   public function init(): void
@@ -56,7 +88,9 @@ final class SQLQuery
   }
 
   /**
-   * @return array|string[]
+   * Returns the list of fields to hash.
+   *
+   * @return array|string[] The list of fields to hash.
    */
   public function passwordHashFields(): array
   {
@@ -64,7 +98,9 @@ final class SQLQuery
   }
 
   /**
-   * @return string
+   * Returns the algorithm to use for hashing.
+   *
+   * @return string The algorithm to use for hashing.
    */
   public function passwordHashAlgorithm(): string
   {
@@ -72,7 +108,9 @@ final class SQLQuery
   }
 
   /**
-   * @return int|null
+   * Returns the ID of the last inserted row or sequence value.
+   *
+   * @return int|null The ID of the last inserted row or sequence value.
    */
   public function lastInsertId(): ?int
   {
@@ -80,7 +118,9 @@ final class SQLQuery
   }
 
   /**
-   * @return string
+   * Returns a string representing the query.
+   *
+   * @return string Returns a string representing the query.
    */
   public function __toString(): string
   {
@@ -88,6 +128,8 @@ final class SQLQuery
   }
 
   /**
+   * Returns the raw Sql query as a string.
+   *
    * @return string Returns the raw Sql query as a string.
    */
   public function queryString(): string
@@ -96,7 +138,9 @@ final class SQLQuery
   }
 
   /**
-   * @return string
+   * Returns the type of the query.
+   *
+   * @return string Returns the type of the query.
    */
   public function type(): string
   {
@@ -302,6 +346,8 @@ final class SQLQuery
   }
 
   /**
+   * Exit the script and print the query.
+   *
    * @return never
    */
   public function debug(): never
