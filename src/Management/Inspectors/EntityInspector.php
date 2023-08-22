@@ -49,10 +49,12 @@ final class EntityInspector
   }
 
   /**
-   * @param string $entityClass
+   * Asserts that the specified class name is a valid entity and throws an exception if it is not.
+   *
+   * @param string $entityClass The name of the class to validate.
    * @return void
-   * @throws ClassNotFoundException
-   * @throws ORMException
+   * @throws ClassNotFoundException If the class does not exist.
+   * @throws ORMException If the class does not have the required attributes.
    */
   public function validateEntityName(string $entityClass): void
   {
@@ -328,7 +330,7 @@ final class EntityInspector
         foreach ($attributes as $attribute)
         {
           $attrInstance = $attribute->newInstance();
-          if (isset($attrInstance->defaultValue) && !empty($attrInstance->defaultValue))
+          if (!empty($attrInstance->defaultValue))
           {
             $property = $attrInstance->defaultValue;
           }
