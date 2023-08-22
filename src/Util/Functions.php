@@ -42,6 +42,21 @@ function array_find_last(array $arr, callable $callback): mixed
 }
 
 /***********************
+ *       Objects       *
+ ***********************/
+
+/**
+ * Converts an object to an array.
+ *
+ * @param object $object The object to be converted.
+ * @return array The object as an array.
+ */
+function object_to_array(object $object): array
+{
+  return json_decode(json_encode($object), true);
+}
+
+/***********************
  *       Strings       *
  ***********************/
 
