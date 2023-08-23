@@ -49,10 +49,12 @@ final class EntityInspector
   }
 
   /**
-   * @param string $entityClass
+   * Asserts that the specified class name is a valid entity and throws an exception if it is not.
+   *
+   * @param string $entityClass The name of the class to validate.
    * @return void
-   * @throws ClassNotFoundException
-   * @throws ORMException
+   * @throws ClassNotFoundException If the class does not exist.
+   * @throws ORMException If the class does not have the required attributes.
    */
   public function validateEntityName(string $entityClass): void
   {
@@ -328,7 +330,7 @@ final class EntityInspector
         foreach ($attributes as $attribute)
         {
           $attrInstance = $attribute->newInstance();
-          if (isset($attrInstance->defaultValue) && !empty($attrInstance->defaultValue))
+          if (!empty($attrInstance->defaultValue))
           {
             $property = $attrInstance->defaultValue;
           }
@@ -423,5 +425,36 @@ final class EntityInspector
     $output = ucwords(preg_replace('/[\W+]/', ' ', $output));
     $output = str_replace(' ', '', $output);
     return lcfirst($output);
+  }
+
+  /**
+   * Checks if the specified entity has a valid structure.
+   *
+   * @param object|array $entity The entity to check.
+   * @param string $entityClass The name of the entity class.
+   * @return bool Returns `true` if the entity has a valid structure, `false` otherwise.
+   * @throws ClassNotFoundException If the entity class does not exist.
+   */
+  public function hasValidEntityStructure(object|array $entity, string $entityClass): bool
+  {
+    if (is_array($entity))
+    {
+      $entity = (object) $entity;
+    }
+
+    if (!class_exists($entityClass))
+    {
+      throw new ClassNotFoundException(className: $entityClass);
+    }
+
+    foreach ($entity as $propertyName => $propertyValue)
+    {
+      if (!property_exists($entityClass, $propertyName))
+      {
+        return false;
+      }
+    }
+
+    return true;
   }
 }

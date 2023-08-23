@@ -17,6 +17,7 @@ use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
 use Assegai\Orm\Exceptions\TypeConversionException;
+use Assegai\Orm\Exceptions\ValidationException;
 use Assegai\Orm\Interfaces\IEntityStoreOwner;
 use Assegai\Orm\Interfaces\IFactory;
 use Assegai\Orm\Management\Inspectors\EntityInspector;
@@ -25,6 +26,7 @@ use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
+use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Metadata\EntityMetadata;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
@@ -44,7 +46,7 @@ use stdClass;
 use UnitEnum;
 
 /**
- *
+ * Class EntityManager. The EntityManager is the central access point to ORM functionality.
  */
 class EntityManager implements IEntityStoreOwner
 {
@@ -66,15 +68,23 @@ class EntityManager implements IEntityStoreOwner
    */
   protected array $customSecure = [];
 
+  /**
+   * @var array An array of default converters.
+   */
   protected array $defaultConverters = [];
 
+  /**
+   * @var array An array of custom converters.
+   */
   protected array $customConverters = [];
 
   /**
-   * @param DataSource $connection
-   * @param SQLQuery|null $query
-   * @param EntityInspector|null $inspector
-   * @param TypeResolver|null $typeResolver
+   * Constructs a new EntityManager instance.
+   *
+   * @param DataSource $connection The data source to use.
+   * @param SQLQuery|null $query The query to use.
+   * @param EntityInspector|null $inspector The entity inspector to use.
+   * @param TypeResolver|null $typeResolver The type resolver to use.
    */
   public function __construct(
     protected DataSource $connection,
@@ -190,12 +200,12 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * Validates the given entity name. If an invalid entity name is given, then a
-   * `ClassNotFoundException` is thrown.
+   * Asserts that the specified class name is a valid entity and throws an exception if it is not.
    *
-   * @param string $entityClass
-   * @throws ClassNotFoundException
-   * @throws ORMException
+   * @param string $entityClass The name of the class to validate.
+   * @return void
+   * @throws ClassNotFoundException If the class does not exist.
+   * @throws ORMException If the class does not have the required attributes.
    */
   public static function validateEntityName(string $entityClass): void
   {
@@ -221,25 +231,28 @@ class EntityManager implements IEntityStoreOwner
 
     if (!empty($entityLike))
     {
-      foreach ($entityLike as $key => $value)
+      foreach ($entityLike as $entityLikePropertyName => $entityLikePropertyValue)
       {
-        if (property_exists($entity, $key))
+        if (property_exists($entity, $entityLikePropertyName))
         {
-          $sourceTypeReflection = new ReflectionProperty($entityLike, $key);
-          $reflection = new ReflectionProperty($entityClass, $key);
-          if (is_null($value) && !$reflection->getType()->allowsNull())
+          $entityLikeReflectionProperty = new ReflectionProperty($entityLike, $entityLikePropertyName);
+          $entityClassReflectionProperty = new ReflectionProperty($entityClass, $entityLikePropertyName);
+          if (is_null($entityLikePropertyValue) && !$entityClassReflectionProperty->getType()->allowsNull())
           {
             continue;
           }
 
-          $sourceType = $sourceTypeReflection->getType()->getName();
-          $targetType = $reflection->getType()->getName();
-          $typesMatch = $sourceType === $targetType;
+          $entityLikeReflectionPropertyType = $entityLikeReflectionProperty->getType()?->getName();
+          $entityClassReflectionPropertyType = $entityClassReflectionProperty->getType()?->getName();
+          $typesMatch = $entityLikeReflectionPropertyType === $entityClassReflectionPropertyType;
 
-          $entity->$key =
+          $sourceType = $entityLikeReflectionPropertyType ?? gettype($entityLikePropertyValue);
+          $targetType = $entityClassReflectionPropertyType ?? gettype($entityLikePropertyValue);
+
+          $entity->$entityLikePropertyName =
             $typesMatch
-              ? $value
-              : $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType) ?? $value;
+              ? $entityLikePropertyValue
+              : $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType) ?? $entityLikePropertyValue;
         }
       }
     }
@@ -335,10 +348,21 @@ class EntityManager implements IEntityStoreOwner
     array|object $entity
   ): InsertResult
   {
+    # Check if the entity matches the given entity class
+    if (! $this->inspector->hasValidEntityStructure(entity: $entity, entityClass: $entityClass))
+    {
+      return new InsertResult(
+        identifiers: $entity,
+        raw: $this->query->queryString(),
+        generatedMaps: null,
+        errors: [new ORMException("Entity does not match the given entity class.")]
+      );
+    }
+
     $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
 
-    $columns = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns);
-    $values = $this->inspector->getValues(entity: $instance, exclude: $this->readonlyColumns);
+    $columns = $this->inspector->getColumns(entity: $instance);
+    $values = $this->inspector->getValues(entity: $instance);
 
     $result =
       $this
@@ -350,7 +374,12 @@ class EntityManager implements IEntityStoreOwner
 
     if ($result->isError())
     {
-      throw new GeneralSQLQueryException($this->query);
+      return new InsertResult(
+        identifiers: $entity,
+        raw: $this->query->queryString(),
+        generatedMaps: $result,
+        errors: [new GeneralSQLQueryException($this->query)]
+      );
     }
 
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
@@ -480,16 +509,88 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * 
-   * @param string $entityClass
-   * @param object|object[] $entityOrEntities
-   * @return InsertResult|UpdateResult
+   * Inserts a new entity or array of entities unless they already exist in the database, if they do then updates.
+   *
+   * @param string $entityClass The entity class name.
+   * @param object|object[] $entityOrEntities The entity or entities to upsert.
+   * @return InsertResult|UpdateResult Returns an InsertResult or UpdateResult.
+   * @throws ClassNotFoundException
    * @throws NotImplementedException
+   * @throws ORMException
+   * @throws ReflectionException
    */
-  public function upsert(string $entityClass, object|array $entityOrEntities): InsertResult|UpdateResult
+  public function upsert(
+    string $entityClass,
+    object|array $entityOrEntities,
+    array|UpsertOptions $options
+  ): InsertResult|UpdateResult
   {
     // TODO: #83 Implement EntityManager::upsert @amasiye
-    throw new NotImplementedException("EntityManager::upsert()");
+    if (is_array($entityOrEntities))
+    {
+      $results = [];
+      $errors = [];
+      foreach ($entityOrEntities as $entity)
+      {
+        $result = $this->upsert(entityClass: $entityClass, entityOrEntities: $entity, options: $options);
+
+        if ($result->isError())
+        {
+          $errors[] = $result->getErrors();
+        }
+
+        $results[] = $result->getData();
+      }
+
+      $generatedMaps = new stdClass();
+      $generatedMaps->results = $results;
+
+      return new UpdateResult(
+        raw: $this->query->queryString(),
+        affected: $this->query->rowCount(),
+        identifiers: $entityOrEntities,
+        generatedMaps: $generatedMaps,
+        errors: $errors
+      );
+    }
+
+    $this->validateEntityName(entityClass: $entityClass);
+
+    $columns = $this->inspector->getColumns(entity: $entityOrEntities);
+    $updateColumns = $this->inspector->getColumns(entity: $entityOrEntities, exclude: $this->readonlyColumns);
+    $values = $this->inspector->getValues(entity: $entityOrEntities);
+
+    $assignmentList = array_map(fn($column) => "$column=VALUES($column)", $updateColumns);
+
+    $result = $this
+      ->query
+      ->insertInto(tableName: $this->inspector->getTableName(entity: $entityOrEntities))
+      ->singleRow(columns: $columns)
+      ->values(valuesList: $values)
+      ->onDuplicateKeyUpdate(
+        assignmentList: $assignmentList,
+      )->execute();
+
+    $errors = [];
+    if ($result->isError())
+    {
+      $errors[] = $this->query->getConnection()->errorInfo();
+      $errors[] = new GeneralSQLQueryException($this->query);
+    }
+
+    $generatedMaps = $entityOrEntities;
+
+    if ($result->isOk())
+    {
+      $generatedMaps->id = $this->lastInsertId();
+    }
+
+    return new InsertResult(
+      identifiers: (object)['id' => $this->lastInsertId()],
+      raw: $this->query->queryString(),
+      generatedMaps: $entityOrEntities,
+      errors: $errors
+    );
   }
 
   /**
@@ -558,6 +659,11 @@ class EntityManager implements IEntityStoreOwner
 
     if (is_object($entityOrEntities))
     {
+      if (!$entityOrEntities->id)
+      {
+        throw new ORMException("Entity must have an id to be soft removed.");
+      }
+
       $statement =
         $this
           ->query
@@ -580,7 +686,7 @@ class EntityManager implements IEntityStoreOwner
       }
 
       return new UpdateResult(
-        raw: $result,
+        raw: $this->query->queryString(),
         affected: $this->query->rowCount(),
         identifiers: (object) $entityOrEntities,
         generatedMaps: $generatedMaps
@@ -963,9 +1069,12 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * @param string|object|array $conditions
-   * @param string $methodName
-   * @throws EmptyCriteriaException
+   * Validates the given conditions. If the given conditions are invalid, then a `ValidationException` is thrown.
+   *
+   * @param string|object|array $conditions The conditions to validate.
+   * @param string $methodName The name of the method that called this method.
+   * @return void
+   * @throws ValidationException If the given conditions are invalid.
    */
   private function validateConditions(string|object|array $conditions, string $methodName): void
   {
@@ -1006,13 +1115,15 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * @param string|object $className The name of the class to check.
+   * Checks if the given object or class name is a valid Entity class name.
+   *
+   * @param string|object $objectOrClass The name of the class to check.
    * @return bool Returns `true` if the given class name is an Entity instance.
    * @throws ReflectionException
    */
-  public static function isEntity(string|object $className): bool
+  public static function objectOrClassIsEntity(string|object $objectOrClass): bool
   {
-    $reflectionClass = new ReflectionClass($className);
+    $reflectionClass = new ReflectionClass($objectOrClass);
     $entityAttributes = $reflectionClass->getAttributes(Entity::class);
 
     if ($entityAttributes)
@@ -1020,12 +1131,12 @@ class EntityManager implements IEntityStoreOwner
       return true;
     }
 
-    if ($className instanceof Entity)
+    if ($objectOrClass instanceof Entity)
     {
       return true;
     }
 
-    if (in_array(Entity::class, class_implements($className)))
+    if (in_array(Entity::class, class_implements($objectOrClass)))
     {
       return true;
     }
@@ -1034,13 +1145,13 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * @param string|object $className
+   * @param string|object $objectOrClass
    * @return bool
    * @throws ReflectionException
    */
-  public static function isNotEntity(string|object $className): bool
+  public static function objectOrClassIsNotEntity(string|object $objectOrClass): bool
   {
-    return ! self::isEntity(className: $className);
+    return ! self::objectOrClassIsEntity(objectOrClass: $objectOrClass);
   }
 
   /**

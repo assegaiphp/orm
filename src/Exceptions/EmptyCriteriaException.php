@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Exceptions;
 
-class EmptyCriteriaException extends ORMException
+class EmptyCriteriaException extends ValidationException
 {
   public function __construct($methodName)
   {
