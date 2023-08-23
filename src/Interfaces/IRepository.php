@@ -10,6 +10,7 @@ use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
+use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
@@ -90,10 +91,13 @@ interface IRepository
   public function update(string|object|array $conditions, object|array|null $entity): UpdateResult;
 
   /**
-   * @param object|object[] $entity
-   * @return InsertResult|UpdateResult
+   * Inserts or updates a given entity or entities.
+   *
+   * @param object|object[] $entity The entity or entities to upsert.
+   * @param UpsertOptions|array $options The options to use when upserting.
+   * @return InsertResult|UpdateResult Returns the inserted or updated entity or entities.
    */
-  public function upsert(object|array|null $entity): InsertResult|UpdateResult;
+  public function upsert(object|array|null $entity, UpsertOptions|array $options = []): InsertResult|UpdateResult;
 
   /**
    * Removes a given entity from the database.

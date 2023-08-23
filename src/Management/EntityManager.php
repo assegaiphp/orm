@@ -556,6 +556,8 @@ class EntityManager implements IEntityStoreOwner
 
     $this->validateEntityName(entityClass: $entityClass);
 
+    // TODO: Configure the upsert options
+
     $columns = $this->inspector->getColumns(entity: $entityOrEntities);
     $updateColumns = $this->inspector->getColumns(entity: $entityOrEntities, exclude: $this->readonlyColumns);
     $values = $this->inspector->getValues(entity: $entityOrEntities);

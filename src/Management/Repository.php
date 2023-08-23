@@ -19,6 +19,7 @@ use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
+use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
@@ -126,14 +127,14 @@ readonly class Repository implements IRepository
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function upsert(array|object|null $entity): UpdateResult|InsertResult
+  public function upsert(array|object|null $entity, UpsertOptions|array $options = []): UpdateResult|InsertResult
   {
     if (empty($entity))
     {
       throw new NotFoundException($this->entityId);
     }
     $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entity);
-    return $this->manager->upsert(entityClass: $this->entityId, entityOrEntities: $entity);
+    return $this->manager->upsert(entityClass: $this->entityId, entityOrEntities: $entity, options: $options);
   }
 
   /**
