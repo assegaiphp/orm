@@ -16,7 +16,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use stdClass as Entity;
 
-interface IRepository
+interface RepositoryInterface
 {
   /**
    * Saves a given entity or array of entities.

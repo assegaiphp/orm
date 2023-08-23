@@ -13,7 +13,7 @@ use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
 use Assegai\Orm\Interfaces\IFactory;
-use Assegai\Orm\Interfaces\IRepository;
+use Assegai\Orm\Interfaces\RepositoryInterface;
 use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
@@ -30,7 +30,7 @@ use stdClass;
 /**
  * Represents a repository for a specific entity.
  */
-readonly class Repository implements IRepository
+readonly class Repository implements RepositoryInterface
 {
   /**
    * @param string $entityId
