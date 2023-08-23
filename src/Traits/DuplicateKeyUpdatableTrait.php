@@ -15,10 +15,10 @@ trait DuplicateKeyUpdatableTrait
       $queryString .= "ON DUPLICATE KEY UPDATE ";
       foreach ($assignmentList as $assignment)
       {
-        $queryString .= "$assignment ";
+        $queryString .= "$assignment, ";
       }
     }
-    $queryString = trim($queryString);
+    $queryString = rtrim(trim($queryString), ',');
     $this->query->appendQueryString($queryString);
     return $this;
   }

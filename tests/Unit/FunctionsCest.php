@@ -29,6 +29,17 @@ class FunctionsCest
       $I->assertNull(array_find_last([], $itemIsGreaterThanSeverCallback));
     }
 
+    public function testObjectFunctions(UnitTester $I): void
+    {
+      $I->wantToTest("the object_to_array function");
+      $validObject = new class {
+        public string $name = "John Doe";
+        public int $age = 30;
+      };
+
+      $I->assertEquals(["name" => "John Doe", "age" => 30], object_to_array($validObject));
+    }
+
     public function testStringFunctions(UnitTester $I): void
     {
       $validString = "The quick brown fox jumps over the lazy dog";

@@ -2,25 +2,32 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Interfaces\QueryResultInterface;
 use JetBrains\PhpStorm\ArrayShape;
 
-final class SQLQueryResult
+/**
+ * Class SQLQueryResult. Represents the result of a SQL query.
+ */
+final readonly class SQLQueryResult implements QueryResultInterface
 {
   /**
-   * @param array $data
-   * @param array $errors
-   * @param bool $isOK
+   * Constructs a new SQLQueryResult instance.
+   *
+   * @param array $data The data.
+   * @param array $errors The errors.
+   * @param mixed|null $raw
    */
   public function __construct(
-    private readonly array $data,
-    private readonly array $errors = [],
-    private readonly bool  $isOK = true,
+    private array $data,
+    private array $errors = [],
+    private mixed $raw = null
   )
   {
   }
 
   /**
    * @return bool
+   * @deprecated 1.0.0 No longer used by internal code and not recommended. Use SQLQueryResult::isSuccessful() instead.
    */
   public function isSuccessful(): bool
   {
@@ -28,20 +35,21 @@ final class SQLQueryResult
   }
 
   /**
+   *
    * @return bool
-   * @deprecated 1.0.0 No longer used by internal code and not recommended. Use SQLQueryResult::isSuccessful() instead.
    */
   public function isOK(): bool
   {
-    return $this->isOK;
+    return empty($this->errors);
   }
 
   /**
+   *
    * @return bool
    */
   public function isError(): bool
   {
-    return $this->isOK === false;
+    return !$this->isOK();
   }
 
   /**
@@ -49,17 +57,18 @@ final class SQLQueryResult
    */
   public function value(): array
   {
-    return $this->isOK ? $this->data : $this->errors;
+    return $this->isOK() ? $this->data : $this->errors;
   }
 
   /**
    * @return array
    */
-  #[ArrayShape(['isOK' => "bool", 'value' => "array", 'errors' => "array"])]
+  #[ArrayShape(['isOK' => "bool", 'isError' => "bool", 'value' => "array", 'errors' => "array"])]
   public function toArray(): array
   {
     return [
-      'isOK'    => $this->isSuccessful(),
+      'isOK'    => $this->isOK(),
+      'isError'    => $this->isError(),
       'value'   => $this->value(),
       'errors'  => $this->errors
     ];
@@ -97,5 +106,30 @@ final class SQLQueryResult
   public function containsError(mixed $needle): bool
   {
     return in_array(needle: $needle, haystack: $this->errors, strict: true);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function getErrors(): array
+  {
+    return $this->errors;
+  }
+
+  /**
+   * @inheritDoc
+   * @return array
+   */
+  public function getData(): array
+  {
+    return $this->data;
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function getRaw(): mixed
+  {
+    return $this->raw;
   }
 }

@@ -54,6 +54,11 @@ class InjectRepository
     $driver = $entityAttribute->driver;
     $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source');
 
+    if (empty($dataSourceName))
+    {
+      throw new ORMException('No data source name provided');
+    }
+
     $dataSourceOptions = new DataSourceOptions(
       entities: [$reflectionEntity->newInstance()],
       name: $dataSourceName,

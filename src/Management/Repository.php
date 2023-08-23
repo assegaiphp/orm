@@ -26,7 +26,10 @@ use JetBrains\PhpStorm\ArrayShape;
 use ReflectionException;
 use stdClass;
 
-class Repository implements IRepository
+/**
+ * Represents a repository for a specific entity.
+ */
+readonly class Repository implements IRepository
 {
   /**
    * @param string $entityId
@@ -35,11 +38,11 @@ class Repository implements IRepository
    * @throws ReflectionException
    */
   public function __construct(
-    public readonly string $entityId,
-    public readonly EntityManager $manager
+    public string        $entityId,
+    public EntityManager $manager
   )
   {
-    if (EntityManager::isNotEntity(className: $this->entityId))
+    if (EntityManager::objectOrClassIsNotEntity(objectOrClass: $this->entityId))
     {
       throw new IllegalTypeException(expected: Entity::class, actual: $entityId);
     }
