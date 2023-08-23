@@ -8,7 +8,7 @@ use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Interfaces\DataSourceInterface;
-use Assegai\Orm\Interfaces\IRepository;
+use Assegai\Orm\Interfaces\RepositoryInterface;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Repository;
 use Assegai\Orm\Queries\Sql\SQLQuery;
@@ -48,12 +48,12 @@ class DataSource implements DataSourceInterface
 
   /**
    * @param string $entityName The target entity for the repository
-   * @return IRepository
+   * @return RepositoryInterface
    * @throws ClassNotFoundException
    * @throws IllegalTypeException
    * @throws ReflectionException
    */
-  public function getRepository(string $entityName): IRepository
+  public function getRepository(string $entityName): RepositoryInterface
   {
     if (!class_exists($entityName))
     {
