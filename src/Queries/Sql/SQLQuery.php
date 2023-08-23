@@ -294,7 +294,6 @@ final class SQLQuery
 
   /**
    * @return SQLQueryResult
-   * @throws ORMException
    */
   public function execute(): SQLQueryResult
   {
@@ -321,7 +320,7 @@ final class SQLQuery
           $this->lastInsertId = $this->db->lastInsertId();
         }
   
-        return new SQLQueryResult(data: $data, errors: [], isOK: true);
+        return new SQLQueryResult(data: $data, errors: [], raw: $this->queryString);
       }
 
       $errors = [
@@ -329,7 +328,7 @@ final class SQLQuery
         'info' => $this->db->errorInfo(),
       ];
 
-      return new SQLQueryResult( data: [], errors: $errors, isOK: false );
+      return new SQLQueryResult( data: [], errors: $errors, raw: $this->queryString );
     }
     catch (PDOException)
     {
@@ -338,10 +337,12 @@ final class SQLQuery
       {
         $message = 'Bad Request';
       }
-      throw match($sqlCode) {
+      $errors[] = match($sqlCode) {
         '23000' => new ORMException(message: "$driverCode - $message"),
         default => new ORMException(message: "General SQL error - $message")
       };
+
+      return new SQLQueryResult( data: [], errors: $errors, raw: $this->queryString );
     }
   }
 

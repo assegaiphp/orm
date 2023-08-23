@@ -17,7 +17,7 @@ class MockEntity
   use ChangeRecorderTrait;
 
   #[PrimaryGeneratedColumn]
-  public int $id = 0;
+  public ?int $id = null;
 
   #[Column(type: ColumnType::VARCHAR, nullable: false)]
   public string $name = '';

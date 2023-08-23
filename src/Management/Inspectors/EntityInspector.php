@@ -426,4 +426,35 @@ final class EntityInspector
     $output = str_replace(' ', '', $output);
     return lcfirst($output);
   }
+
+  /**
+   * Checks if the specified entity has a valid structure.
+   *
+   * @param object|array $entity The entity to check.
+   * @param string $entityClass The name of the entity class.
+   * @return bool Returns `true` if the entity has a valid structure, `false` otherwise.
+   * @throws ClassNotFoundException If the entity class does not exist.
+   */
+  public function hasValidEntityStructure(object|array $entity, string $entityClass): bool
+  {
+    if (is_array($entity))
+    {
+      $entity = (object) $entity;
+    }
+
+    if (!class_exists($entityClass))
+    {
+      throw new ClassNotFoundException(className: $entityClass);
+    }
+
+    foreach ($entity as $propertyName => $propertyValue)
+    {
+      if (!property_exists($entityClass, $propertyName))
+      {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }

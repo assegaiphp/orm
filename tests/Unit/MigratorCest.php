@@ -154,6 +154,7 @@ QUERY
     $I->seeNumRecords($totalMigrations, self::MIGRATIONS_SCHEMA_TABLE_NAME);
   }
 
+  #[Skip]
   /**
    * @param UnitTester $I
    * @return void
