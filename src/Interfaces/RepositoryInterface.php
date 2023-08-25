@@ -27,10 +27,10 @@ interface RepositoryInterface
    * undefined properties are skipped.
    *
    * @param object|array<object> $targetOrEntity The target entity/entities to be saved.
-   * @return object|array Returns the saved entity/entities.
+   * @return QueryResultInterface Returns a QueryResultInterface instance. Use it to check if the operation was successful.
    * @throws IllegalTypeException
    */
-  public function save(object|array $targetOrEntity): object|array;
+  public function save(object|array $targetOrEntity): QueryResultInterface;
 
   /**
    * Creates a new entity instance or instances. Optionally accepts an object literal with entity

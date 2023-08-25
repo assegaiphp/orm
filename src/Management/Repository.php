@@ -13,6 +13,7 @@ use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Exceptions\SaveException;
 use Assegai\Orm\Interfaces\IFactory;
+use Assegai\Orm\Interfaces\QueryResultInterface;
 use Assegai\Orm\Interfaces\RepositoryInterface;
 use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
@@ -52,7 +53,7 @@ readonly class Repository implements RepositoryInterface
   /**
    * @inheritDoc
    * @param array|object $targetOrEntity
-   * @return array
+   * @return QueryResultInterface
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
@@ -61,7 +62,7 @@ readonly class Repository implements RepositoryInterface
    * @throws ReflectionException
    * @throws SaveException
    */
-  public function save(array|object $targetOrEntity): object|array
+  public function save(array|object $targetOrEntity): QueryResultInterface
   {
     return $this->manager->save(targetOrEntity: $targetOrEntity);
   }
