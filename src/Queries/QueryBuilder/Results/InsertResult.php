@@ -10,6 +10,7 @@ readonly class InsertResult implements QueryResultInterface
    * @param object|null $identifiers Contains inserted entity id. Has entity-like structure (not just column database name and values).
    * @param mixed $raw Raw SQL result returned by executed query.
    * @param object|null $generatedMaps Generated values returned by a database. Has entity-like structure (not just column database name and values).
+   * @param array $errors List of errors.
    */
   public function __construct(
     public ?object $identifiers,
