@@ -172,7 +172,7 @@ class DataSource implements DataSourceInterface
     $this->manager = isset($options->entities) && count($options->entities) === 1
       ? new EntityManager(
         connection: $this,
-        query: new SQLQuery(db: $this->db, fetchClass: $options->entities[0], fetchMode: PDO::FETCH_CLASS)
+        query: new SQLQuery(db: $this->db, fetchClass: $options->entities[0]::class, fetchMode: PDO::FETCH_CLASS)
       )
       : new EntityManager(connection: $this);
   }
