@@ -20,6 +20,7 @@ use Assegai\Orm\Exceptions\TypeConversionException;
 use Assegai\Orm\Exceptions\ValidationException;
 use Assegai\Orm\Interfaces\IEntityStoreOwner;
 use Assegai\Orm\Interfaces\IFactory;
+use Assegai\Orm\Interfaces\QueryResultInterface;
 use Assegai\Orm\Management\Inspectors\EntityInspector;
 use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
@@ -30,9 +31,11 @@ use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Metadata\EntityMetadata;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
+use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
@@ -142,7 +145,7 @@ class EntityManager implements IEntityStoreOwner
    * If entities do not exist in the database then inserts, otherwise updates.
    *
    * @param object|object[] $targetOrEntity
-   * @return object|array
+   * @return QueryResultInterface
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
@@ -151,7 +154,7 @@ class EntityManager implements IEntityStoreOwner
    * @throws ReflectionException
    * @throws SaveException
    */
-  public function save(object|array $targetOrEntity): object|array
+  public function save(object|array $targetOrEntity): QueryResultInterface
   {
     $results = [];
 
@@ -168,35 +171,23 @@ class EntityManager implements IEntityStoreOwner
       }
       else
       {
-        throw new NotFoundException($targetOrEntity->id);
+        $saveResult = new SQLQueryResult([], [new NotFoundException($targetOrEntity->id)]);
       }
 
-      if ($saveResult instanceof InsertResult)
+      if ($saveResult instanceof InsertResult || $saveResult instanceof UpdateResult || $saveResult instanceof  DeleteResult)
       {
-        return $saveResult->generatedMaps;
-      }
-
-      if ($saveResult instanceof UpdateResult)
-      {
-        return $saveResult->generatedMaps;
-      }
-
-      if ($saveResult->affected === 0)
-      {
-        return $results;
+        return $saveResult;
       }
 
       return $this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $this->query->lastInsertId()]));
     }
-    else
+
+    foreach ($targetOrEntity as $entity)
     {
-      foreach ($targetOrEntity as $entity)
-      {
-        $results[] = $this->save(targetOrEntity: $entity);
-      }
+      $results[] = $this->save(targetOrEntity: $entity);
     }
 
-    return $results;
+    return new SQLQueryResult($results);
   }
 
   /**
@@ -374,6 +365,7 @@ class EntityManager implements IEntityStoreOwner
 
     if ($result->isError())
     {
+      http_response_code(500);
       return new InsertResult(
         identifiers: $entity,
         raw: $this->query->queryString(),
@@ -950,14 +942,14 @@ class EntityManager implements IEntityStoreOwner
   /**
    * Finds entities that match given `FindWhereOptions`.
    *
-   * @param string $entityClass
-   * @param FindWhereOptions|array $where
-   * @return null|array<object> Returns a list of entities that match the given `FindWhereOptions`.
-   * @throws ClassNotFoundException
-   * @throws GeneralSQLQueryException
-   * @throws ORMException|ReflectionException
+   * @param string $entityClass The entity class name.
+   * @param FindWhereOptions|array $where The find options.
+   * @return FindResult Returns a FindResult object representing the result of the query.
+   * @throws ClassNotFoundException If the given entity class does not exist.
+   * @throws GeneralSQLQueryException If the query fails.
+   * @throws ORMException|ReflectionException If the given entity class does not have the required attributes.
    */
-  public function findBy(string $entityClass, FindWhereOptions|array $where): ?array
+  public function findBy(string $entityClass, FindWhereOptions|array $where): FindResult
   {
     $entity = $this->create(entityClass: $entityClass);
     if (is_array($where))
@@ -966,10 +958,10 @@ class EntityManager implements IEntityStoreOwner
     }
     $statement =
       $this->query
-      ->select()
-      ->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))
-      ->from(tableReferences: $this->inspector->getTableName(entity: $entity))
-      ->where(condition: $where);
+        ->select()
+        ->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))
+        ->from(tableReferences: $this->inspector->getTableName(entity: $entity))
+        ->where(condition: $where);
 
     $limit = $_GET['limit'] ?? 100;
     $skip = $_GET['skip'] ?? 0;
@@ -981,7 +973,11 @@ class EntityManager implements IEntityStoreOwner
       throw new GeneralSQLQueryException($this->query);
     }
 
-    return $result->value();
+    return new FindResult(
+      raw: $result->getRaw(),
+      data: $result->value(),
+      errors: $result->getErrors()
+    );
   }
 
   /**

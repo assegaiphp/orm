@@ -16,6 +16,12 @@ use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use stdClass as Entity;
 
+/**
+ * Interface RepositoryInterface
+ * @package Assegai\Orm\Interfaces
+ *
+ * @template T
+ */
 interface RepositoryInterface
 {
   /**
@@ -165,7 +171,7 @@ interface RepositoryInterface
   /**
    * Finds entities that match given `FindWhereOptions`.
    *
-   * @param \Assegai\Orm\Management\Options\FindWhereOptions|array $where
+   * @param FindWhereOptions|array $where
    * @return null|array<Entity> Returns a list of entities that match the given `FindWhereOptions`.
    */
   public function findBy(FindWhereOptions|array $where): ?array;
@@ -175,7 +181,7 @@ interface RepositoryInterface
    * Also counts all entities that match given conditions,
    * but ignores pagination settings (from and take options).
    *
-   * @param \Assegai\Orm\Management\Options\FindManyOptions|array|null $options
+   * @param FindManyOptions|array|null $options
    * @return array<[Entity,int]>
    */
   public function findAndCount(FindManyOptions|array|null $options = null): array;
@@ -185,7 +191,7 @@ interface RepositoryInterface
    * Also counts all entities that match given conditions,
    * but ignores pagination settings (from and take options).
    *
-   * @param \Assegai\Orm\Management\Options\FindWhereOptions|array $where
+   * @param FindWhereOptions|array $where
    * @return array
    */
   public function findAndCountBy(FindWhereOptions|array $where): array;
@@ -194,7 +200,7 @@ interface RepositoryInterface
    * Finds first entity by a given find options.
    * If entity was not found in the database - returns null.
    *
-   * @param \Assegai\Orm\Management\Options\FindOptions|\Assegai\Orm\Management\Options\FindOneOptions|array $options
+   * @param FindOptions|FindOneOptions|array $options
    * @return null|Entity Returns the entity if found, null otherwise.
    */
   public function findOne(FindOptions|FindOneOptions|array $options): ?object;

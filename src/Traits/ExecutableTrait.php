@@ -16,7 +16,6 @@ trait ExecutableTrait
    * Executes the query and returns the result
    *
    * @return SQLQueryResult The result of the query.
-   * @throws ORMException If the query fails to execute.
    */
   public function execute(): SQLQueryResult
   {

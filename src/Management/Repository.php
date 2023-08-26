@@ -30,6 +30,10 @@ use stdClass;
 
 /**
  * Represents a repository for a specific entity.
+ * @package Assegai\Orm\Management
+ *
+ * @template T
+ * @template-implements RepositoryInterface<T>
  */
 readonly class Repository implements RepositoryInterface
 {
