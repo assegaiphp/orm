@@ -7,6 +7,9 @@ use Assegai\Orm\Interfaces\QueryResultInterface;
 /**
  * Class FindResult represents a result of a find query.
  * @package Assegai\Orm\Queries\QueryBuilder\Results
+ *
+ * @template T
+ * @template-implements QueryResultInterface<T>
  */
 readonly class FindResult implements QueryResultInterface
 {
@@ -61,5 +64,20 @@ readonly class FindResult implements QueryResultInterface
   public function getRaw(): mixed
   {
     return $this->raw;
+  }
+
+  /**
+   * Returns the total number of records.
+   *
+   * @return int The total number of records.
+   */
+  public function getTotal(): int
+  {
+    if (is_countable($this->data))
+    {
+      return count($this->data);
+    }
+
+    return 0;
   }
 }

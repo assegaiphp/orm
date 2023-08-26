@@ -4,6 +4,13 @@ namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
 
+/**
+ * Class InsertResult represents a result of an insert query.
+ * @package Assegai\Orm\Queries\QueryBuilder\Results
+ *
+ * @template T
+ * @template-implements QueryResultInterface<T>
+ */
 readonly class InsertResult implements QueryResultInterface
 {
   /**
