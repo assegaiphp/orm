@@ -3,8 +3,14 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
-use stdClass;
 
+/**
+ * UpdateResult class. Represents result of update query execution.
+ * @package Assegai\Orm\Queries\QueryBuilder\Results
+ *
+ * @template T
+ * @template-implements QueryResultInterface<T>
+ */
 readonly class UpdateResult implements QueryResultInterface
 {
   /**

@@ -5,6 +5,9 @@ namespace Assegai\Orm\Interfaces;
 /**
  * Interface ResultInterface
  * @package Assegai\Orm\Interfaces
+ *
+ * @template T
+ * @template-implements QueryResultInterface<T>
  */
 interface QueryResultInterface
 {
@@ -32,7 +35,7 @@ interface QueryResultInterface
   /**
    * Returns the result data.
    *
-   * @return mixed Result data.
+   * @return T Result data.
    */
   public function getData(): mixed;
 

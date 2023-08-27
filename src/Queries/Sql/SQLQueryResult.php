@@ -7,6 +7,9 @@ use JetBrains\PhpStorm\ArrayShape;
 
 /**
  * Class SQLQueryResult. Represents the result of a SQL query.
+ * @package Assegai\Orm\Queries\Sql
+ *
+ * @template T
  */
 final readonly class SQLQueryResult implements QueryResultInterface
 {
@@ -31,7 +34,7 @@ final readonly class SQLQueryResult implements QueryResultInterface
    */
   public function isSuccessful(): bool
   {
-    return $this->isOK;
+    return $this->isOK();
   }
 
   /**

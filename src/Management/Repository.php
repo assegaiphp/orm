@@ -22,6 +22,7 @@ use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
+use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use JetBrains\PhpStorm\ArrayShape;
@@ -30,6 +31,10 @@ use stdClass;
 
 /**
  * Represents a repository for a specific entity.
+ * @package Assegai\Orm\Management
+ *
+ * @template T
+ * @template-implements RepositoryInterface<T>
  */
 readonly class Repository implements RepositoryInterface
 {
@@ -214,14 +219,13 @@ readonly class Repository implements RepositoryInterface
   }
 
   /**
-   * @param FindOptions|array|null $findOptions
-   * @return array|null
-   * @throws ClassNotFoundException
-   * @throws GeneralSQLQueryException
-   * @throws ORMException
-   * @throws ReflectionException
+   * @inheritDoc
+   * @throws ClassNotFoundException if the entity class does not exist.
+   * @throws GeneralSQLQueryException if the query fails.
+   * @throws ORMException if the entity class is not an entity.
+   * @throws ReflectionException if the entity class does not exist.
    */
-  public function find(FindOptions|array|null $findOptions = new FindOptions()): ?array
+  public function find(FindOptions|array|null $findOptions = new FindOptions()): FindResult
   {
     if (is_array($findOptions))
     {
@@ -231,14 +235,13 @@ readonly class Repository implements RepositoryInterface
   }
 
   /**
-   * @param FindWhereOptions|array $where
-   * @return array|null
+   * @inheritDoc
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function findBy(FindWhereOptions|array $where): ?array
+  public function findBy(FindWhereOptions|array $where): FindResult
   {
     if (is_array($where))
     {
@@ -256,7 +259,7 @@ readonly class Repository implements RepositoryInterface
    * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "\array|null", 'count' => "int"])]
-  public function findAndCount(FindManyOptions|array|null $options = null): array
+  public function findAndCount(FindManyOptions|array|null $options = null): FindResult
   {
     if (is_array($options))
     {
@@ -274,7 +277,7 @@ readonly class Repository implements RepositoryInterface
    * @throws ReflectionException
    */
   #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
-  public function findAndCountBy(FindWhereOptions|array $where): array
+  public function findAndCountBy(FindWhereOptions|array $where): FindResult
   {
     if (is_array($where))
     {
@@ -287,13 +290,14 @@ readonly class Repository implements RepositoryInterface
    * @param FindOptions|FindOneOptions|array $options If an array is passed, the whole array will be used to generate
    * the `where` clause of a FindOneOptions object. To specify the other options, you must explicitly specify
    * the `where` clause e.g. 'where' => '...'
-   * @return Entity|null
+   * @return FindResult Returns an instance of `FindResult` which contains the entity that matches the
+   * given `FindOptions`.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function findOne(FindOptions|FindOneOptions|array $options): ?object
+  public function findOne(FindOptions|FindOneOptions|array $options): FindResult
   {
     if (is_array($options))
     {

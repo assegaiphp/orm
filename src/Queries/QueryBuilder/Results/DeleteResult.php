@@ -6,6 +6,10 @@ use Assegai\Orm\Interfaces\QueryResultInterface;
 
 /**
  * DeleteResult class. Represents result of delete query execution.
+ * @package Assegai\Orm\Queries\QueryBuilder\Results
+ *
+ * @template T
+ * @template-implements QueryResultInterface<T>
  */
 readonly class DeleteResult implements QueryResultInterface
 {
