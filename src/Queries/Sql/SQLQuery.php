@@ -301,9 +301,7 @@ final class SQLQuery
     {
       $statement = $this->db->prepare($this->queryString);
 
-      $statement->execute($this->params);
-
-      if (!empty($statement->errorInfo()))
+      if ($statement->execute($this->params))
       {
         if (!empty($this->params))
         {
@@ -318,8 +316,12 @@ final class SQLQuery
         if ($this->type() === SQLQueryType::INSERT)
         {
           $this->lastInsertId = $this->db->lastInsertId();
+          if ($this->lastInsertId && isset($data['id']))
+          {
+            $data['id'] = $this->lastInsertId;
+          }
         }
-  
+
         return new SQLQueryResult(data: $data, errors: [], raw: $this->queryString);
       }
 
@@ -332,7 +334,7 @@ final class SQLQuery
     }
     catch (PDOException)
     {
-      list($sqlCode, $driverCode, $message) = $statement->errorInfo();
+      [$sqlCode, $driverCode, $message] = $statement->errorInfo();
       if (Config::environment() === 'PROD')
       {
         $message = 'Bad Request';
