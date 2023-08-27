@@ -12,6 +12,7 @@ use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
+use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use stdClass as Entity;
@@ -108,19 +109,19 @@ interface RepositoryInterface
   /**
    * Removes a given entity from the database.
    *
-   * @param object|array|null $entityOrEntities
-   * @param RemoveOptions|array|null $removeOptions
-   * @return DeleteResult
-   * @throws ORMException
+   * @param object|array|null $entityOrEntities The entity or entities to remove.
+   * @param RemoveOptions|array|null $removeOptions The options to use when removing.
+   * @return DeleteResult Returns a DeleteResult instance. Use it to check if the operation was successful.
+   * @throws ORMException If the given entity is not an object or an array.
    */
   public function remove(object|array|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult;
 
   /**
    * Records the deletion date of a given entity.
    *
-   * @param object|array|null $entityOrEntities
-   * @param RemoveOptions|array|null $removeOptions
-   * @return UpdateResult Returns the removed entities.
+   * @param object|array|null $entityOrEntities The entity or entities to soft remove.
+   * @param RemoveOptions|array|null $removeOptions The options to use when soft removing.
+   * @return UpdateResult Returns an UpdateResult instance. Use it to check if the operation was successful.
    */
   public function softRemove(object|array|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult;
 
@@ -135,7 +136,7 @@ interface RepositoryInterface
    *
    * @param int|array|object $conditions The deletion conditions.
    * @return DeleteResult Returns the removed entities.
-   * @throws ORMException
+   * @throws ORMException If the given condition(s) is/are empty.
    */
   public function delete(int|array|object $conditions): DeleteResult;
 
@@ -146,8 +147,8 @@ interface RepositoryInterface
    * Does not check if entity exist in the database.
    * Condition(s) cannot be empty.
    *
-   * @param int|array|object $conditions
-   * @return UpdateResult
+   * @param int|array|object $conditions The deletion conditions.
+   * @return UpdateResult Returns the removed entities.
    */
   public function restore(int|array|object $conditions): UpdateResult;
 
@@ -155,53 +156,58 @@ interface RepositoryInterface
    * Counts entities that match given options.
    * Useful for pagination.
    *
-   * @param FindOptions|array|null $options
-   * @return int Returns the count of entities that match the given options
+   * @param FindOptions|array|null $options The options to count entities.
+   * @return int Returns the total number of entities that match the given options.
    */
   public function count(FindOptions|array|null $options = null): int;
 
   /**
    * Find entities that match the given `FindOptions`.
    *
-   * @param FindOptions|array|null $findOptions
-   * @return array|null
+   * @param FindOptions|array|null $findOptions The options to find entities.
+   * @return FindResult<T> Returns an instance of `FindResult` which contains a list of entities that match the
+   *
    */
-  public function find(FindOptions|array|null $findOptions = new FindOptions()): ?array;
+  public function find(FindOptions|array|null $findOptions = new FindOptions()): FindResult;
 
   /**
    * Finds entities that match given `FindWhereOptions`.
    *
-   * @param FindWhereOptions|array $where
-   * @return null|array<Entity> Returns a list of entities that match the given `FindWhereOptions`.
+   * @param FindWhereOptions|array $where The options to find entities.
+   * @return FindResult<T> Returns an instance of `FindResult` which contains a list of entities that match the
+   * given `FindWhereOptions`.
    */
-  public function findBy(FindWhereOptions|array $where): ?array;
+  public function findBy(FindWhereOptions|array $where): FindResult;
 
   /**
    * Finds entities that match given find options.
    * Also counts all entities that match given conditions,
    * but ignores pagination settings (from and take options).
    *
-   * @param FindManyOptions|array|null $options
-   * @return array<[Entity,int]>
+   * @param FindManyOptions|array|null $options The options to find entities.
+   * @return FindResult<T> Returns an instance of `FindResult` which contains a list of entities that match the
+   * given `FindManyOptions`.
    */
-  public function findAndCount(FindManyOptions|array|null $options = null): array;
+  public function findAndCount(FindManyOptions|array|null $options = null): FindResult;
 
   /**
    * Finds entities that match given WHERE conditions.
    * Also counts all entities that match given conditions,
    * but ignores pagination settings (from and take options).
    *
-   * @param FindWhereOptions|array $where
-   * @return array
+   * @param FindWhereOptions|array $where The options to find entities.
+   * @return FindResult<T> Returns an instance of `FindResult` which contains a list of entities that match the
+   * given `FindWhereOptions`.
    */
-  public function findAndCountBy(FindWhereOptions|array $where): array;
+  public function findAndCountBy(FindWhereOptions|array $where): FindResult;
 
   /**
    * Finds first entity by a given find options.
    * If entity was not found in the database - returns null.
    *
    * @param FindOptions|FindOneOptions|array $options
-   * @return null|Entity Returns the entity if found, null otherwise.
+   * @return FindResult<T> Returns an instance of `FindResult` which contains the entity that matches the
+   * given `FindOptions`.
    */
-  public function findOne(FindOptions|FindOneOptions|array $options): ?object;
+  public function findOne(FindOptions|FindOneOptions|array $options): FindResult;
 }

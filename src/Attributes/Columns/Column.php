@@ -15,7 +15,7 @@ use UnitEnum;
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class Column
 {
-  // TODO: Move this constants to an appropriate class/enum
+  // TODO: Move these constants to an appropriate class/enum
   const SIGNED = 'SIGNED';
   const UNSIGNED = 'UNSIGNED';
   const ZEROFILL = 'ZEROFILL';
