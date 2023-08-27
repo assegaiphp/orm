@@ -5,23 +5,22 @@ namespace Assegai\Orm\Queries\QueryBuilder\Results;
 use Assegai\Orm\Interfaces\QueryResultInterface;
 
 /**
- * DeleteResult class. Represents result of delete query execution.
+ * Class FindResult represents a result of a find query.
  * @package Assegai\Orm\Queries\QueryBuilder\Results
  *
  * @template T
  * @template-implements QueryResultInterface<T>
  */
-readonly class DeleteResult implements QueryResultInterface
+readonly class FindResult implements QueryResultInterface
 {
   /**
-   * Construct a new DeleteResult instance.
-   *
    * @param mixed $raw Raw SQL result returned by executed query.
-   * @param int|null $affected Number of affected rows/documents. Not all drivers support this.
+   * @param mixed $data The result data.
+   * @param array $errors List of errors.
    */
   public function __construct(
-    public mixed $raw,
-    public ?int  $affected,
+    protected mixed $raw,
+    protected mixed $data,
     protected array $errors = []
   )
   {
@@ -52,13 +51,11 @@ readonly class DeleteResult implements QueryResultInterface
   }
 
   /**
-   * Returns the number of affected rows/documents. Not all drivers support this.
-   *
-   * @return int|null Number of affected rows/documents. Not all drivers support this.
+   * @inheritDoc
    */
-  public function getData(): ?int
+  public function getData(): mixed
   {
-    return $this->affected;
+    return $this->data;
   }
 
   /**
@@ -67,5 +64,20 @@ readonly class DeleteResult implements QueryResultInterface
   public function getRaw(): mixed
   {
     return $this->raw;
+  }
+
+  /**
+   * Returns the total number of records.
+   *
+   * @return int The total number of records.
+   */
+  public function getTotal(): int
+  {
+    if (is_countable($this->data))
+    {
+      return count($this->data);
+    }
+
+    return 0;
   }
 }

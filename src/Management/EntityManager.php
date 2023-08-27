@@ -4,6 +4,7 @@ namespace Assegai\Orm\Management;
 
 use Assegai\Core\Config;
 use Assegai\Core\ModuleManager;
+use Assegai\Core\Util\Debug\Log;
 use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\DataSource\DataSource;
@@ -20,6 +21,7 @@ use Assegai\Orm\Exceptions\TypeConversionException;
 use Assegai\Orm\Exceptions\ValidationException;
 use Assegai\Orm\Interfaces\IEntityStoreOwner;
 use Assegai\Orm\Interfaces\IFactory;
+use Assegai\Orm\Interfaces\QueryResultInterface;
 use Assegai\Orm\Management\Inspectors\EntityInspector;
 use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
@@ -30,12 +32,16 @@ use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Metadata\EntityMetadata;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
+use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
+use DateTime;
+use Exception;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
 use PDOStatement;
@@ -47,9 +53,13 @@ use UnitEnum;
 
 /**
  * Class EntityManager. The EntityManager is the central access point to ORM functionality.
+ * @package Assegai\Orm\Management
+ *
+ * @template T of object
  */
 class EntityManager implements IEntityStoreOwner
 {
+  const LOG_TAG = '[Entity Manager]';
   /**
    * Once created and then reused by repositories.
    */
@@ -142,7 +152,7 @@ class EntityManager implements IEntityStoreOwner
    * If entities do not exist in the database then inserts, otherwise updates.
    *
    * @param object|object[] $targetOrEntity
-   * @return object|array
+   * @return QueryResultInterface
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
@@ -151,7 +161,7 @@ class EntityManager implements IEntityStoreOwner
    * @throws ReflectionException
    * @throws SaveException
    */
-  public function save(object|array $targetOrEntity): object|array
+  public function save(object|array $targetOrEntity): QueryResultInterface
   {
     $results = [];
 
@@ -168,35 +178,23 @@ class EntityManager implements IEntityStoreOwner
       }
       else
       {
-        throw new NotFoundException($targetOrEntity->id);
+        $saveResult = new SQLQueryResult([], [new NotFoundException($targetOrEntity->id)]);
       }
 
-      if ($saveResult instanceof InsertResult)
+      if ($saveResult instanceof InsertResult || $saveResult instanceof UpdateResult || $saveResult instanceof  DeleteResult)
       {
-        return $saveResult->generatedMaps;
-      }
-
-      if ($saveResult instanceof UpdateResult)
-      {
-        return $saveResult->generatedMaps;
-      }
-
-      if ($saveResult->affected === 0)
-      {
-        return $results;
+        return $saveResult;
       }
 
       return $this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $this->query->lastInsertId()]));
     }
-    else
+
+    foreach ($targetOrEntity as $entity)
     {
-      foreach ($targetOrEntity as $entity)
-      {
-        $results[] = $this->save(targetOrEntity: $entity);
-      }
+      $results[] = $this->save(targetOrEntity: $entity);
     }
 
-    return $results;
+    return new SQLQueryResult($results);
   }
 
   /**
@@ -237,9 +235,15 @@ class EntityManager implements IEntityStoreOwner
         {
           $entityLikeReflectionProperty = new ReflectionProperty($entityLike, $entityLikePropertyName);
           $entityClassReflectionProperty = new ReflectionProperty($entityClass, $entityLikePropertyName);
-          if (is_null($entityLikePropertyValue) && !$entityClassReflectionProperty->getType()->allowsNull())
+
+          if (is_null($entityLikePropertyValue))
           {
-            continue;
+            $entityLikePropertyValue = $this->getDefaultColumnValue($entityClassReflectionProperty);
+
+            if (!$entityClassReflectionProperty->getType()->allowsNull())
+            {
+              continue;
+            }
           }
 
           $entityLikeReflectionPropertyType = $entityLikeReflectionProperty->getType()?->getName();
@@ -315,7 +319,17 @@ class EntityManager implements IEntityStoreOwner
    */
   public function preload(string $entityClass, object $entityLike): ?object
   {
-    $entity = $this->find(entityClass: $entityClass);
+    $findOptions = [];
+
+    foreach ($entityLike as $prop => $value)
+    {
+      if (property_exists($entityClass, $prop))
+      {
+        $findOptions[$prop] = $value;
+      }
+    }
+
+    $entity = $this->find(entityClass: $entityClass, findOptions: FindOptions::fromArray($findOptions));
 
     if (empty($entity))
     {
@@ -374,13 +388,38 @@ class EntityManager implements IEntityStoreOwner
 
     if ($result->isError())
     {
+      http_response_code(500);
+      $error = new GeneralSQLQueryException($this->query);
+      Log::error(self::LOG_TAG, $error);
+
       return new InsertResult(
         identifiers: $entity,
         raw: $this->query->queryString(),
         generatedMaps: $result,
-        errors: [new GeneralSQLQueryException($this->query)]
+        errors: [$error]
       );
     }
+
+    # Find the record by the last insert id and hydrate the entity
+    $result = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: ['id' => $this->lastInsertId()]));
+
+    if ($result->isError())
+    {
+      http_response_code(500);
+      $error = new GeneralSQLQueryException($this->query);
+      Log::error(self::LOG_TAG, $error);
+
+      return new InsertResult(
+        identifiers: $entity,
+        raw: $this->query->queryString(),
+        generatedMaps: $result,
+        errors: [$result->getErrors()]
+      );
+    }
+
+    $entity = is_array($result->getData())
+      ? $result->getData()[0]
+      : $result->getData();
 
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
     $generatedMaps->id = $this->lastInsertId();
@@ -855,13 +894,13 @@ class EntityManager implements IEntityStoreOwner
    * @param string $entityClass
    * @param null|FindOptions $findOptions
    *
-   * @return array|null
+   * @return FindResult<T>
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function find(string $entityClass, ?FindOptions $findOptions = new FindOptions()): ?array
+  public function find(string $entityClass, ?FindOptions $findOptions = new FindOptions()): FindResult
   {
     $entity = $this->create(entityClass: $entityClass);
     $conditions = [];
@@ -941,23 +980,33 @@ class EntityManager implements IEntityStoreOwner
 
     if ($result->isError())
     {
-      throw new GeneralSQLQueryException($this->query);
+      return new FindResult(
+        raw: $result->getRaw(),
+        data: $result->value(),
+        errors: [new GeneralSQLQueryException($this->query), ...$result->getErrors()]
+      );
     }
 
-    return $this->processRelations($result->value(), $entityClass, $findOptions, $availableRelations);
+    $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations);
+
+    return new FindResult(
+      raw: $result->getRaw(),
+      data: $resultSet,
+      errors: $result->getErrors()
+    );
   }
 
   /**
    * Finds entities that match given `FindWhereOptions`.
    *
-   * @param string $entityClass
-   * @param FindWhereOptions|array $where
-   * @return null|array<object> Returns a list of entities that match the given `FindWhereOptions`.
-   * @throws ClassNotFoundException
-   * @throws GeneralSQLQueryException
-   * @throws ORMException|ReflectionException
+   * @param string $entityClass The entity class name.
+   * @param FindWhereOptions|array $where The find options.
+   * @return FindResult Returns a FindResult object representing the result of the query.
+   * @throws ClassNotFoundException If the given entity class does not exist.
+   * @throws GeneralSQLQueryException If the query fails.
+   * @throws ORMException|ReflectionException If the given entity class does not have the required attributes.
    */
-  public function findBy(string $entityClass, FindWhereOptions|array $where): ?array
+  public function findBy(string $entityClass, FindWhereOptions|array $where): FindResult
   {
     $entity = $this->create(entityClass: $entityClass);
     if (is_array($where))
@@ -966,10 +1015,10 @@ class EntityManager implements IEntityStoreOwner
     }
     $statement =
       $this->query
-      ->select()
-      ->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))
-      ->from(tableReferences: $this->inspector->getTableName(entity: $entity))
-      ->where(condition: $where);
+        ->select()
+        ->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))
+        ->from(tableReferences: $this->inspector->getTableName(entity: $entity))
+        ->where(condition: $where);
 
     $limit = $_GET['limit'] ?? 100;
     $skip = $_GET['skip'] ?? 0;
@@ -981,7 +1030,11 @@ class EntityManager implements IEntityStoreOwner
       throw new GeneralSQLQueryException($this->query);
     }
 
-    return $result->value();
+    return new FindResult(
+      raw: $result->getRaw(),
+      data: $result->getData(),
+      errors: $result->getErrors()
+    );
   }
 
   /**
@@ -1037,7 +1090,7 @@ class EntityManager implements IEntityStoreOwner
    *
    * @param string $entityClass
    * @param FindOptions|FindOneOptions $options
-   * @return object|null
+   * @return T|null
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
@@ -1046,17 +1099,22 @@ class EntityManager implements IEntityStoreOwner
   public function findOne(
     string $entityClass,
     FindOptions|FindOneOptions $options
-  ): ?object
+  ): FindResult
   {
-    $found = $this->find(entityClass: $entityClass, findOptions: $options);
+    $result = $this->find(entityClass: $entityClass, findOptions: $options);
 
-    if (empty($found[0]))
+    if ($result->isError())
     {
-      return null;
+      return $result;
+    }
+
+    if ($result->getTotal() === 0)
+    {
+      return new FindResult(raw: $result->getRaw(), data: null);
     }
 
     /** @var Entity $entityClass */
-    return (object)$found[0];
+    return new FindResult(raw: $result->getRaw(), data: $result->getData());
   }
 
   /**
@@ -1446,5 +1504,47 @@ class EntityManager implements IEntityStoreOwner
     }
 
     return $restructuredEntity;
+  }
+
+  /**
+   * Returns the default value for a given column. If no default value is specified, returns null.
+   *
+   * @param ReflectionProperty $reflectionProperty The reflection property to get the default value for.
+   * @return mixed Returns the default value for the given column.
+   * @throws ValidationException If the default value is invalid.
+   */
+  private function getDefaultColumnValue(ReflectionProperty $reflectionProperty): mixed
+  {
+    # Load Column attribute for the property
+    $attributes = $reflectionProperty->getAttributes();
+
+    foreach ($attributes as $attribute)
+    {
+      $attributeInstance = $attribute->newInstance();
+
+      try
+      {
+        # Check if a default value is specified
+        if (!is_null($attributeInstance->default))
+        {
+          return match (true) {
+            $attributeInstance->default === 'CURRENT_TIMESTAMP',
+              $attributeInstance->default === 'NOW()' => new DateTime(),
+            # Match ISO 8601 date format
+            preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $attributeInstance->default) => new DateTime($attributeInstance->default),
+            # Match ATOM date format
+            preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$/', $attributeInstance->default) => new DateTime($attributeInstance->default),
+            default => $attributeInstance->default
+          };
+        }
+      }
+      catch (Exception $exception)
+      {
+        throw new ValidationException($exception);
+      }
+    }
+
+    # If no default value is specified, return null
+    return null;
   }
 }
