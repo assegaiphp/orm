@@ -6,8 +6,7 @@
     "autoload": {
         "psr-4": {
             "Assegai\\Orm\\": "src/"
-        },
-        "files": ["src/Util/Functions.php"]
+        }
     },
     "autoload-dev": {
         "psr-4": {
@@ -28,7 +27,8 @@
         "ext-pdo_mysql": "*",
         "ext-pdo_pgsql": "*",
         "ext-pdo_sqlite": "*",
-        "assegaiphp/core": ">=0.3.0"
+        "assegaiphp/core": ">=0.3.0",
+        "assegaiphp/util": "^0.4.2"
     },
     "require-dev": {
         "codeception/codeception": "^5.0",
