@@ -338,7 +338,7 @@ class EntityManager implements IEntityStoreOwner
 
     $entity = $this->find(entityClass: $entityClass, findOptions: FindOptions::fromArray($findOptions));
 
-    if (empty($entity))
+    if (empty($entity->getData()))
     {
       $entity = $this->create(entityClass: $entityClass, entityLike: $entityLike);
     }
@@ -957,7 +957,7 @@ class EntityManager implements IEntityStoreOwner
       # Resolve relations and joins
       if ($findOptions->relations)
       {
-        $this->buildRelations();
+        # $this->buildRelations($listOfRelations);
         foreach ($findOptions->relations as $key => $value)
         {
           /** @var RelationPropertyMetadata $relationProperty */
@@ -1079,7 +1079,7 @@ class EntityManager implements IEntityStoreOwner
   {
     $entities = $this->find(entityClass: $entityClass, findOptions: $options);
 
-    return ['entities' => $entities, 'count' => count($entities)];
+    return ['entities' => $entities, 'count' => count($entities->getData())];
   }
 
   /**
@@ -1102,7 +1102,7 @@ class EntityManager implements IEntityStoreOwner
   {
     $entities = $this->findBy(entityClass: $entityClass, where: $where);
 
-    return ['entities' => $entities, 'count' => count($entities)];
+    return ['entities' => $entities, 'count' => count($entities->getData())];
   }
 
   /**
