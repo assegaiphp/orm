@@ -381,9 +381,13 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
+    $columnsMeta = [];
 
-    $columns = $this->inspector->getColumns(entity: $instance);
-    $values = $this->inspector->getValues(entity: $instance);
+    $columns = $this->inspector->getColumns(entity: $instance, meta: $columnsMeta);
+    $values = $this->inspector->getValues(entity: $instance, options: [
+      'filter' => true,
+      'columnTypes' => $columnsMeta['columnTypes'] ?? []
+    ]);
 
     $result =
       $this
