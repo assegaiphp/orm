@@ -352,21 +352,7 @@ final class EntityInspector
 
         if ($property instanceof DateTime)
         {
-          $dateTimeFormat = DATE_ATOM;
-
-          if (isset($options['columnTypes']))
-          {
-            /** @var ColumnType $columnType */
-            $columnType = $options['columnTypes'][$propName];
-            $dateTimeFormat = match ($columnType) {
-              ColumnType::DATE => 'Y-m-d',
-              ColumnType::TIME => 'h:i:s',
-              ColumnType::DATETIME => 'Y-m-d h:i:s',
-              default => DATE_ATOM
-            };
-          }
-
-          $property = $property->format($dateTimeFormat);
+          $property = $this->convertDateTimeToString($property, $propName);
         }
       }
       $filteredValue = match(gettype($entity->$propName)) {
@@ -475,5 +461,31 @@ final class EntityInspector
     }
 
     return true;
+  }
+
+  /**
+   * Converts a DateTime object to a string.
+   *
+   * @param DateTime $property The DateTime object to convert.
+   * @param string $propName The name of the property.
+   * @return string Returns the DateTime object as a string.
+   */
+  public function convertDateTimeToString(DateTime $property, string $propName): string
+  {
+    $dateTimeFormat = DATE_ATOM;
+
+    if (isset($options['columnTypes']))
+    {
+      /** @var ColumnType $columnType */
+      $columnType = $options['columnTypes'][$propName];
+      $dateTimeFormat = match ($columnType) {
+        ColumnType::DATE => 'Y-m-d',
+        ColumnType::TIME => 'h:i:s',
+        ColumnType::DATETIME => 'Y-m-d h:i:s',
+        default => DATE_ATOM
+      };
+    }
+
+    return $property->format($dateTimeFormat);
   }
 }

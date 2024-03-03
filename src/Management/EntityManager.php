@@ -515,7 +515,8 @@ class EntityManager implements IEntityStoreOwner
 
     $instance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
     $assignmentList = [];
-    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns);
+    $meta = [];
+    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $meta);
 
     foreach ($partialEntity as $prop => $value)
     {
@@ -529,6 +530,11 @@ class EntityManager implements IEntityStoreOwner
           if ($value instanceof UnitEnum && property_exists($value, 'value'))
           {
             $value = $value->value;
+          }
+
+          if ($value instanceof DateTime)
+          {
+            $value = $this->inspector->convertDateTimeToString($value, $prop);
           }
           $assignmentList[$columnName] = $value;
         }
