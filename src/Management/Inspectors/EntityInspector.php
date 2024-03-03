@@ -352,7 +352,7 @@ final class EntityInspector
 
         if ($property instanceof DateTime)
         {
-          $property = $this->convertDateTimeToString($property, $propName);
+          $property = $this->convertDateTimeToString($property, $propName, $options);
         }
       }
       $filteredValue = match(gettype($entity->$propName)) {
@@ -468,9 +468,10 @@ final class EntityInspector
    *
    * @param DateTime $property The DateTime object to convert.
    * @param string $propName The name of the property.
+   * @param array $options The options to use when converting the DateTime object.
    * @return string Returns the DateTime object as a string.
    */
-  public function convertDateTimeToString(DateTime $property, string $propName): string
+  public function convertDateTimeToString(DateTime $property, string $propName, array $options): string
   {
     $dateTimeFormat = DATE_ATOM;
 

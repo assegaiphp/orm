@@ -515,8 +515,8 @@ class EntityManager implements IEntityStoreOwner
 
     $instance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
     $assignmentList = [];
-    $meta = [];
-    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $meta);
+    $columnOptions = [];
+    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $columnOptions);
 
     foreach ($partialEntity as $prop => $value)
     {
@@ -534,7 +534,7 @@ class EntityManager implements IEntityStoreOwner
 
           if ($value instanceof DateTime)
           {
-            $value = $this->inspector->convertDateTimeToString($value, $prop);
+            $value = $this->inspector->convertDateTimeToString($value, $prop, $columnOptions);
           }
           $assignmentList[$columnName] = $value;
         }
