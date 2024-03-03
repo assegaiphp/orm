@@ -13,6 +13,7 @@ use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
+use Assegai\Orm\Queries\Sql\ColumnType;
 use DateTime;
 use ReflectionClass;
 use ReflectionException;
@@ -111,7 +112,8 @@ final class EntityInspector
     object $entity,
     array $exclude = [],
     array $relations = [],
-    array &$relationProperties = []
+    array &$relationProperties = [],
+    array &$meta = []
   ): array
   {
     $columns = [];
@@ -153,6 +155,9 @@ final class EntityInspector
           {
             $columns[] = "$tableName." . $propertyName;
           }
+
+          # Set the ColumnType
+          $meta['columnTypes'][$propertyName] = $attributeInstance->type;
         }
 
         if ($relations)
@@ -345,10 +350,24 @@ final class EntityInspector
           $property = $property->value;
         }
 
-        $property = match(true) {
-          $property instanceof DateTime => $property->format(DATE_ATOM),
-          default => $property
-        };
+        if ($property instanceof DateTime)
+        {
+          $dateTimeFormat = DATE_ATOM;
+
+          if (isset($options['columnTypes']))
+          {
+            /** @var ColumnType $columnType */
+            $columnType = $options['columnTypes'][$propName];
+            $dateTimeFormat = match ($columnType) {
+              ColumnType::DATE => 'Y-m-d',
+              ColumnType::TIME => 'h:i:s',
+              ColumnType::DATETIME => 'Y-m-d h:i:s',
+              default => DATE_ATOM
+            };
+          }
+
+          $property = $property->format($dateTimeFormat);
+        }
       }
       $filteredValue = match(gettype($entity->$propName)) {
         'integer' => filter_var($property, FILTER_SANITIZE_NUMBER_INT),
