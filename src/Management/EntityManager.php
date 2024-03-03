@@ -5,7 +5,14 @@ namespace Assegai\Orm\Management;
 use Assegai\Core\Config;
 use Assegai\Core\ModuleManager;
 use Assegai\Core\Util\Debug\Log;
+use Assegai\Orm\Attributes\Columns\Column;
+use Assegai\Orm\Attributes\Columns\CreateDateColumn;
 use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
+use Assegai\Orm\Attributes\Columns\EmailColumn;
+use Assegai\Orm\Attributes\Columns\PasswordColumn;
+use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
+use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
+use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
@@ -504,10 +511,14 @@ class EntityManager implements IEntityStoreOwner
 
     $instance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
     $assignmentList = [];
+    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns);
 
     foreach ($partialEntity as $prop => $value)
     {
-      if (in_array($prop, $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns)))
+      # Get the correct prop name
+      $columnName = $this->getColumnNameFromProperty($instance, $prop);
+
+      if ($this->mapContainsColumnName($columnMap, $columnName))
       {
         if (!is_null($value))
         {
@@ -515,7 +526,7 @@ class EntityManager implements IEntityStoreOwner
           {
             $value = $value->value;
           }
-          $assignmentList[$prop] = $value;
+          $assignmentList[$columnName] = $value;
         }
       }
     }
@@ -908,7 +919,7 @@ class EntityManager implements IEntityStoreOwner
 
     if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass))
     {
-      $conditions = array_merge($findOptions->where->conditions ?? [], [$deleteColumnName => 'NULL']);
+      $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
     }
 
     $listOfRelations = match(gettype($findOptions->relations)) {
@@ -936,7 +947,7 @@ class EntityManager implements IEntityStoreOwner
       # Resolve relations and joins
       if ($findOptions->relations)
       {
-//        $this->buildRelations();
+        $this->buildRelations();
         foreach ($findOptions->relations as $key => $value)
         {
           /** @var RelationPropertyMetadata $relationProperty */
@@ -1403,6 +1414,14 @@ class EntityManager implements IEntityStoreOwner
     return null;
   }
 
+  /**
+   * @param object $relations
+   * @param object $selection
+   * @param EntityMetadata $metadata
+   * @param string $alias
+   * @param string|null $embedPrefix
+   * @return void
+   */
   private function buildRelations(
     object $relations,
     object $selection,
@@ -1546,5 +1565,77 @@ class EntityManager implements IEntityStoreOwner
 
     # If no default value is specified, return null
     return null;
+  }
+
+  /**
+   * Returns the column name for a given property. If no column name is specified, returns the property name.
+   *
+   * @param object $entity The entity to get the column name for.
+   * @param string $prop The property to get the column name for.
+   * @return string Returns the column name for the given property.
+   * @throws ReflectionException If the property does not exist.
+   */
+  private function getColumnNameFromProperty(object $entity, string $prop): string
+  {
+    $propertyReflection = new ReflectionProperty($entity, $prop);
+    $attributes = $propertyReflection->getAttributes();
+
+    if (empty($attributes))
+    {
+      return $prop;
+    }
+
+    # Return $prop if no valid Column attribute found
+    $columnClassNames = [
+      Column::class,
+      CreateDateColumn::class,
+      DeleteDateColumn::class,
+      EmailColumn::class,
+      PasswordColumn::class,
+      PrimaryGeneratedColumn::class,
+      UpdateDateColumn::class,
+      URLColumn::class
+    ];
+    $columnAttribute = null;
+    foreach ( $attributes as $attribute)
+    {
+      if (in_array($attribute->getName(), $columnClassNames))
+      {
+        $columnAttribute = $attribute;
+      }
+    }
+
+    if (!$columnAttribute)
+    {
+      return $prop;
+    }
+
+    /** @var Column $column */
+    $column = $columnAttribute->newInstance();
+    return empty($column->name) ? $prop : $column->name;
+  }
+
+  /**
+   * Determines if a given column map contains a given column name.
+   *
+   * @param array $columnMap The column map to check.
+   * @param string $columnName The column name to check for.
+   * @return bool Returns true if the column map contains the given column name, otherwise false.
+   */
+  private function mapContainsColumnName(array $columnMap, string $columnName): bool
+  {
+    foreach ($columnMap as $key => $value)
+    {
+      if (str_ends_with($key, $columnName))
+      {
+        return true;
+      }
+
+      if (str_ends_with($value, $columnName))
+      {
+        return true;
+      }
+    }
+    return false;
   }
 }
