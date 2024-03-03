@@ -1568,10 +1568,12 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * @param object $entity
-   * @param int|string $prop
-   * @return string
-   * @throws ReflectionException
+   * Returns the column name for a given property. If no column name is specified, returns the property name.
+   *
+   * @param object $entity The entity to get the column name for.
+   * @param string $prop The property to get the column name for.
+   * @return string Returns the column name for the given property.
+   * @throws ReflectionException If the property does not exist.
    */
   private function getColumnNameFromProperty(object $entity, string $prop): string
   {
