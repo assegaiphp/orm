@@ -338,7 +338,7 @@ class EntityManager implements IEntityStoreOwner
 
     $entity = $this->find(entityClass: $entityClass, findOptions: FindOptions::fromArray($findOptions));
 
-    if (empty($entity))
+    if (empty($entity->getData()))
     {
       $entity = $this->create(entityClass: $entityClass, entityLike: $entityLike);
     }
@@ -515,7 +515,8 @@ class EntityManager implements IEntityStoreOwner
 
     $instance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
     $assignmentList = [];
-    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns);
+    $columnOptions = [];
+    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $columnOptions);
 
     foreach ($partialEntity as $prop => $value)
     {
@@ -529,6 +530,11 @@ class EntityManager implements IEntityStoreOwner
           if ($value instanceof UnitEnum && property_exists($value, 'value'))
           {
             $value = $value->value;
+          }
+
+          if ($value instanceof DateTime)
+          {
+            $value = $this->inspector->convertDateTimeToString($value, $prop, $columnOptions);
           }
           $assignmentList[$columnName] = $value;
         }
@@ -548,11 +554,8 @@ class EntityManager implements IEntityStoreOwner
       throw new GeneralSQLQueryException($this->query);
     }
 
-    $generatedMaps = new stdClass();
-    foreach ($result->value() as $key => $value)
-    {
-      $generatedMaps->$key = $value;
-    }
+    $updatedEntity = $this->findOne(entityClass: $entityClass, options: new FindOptions(where: $conditions));
+    $generatedMaps = $updatedEntity->getData() ?? new stdClass();
 
     return new UpdateResult(
       raw: $this->query->queryString(),
@@ -951,7 +954,7 @@ class EntityManager implements IEntityStoreOwner
       # Resolve relations and joins
       if ($findOptions->relations)
       {
-        $this->buildRelations();
+        # $this->buildRelations($listOfRelations);
         foreach ($findOptions->relations as $key => $value)
         {
           /** @var RelationPropertyMetadata $relationProperty */
@@ -1073,7 +1076,7 @@ class EntityManager implements IEntityStoreOwner
   {
     $entities = $this->find(entityClass: $entityClass, findOptions: $options);
 
-    return ['entities' => $entities, 'count' => count($entities)];
+    return ['entities' => $entities, 'count' => count($entities->getData())];
   }
 
   /**
@@ -1096,7 +1099,7 @@ class EntityManager implements IEntityStoreOwner
   {
     $entities = $this->findBy(entityClass: $entityClass, where: $where);
 
-    return ['entities' => $entities, 'count' => count($entities)];
+    return ['entities' => $entities, 'count' => count($entities->getData())];
   }
 
   /**
@@ -1129,7 +1132,7 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /** @var Entity $entityClass */
-    return new FindResult(raw: $result->getRaw(), data: $result->getData());
+    return new FindResult(raw: $result->getRaw(), data: $result->getData()[0] ?? null);
   }
 
   /**
