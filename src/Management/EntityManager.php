@@ -554,11 +554,8 @@ class EntityManager implements IEntityStoreOwner
       throw new GeneralSQLQueryException($this->query);
     }
 
-    $generatedMaps = new stdClass();
-    foreach ($result->value() as $key => $value)
-    {
-      $generatedMaps->$key = $value;
-    }
+    $updatedEntity = $this->findOne(entityClass: $entityClass, options: new FindOptions(where: $conditions));
+    $generatedMaps = $updatedEntity->getData() ?? new stdClass();
 
     return new UpdateResult(
       raw: $this->query->queryString(),
@@ -1135,7 +1132,7 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /** @var Entity $entityClass */
-    return new FindResult(raw: $result->getRaw(), data: $result->getData());
+    return new FindResult(raw: $result->getRaw(), data: $result->getData()[0] ?? null);
   }
 
   /**
