@@ -4,10 +4,18 @@ namespace Assegai\Orm\Management\Options;
 
 /**
  * Defines the search criteria for finding a specific entity.
+ *
+ * @package Assegai\Orm\Management\Options
  */
 class FindOneOptions extends FindOptions
 {
+  /**
+   * @var int|null The maximum number of entities to return.
+   */
   public readonly ?int $limit;
+  /**
+   * @var int|null The number of entities to skip.
+   */
   public readonly ?int $skip;
 
   /**

@@ -33,7 +33,18 @@ class FindOptions
    */
   public function __toString(): string
   {
-    $output = strval($this->where);
+    $output = match(true) {
+      is_array($this->where) => (function() {
+        $where = '';
+        foreach ($this->where as $key => $value)
+        {
+          $where .= "$key = $value";
+        }
+        return $where;
+      })(),
+      $this->where instanceof FindWhereOptions => strval($this->where),
+      default => '',
+    };
 
     if (!empty($limit))
     {

@@ -6,9 +6,19 @@ use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Metadata\RelationMetadata;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 
-class RelationLoader
+/**
+ * Class RelationLoader. Loads relation data for entities.
+ *
+ * @package Assegai\Orm\Queries\QueryBuilder
+ */
+readonly class RelationLoader
 {
-  public function __construct(private readonly DataSource $connection)
+  /**
+   * RelationLoader constructor.
+   *
+   * @param DataSource $connection
+   */
+  public function __construct(private DataSource $connection)
   {
   }
 
@@ -86,7 +96,7 @@ class RelationLoader
     // TODO: Implement loadManyToOneOrOneToOneOwner() method.
     $entities = is_array($entityOrEntities) ? $entityOrEntities : [$entityOrEntities];
     $joinAliasName = $relation->entityMetadata->name;
-    $query = $selectQueryBuilder ?? new SQLQuery(db: $this->connection->db);
+    $query = $selectQueryBuilder ?? new SQLQuery(db: $this->connection->getClient());
     return $this->connection;
   }
 
