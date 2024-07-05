@@ -4,6 +4,7 @@ namespace Assegai\Orm\Attributes;
 
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
+use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\EntityManager;
@@ -44,8 +45,7 @@ class InjectRepository
 
     $entityAttribute = $reflectionAttribute->newInstance();
 
-    if (! $entityAttribute instanceof Entity)
-    {
+    if (! $entityAttribute instanceof Entity) {
       throw new ClassNotFoundException(className: Entity::class);
     }
 
@@ -53,6 +53,11 @@ class InjectRepository
 
     $driver = $entityAttribute->driver;
     $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source');
+
+    if (preg_match('/[\w]+:[\w]+/', $dataSourceName)) {
+      [$driver, $dataSourceName] = explode(':', $dataSourceName);
+      $driver = DataSourceType::tryFrom($driver);
+    }
 
     if (empty($dataSourceName))
     {
