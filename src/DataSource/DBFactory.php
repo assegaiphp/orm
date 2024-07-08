@@ -6,6 +6,7 @@ use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
+use Assegai\Util\Path;
 use PDO;
 use PDOException;
 
@@ -51,29 +52,24 @@ final class DBFactory
   {
     $type = 'mysql';
 
-    if (empty($dbName))
-    {
+    if (empty($dbName)) {
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
-    {
+    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
-      if (empty($config))
-      {
+      if (empty($config)) {
         # Attempt to get the first config we find
         $databases = Config::get('databases')[$type];
 
-        if (!empty($databases))
-        {
+        if (!empty($databases)) {
           $config = array_pop($databases);
         }
       }
 
-      try
-      {
+      try {
         $host = null;
         $port = null;
         $name = $dbName;
@@ -85,10 +81,8 @@ final class DBFactory
           username: $user,
           password: $password
         );
-      }
-      catch (PDOException)
-      {
-        die(new DataSourceConnectionException());
+      } catch (PDOException) {
+        throw new DataSourceConnectionException();
       }
     }
 
@@ -114,18 +108,15 @@ final class DBFactory
   {
     $type = 'pgsql';
 
-    if (empty($dbName))
-    {
+    if (empty($dbName)) {
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
-    {
+    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
-      try
-      {
+      try {
         $host = null;
         $port = null;
         $name = null;
@@ -137,10 +128,8 @@ final class DBFactory
           username: $user,
           password: $password
         );
-      }
-      catch (PDOException)
-      {
-        die(new DataSourceConnectionException(DataSourceType::POSTGRESQL));
+      } catch (PDOException) {
+        throw new DataSourceConnectionException(DataSourceType::POSTGRESQL);
       }
     }
 
@@ -156,25 +145,21 @@ final class DBFactory
   {
     $type = 'sqlite';
 
-    if (empty($dbName))
-    {
+    if (empty($dbName)) {
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
-    {
+    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
-      try
-      {
+      try {
         $path = null;
         extract($config);
+        $path = Path::join(getcwd() ?: '', $path);
         DBFactory::$connections[$type][$dbName] = new PDO( dsn: "sqlite:$path" );
-      }
-      catch (PDOException)
-      {
-        die(new DataSourceConnectionException(DataSourceType::SQLITE));
+      } catch (PDOException) {
+        throw new DataSourceConnectionException(DataSourceType::SQLITE);
       }
     }
 
@@ -190,22 +175,17 @@ final class DBFactory
   {
     $type = 'mongodb';
 
-    if (empty($dbName))
-    {
+    if (empty($dbName)) {
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName]))
-    {
+    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
       $config = Config::get('databases')[$type][$dbName];
 
-      try
-      {
+      try {
         # TODO #16 Implement mongodb connection @amasiye
-      }
-      catch (PDOException)
-      {
+      } catch (PDOException) {
         die(new DataSourceConnectionException(DataSourceType::MONGODB));
       }
     }
@@ -223,8 +203,7 @@ final class DBFactory
   {
     $databases = Config::get('databases');
 
-    if (!isset($databases[$type]) || !isset($databases[$type][$dbName]))
-    {
+    if (!isset($databases[$type]) || !isset($databases[$type][$dbName])) {
       throw new DataSourceConnectionException();
     }
   }

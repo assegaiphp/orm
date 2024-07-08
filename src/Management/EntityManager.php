@@ -383,8 +383,8 @@ class EntityManager implements IEntityStoreOwner
     $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
     $columnsMeta = [];
 
-    $columns = $this->inspector->getColumns(entity: $instance, meta: $columnsMeta);
-    $values = $this->inspector->getValues(entity: $instance, options: [
+    $columns = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $columnsMeta);
+    $values = $this->inspector->getValues(entity: $instance, exclude: $this->readonlyColumns, options: [
       'filter' => true,
       'columnTypes' => $columnsMeta['columnTypes'] ?? []
     ]);
@@ -397,9 +397,10 @@ class EntityManager implements IEntityStoreOwner
         ->values(valuesList: $values)
         ->execute();
 
-    if ($result->isError())
-    {
-      http_response_code(500);
+    if ($result->isError()) {
+      if (! headers_sent() ) {
+        http_response_code(500);
+      }
       $error = new GeneralSQLQueryException($this->query);
       Log::error(self::LOG_TAG, $error);
 
@@ -414,9 +415,10 @@ class EntityManager implements IEntityStoreOwner
     # Find the record by the last insert id and hydrate the entity
     $result = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: ['id' => $this->lastInsertId()]));
 
-    if ($result->isError())
-    {
-      http_response_code(500);
+    if ($result->isError()) {
+      if (! headers_sent() ) {
+        http_response_code(500);
+      }
       $error = new GeneralSQLQueryException($this->query);
       Log::error(self::LOG_TAG, $error);
 

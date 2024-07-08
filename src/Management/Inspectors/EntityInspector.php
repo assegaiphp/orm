@@ -25,7 +25,7 @@ use ReflectionProperty;
 final class EntityInspector
 {
   /**
-   * @var EntityInspector|null
+   * @var EntityInspector|null The singleton instance of the EntityInspector.
    */
   private static ?EntityInspector $instance = null;
 
@@ -37,7 +37,9 @@ final class EntityInspector
   }
 
   /**
-   * @return EntityInspector
+   * Returns the singleton instance of the EntityInspector.
+   *
+   * @return EntityInspector The singleton instance of the EntityInspector.
    */
   public static function getInstance(): EntityInspector
   {
@@ -74,11 +76,13 @@ final class EntityInspector
   }
 
   /**
-   * @param object $entity
-   * @return Entity
-   * @throws ClassNotFoundException
-   * @throws ORMException
-   * @throws ReflectionException
+   * Returns the metadata for the specified entity.
+   *
+   * @param object $entity The entity to inspect.
+   * @return Entity The metadata for the entity.
+   * @throws ClassNotFoundException If the entity does not have the required attributes.
+   * @throws ORMException If the entity attributes have invalid values.
+   * @throws ReflectionException If the entity cannot be reflected.
    */
   public function getMetaData(object $entity): Entity
   {
@@ -102,10 +106,12 @@ final class EntityInspector
 
   /**
    * Returns a list of class property names that are marked with the `Column` attribute.
-   * @param object $entity
-   * @param string[] $exclude
-   * @param string[] $relations
-   * @param RelationPropertyMetadata $relationProperties
+   *
+   * @param object $entity The entity to inspect.
+   * @param string[] $exclude A list of properties to exclude.
+   * @param string[] $relations A list of properties that are marked with the `JoinColumn` attribute.
+   * @param array<string, mixed> $relationProperties A list of properties that are marked with the `JoinColumn` attribute.
+   * @param array<string, mixed> $meta The metadata for the entity.
    * @return array Returns a list of properties that are marked with the `Column` attribute.
    */
   public function getColumns(
@@ -251,13 +257,14 @@ final class EntityInspector
   }
 
   /**
-   * @param object $entity
-   * @param array $exclude
-   * @return array
+   * Returns the columns for the specified entity.
+   *
+   * @param object $entity The entity to inspect.
+   * @param array $exclude A list of properties to exclude.
+   * @return array<string, string> Returns the columns for the specified entity.
    */
   private function getRelationColumns(object $entity, array $exclude = []): array
   {
-
     $columns = [];
     $reflectionClass = new ReflectionClass($entity);
     $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
@@ -305,13 +312,15 @@ final class EntityInspector
   }
 
   /**
-   * @param object $entity
-   * @param array $exclude
-   * @param array $options
-   * @return array
-   * @throws ClassNotFoundException
-   * @throws ORMException
-   * @throws ReflectionException
+   * Returns the values of the specified entity.
+   *
+   * @param object $entity The entity to inspect.
+   * @param string[] $exclude A list of properties to exclude.
+   * @param array<string, mixed> $options The options to use when retrieving the values.
+   * @return array<int, mixed> Returns the values of the specified entity.
+   * @throws ClassNotFoundException If the entity does not have the required attributes.
+   * @throws ORMException If the entity attributes have invalid values.
+   * @throws ReflectionException If the entity cannot be reflected.
    */
   public function getValues(object $entity, array $exclude = [], array $options = ['filter' => true]): array
   {
@@ -370,7 +379,8 @@ final class EntityInspector
 
   /**
    * Returns the table name for the specified entity.
-   * @param object $entity
+   *
+   * @param object $entity The entity to inspect.
    * @return string The name of the table associated with the entity.
    * @throws ClassNotFoundException If the entity does not have the required attributes.
    * @throws ORMException If the entity attributes have invalid values.
