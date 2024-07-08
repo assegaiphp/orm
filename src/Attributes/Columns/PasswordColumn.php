@@ -26,8 +26,7 @@ final class PasswordColumn extends Column
     parent::__construct(
       name: $name,
       alias: $alias,
-      type: ColumnType::VARCHAR,
-      lengthOrValues: 10,
+      type: ColumnType::TEXT,
       default: password_hash('password', $this->passwordHashAlgorithm),
       comment: $comment
     );
