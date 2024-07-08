@@ -18,7 +18,7 @@ class EmailColumn extends Column
       name: $name,
       alias: $alias,
       type: ColumnType::VARCHAR,
-      lengthOrValues: 60
+      lengthOrValues: 320
     );
   }
 }

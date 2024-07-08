@@ -11,15 +11,16 @@ use Stringable;
 readonly class DataSourceOptions implements Stringable
 {
   /**
-   * @param array $entities
+   * @param array $entities T
    * @param string $name
    * @param DataSourceType $type
    * @param string $host
    * @param int $port
    * @param string|null $username
    * @param string|null $password
-   * @param bool $synchronize
-   * @param SQLCharacterSet|null $charSet
+   * @param bool $synchronize S
+   * @param SQLCharacterSet|null $charSet The character set to use.
+   * @param string|null $path The path to the database.
    */
   public function __construct(
     public array            $entities,
@@ -30,7 +31,8 @@ readonly class DataSourceOptions implements Stringable
     public ?string          $username = null,
     public ?string          $password = null,
     public bool             $synchronize = false,
-    public ?SQLCharacterSet $charSet = SQLCharacterSet::UTF8MB4
+    public ?SQLCharacterSet $charSet = SQLCharacterSet::UTF8MB4,
+    public ?string          $path = null,
   )
   {
   }
