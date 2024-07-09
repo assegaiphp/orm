@@ -685,7 +685,7 @@ class EntityManager implements IEntityStoreOwner
         throw new GeneralSQLQueryException($this->query);
       }
 
-      return new DeleteResult(raw: $this->query->queryString(), affected: 1);
+      return new DeleteResult(raw: $this->query->queryString(), affected: $result->getTotalAffectedRows());
     }
 
     $affected = 0;
@@ -1003,7 +1003,8 @@ class EntityManager implements IEntityStoreOwner
       return new FindResult(
         raw: $result->getRaw(),
         data: $result->value(),
-        errors: [new GeneralSQLQueryException($this->query), ...$result->getErrors()]
+        errors: [new GeneralSQLQueryException($this->query), ...$result->getErrors()],
+        affected: $result->getTotalAffectedRows()
       );
     }
 
@@ -1123,13 +1124,11 @@ class EntityManager implements IEntityStoreOwner
   {
     $result = $this->find(entityClass: $entityClass, findOptions: $options);
 
-    if ($result->isError())
-    {
+    if ($result->isError()) {
       return $result;
     }
 
-    if ($result->getTotal() === 0)
-    {
+    if ($result->getTotal() === 0) {
       return new FindResult(raw: $result->getRaw(), data: null);
     }
 

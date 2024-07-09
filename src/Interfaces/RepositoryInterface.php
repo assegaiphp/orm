@@ -109,7 +109,7 @@ interface RepositoryInterface
   /**
    * Removes a given entity from the database.
    *
-   * @param object|array|null $entityOrEntities The entity or entities to remove.
+   * @param object|object[]|null $entityOrEntities The entity or entities to remove. If an array is given, all entities in the array will be removed.
    * @param RemoveOptions|array|null $removeOptions The options to use when removing.
    * @return DeleteResult Returns a DeleteResult instance. Use it to check if the operation was successful.
    * @throws ORMException If the given entity is not an object or an array.

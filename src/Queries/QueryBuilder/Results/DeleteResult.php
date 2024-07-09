@@ -68,4 +68,12 @@ readonly class DeleteResult implements QueryResultInterface
   {
     return $this->raw;
   }
+
+  /**
+   * @inheritDoc
+   */
+  public function getTotalAffectedRows(): int
+  {
+    return $this->affected ?? 0;
+  }
 }
