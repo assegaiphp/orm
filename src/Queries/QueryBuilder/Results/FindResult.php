@@ -21,7 +21,8 @@ readonly class FindResult implements QueryResultInterface
   public function __construct(
     protected mixed $raw,
     protected mixed $data,
-    protected array $errors = []
+    protected array $errors = [],
+    protected int $affected = 0,
   )
   {
   }
@@ -79,5 +80,10 @@ readonly class FindResult implements QueryResultInterface
     }
 
     return 0;
+  }
+
+  public function getTotalAffectedRows(): int
+  {
+    // TODO: Implement getTotalAffectedRows() method.
   }
 }

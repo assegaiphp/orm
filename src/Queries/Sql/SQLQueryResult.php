@@ -23,7 +23,8 @@ final readonly class SQLQueryResult implements QueryResultInterface
   public function __construct(
     private array $data,
     private array $errors = [],
-    private mixed $raw = null
+    private mixed $raw = null,
+    private int $affected = 0
   )
   {
   }
@@ -134,5 +135,13 @@ final readonly class SQLQueryResult implements QueryResultInterface
   public function getRaw(): mixed
   {
     return $this->raw;
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function getTotalAffectedRows(): int
+  {
+    return $this->affected;
   }
 }

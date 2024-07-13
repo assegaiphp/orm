@@ -2,32 +2,39 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-final class SQLUpdateDefinition
+/**
+ * Class SQLUpdateDefinition
+ *
+ * @package Assegai\Orm\Queries\Sql
+ */
+final readonly class SQLUpdateDefinition
 {
   /**
-   * @param SQLQuery $query
-   * @param string $tableName
-   * @param bool $lowPriority
-   * @param bool $ignore
+   * @param SQLQuery $query The SQL query object.
+   * @param string $tableName The name of the table to update.
+   * @param bool $lowPriority Whether to use low priority. When set to true, the update will be delayed until there 
+   * are no clients reading from the table.
+   * @param bool $ignore Whether to ignore errors.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string   $tableName,
-    private readonly bool     $lowPriority = false,
-    private readonly bool     $ignore =  false
+    private SQLQuery $query,
+    private string   $tableName,
+    private bool     $lowPriority = false,
+    private bool     $ignore =  false
   )
   {
     $queryString = "UPDATE ";
-    if ($lowPriority)
-    {
+
+    if ($this->lowPriority) {
       $queryString .= "LOW_PRIORITY ";
     }
-    if ($ignore)
-    {
+
+    if ($this->ignore) {
       $queryString .= "IGNORE ";
     }
+
     $queryString = trim($queryString);
-    $this->query->setQueryString(queryString: "$queryString `$tableName`");
+    $this->query->setQueryString(queryString: "$queryString `$this->tableName`");
   }
 
   /**

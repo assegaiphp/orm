@@ -149,8 +149,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function remove(array|object|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): DeleteResult
   {
-    if (empty($entityOrEntities))
-    {
+    if (empty($entityOrEntities)) {
       throw new NotFoundException($this->entityId);
     }
     $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entityOrEntities);
@@ -159,7 +158,7 @@ readonly class Repository implements RepositoryInterface
 
   /**
    * @inheritDoc
-   * @param array|object $entityOrEntities
+   * @param object[]|object $entityOrEntities The entity or entities to remove. If an array is passed, a list of entities will be removed.
    * @param RemoveOptions|array|null $removeOptions
    * @return UpdateResult
    * @throws ClassNotFoundException
@@ -318,11 +317,9 @@ readonly class Repository implements RepositoryInterface
    */
   protected function getEntityFromObject(string $entityClassName, object|array $object, ?IFactory $factory = null): object|array
   {
-    if (is_array($object))
-    {
+    if (is_array($object)) {
       $results = [];
-      foreach ($object as $obj)
-      {
+      foreach ($object as $obj) {
         $results[] = $this->getEntityFromObject(entityClassName: $entityClassName, object: $obj, factory: $factory);
       }
 

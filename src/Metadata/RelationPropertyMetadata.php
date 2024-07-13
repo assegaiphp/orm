@@ -24,17 +24,23 @@ use ReflectionUnionType;
  */
 class RelationPropertyMetadata
 {
+  /**
+   * @var string
+   */
   public readonly string $name;
-
+  /**
+   * @var Entity|null
+   */
   private ?Entity $entity;
+  public readonly ?string $type;
 
   /**
-   * @param string $name
-   * @param RelationType|null $relationType
+   * @param ReflectionProperty $reflectionProperty
    * @param OneToOne|OneToMany|ManyToOne|ManyToMany|null $relationAttribute
    * @param ReflectionAttribute|null $relationAttributeReflection
    * @param JoinColumn|null $joinColumn
    * @param JoinTable|null $joinTable
+   * @param ReflectionClass|null $relationReflection
    */
   public function __construct(
     public readonly ReflectionProperty $reflectionProperty,
@@ -46,27 +52,26 @@ class RelationPropertyMetadata
   )
   {
     $this->name = $this->reflectionProperty->getName();
+    $this->type = $this->reflectionProperty->getType()?->getName();
   }
 
+  /**
+   * Inflates the metadata.
+   */
   public function inflate(): void
   {
-    if (!$this->getEntityClass())
-    {
+    if (!$this->getEntityClass()) {
       return;
     }
 
-    try
-    {
+    try {
       $reflectionEntity = new ReflectionClass($this->getEntityClass());
       $reflectionEntityAttributes = $reflectionEntity->getAttributes(Entity::class);
 
-      foreach ($reflectionEntityAttributes as $reflectionEntityAttribute)
-      {
+      foreach ($reflectionEntityAttributes as $reflectionEntityAttribute) {
         $this->entity = $reflectionEntityAttribute->newInstance();
       }
-    }
-    catch (ReflectionException $exception)
-    {
+    } catch (ReflectionException $exception) {
       die(new ORMException(message: $exception->getMessage()));
     }
   }
@@ -95,7 +100,9 @@ class RelationPropertyMetadata
   }
 
   /**
-   * @return string
+   * Returns the entity class name.
+   *
+   * @return string|null
    */
   public function getEntityClass(): ?string
   {
