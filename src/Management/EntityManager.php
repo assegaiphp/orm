@@ -15,6 +15,7 @@ use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\Enumerations\RelationType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ContainerException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
@@ -45,6 +46,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Util\Filter;
+use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
 use DateTime;
@@ -52,10 +54,12 @@ use Exception;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
 use PDOStatement;
+use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 use stdClass;
+use Symfony\Component\Console\Output\ConsoleOutput;
 use UnitEnum;
 
 /**
@@ -94,6 +98,11 @@ class EntityManager implements IEntityStoreOwner
    * @var array An array of custom converters.
    */
   protected array $customConverters = [];
+  /**
+   * @var bool Is debug mode enabled.
+   */
+  protected bool $isDebug = false;
+  protected LoggerInterface $logger;
 
   /**
    * Constructs a new EntityManager instance.
@@ -110,25 +119,25 @@ class EntityManager implements IEntityStoreOwner
     protected ?TypeResolver $typeResolver = null,
   )
   {
+    $this->logger = new Logger(new ConsoleOutput());
     $this->query = $query ?? new SQLQuery(db: $connection->getClient());
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
-    if (!$this->inspector)
-    {
+    if (!$this->inspector) {
       $this->inspector = EntityInspector::getInstance();
     }
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
-    if (!$this->typeResolver)
-    {
+    if (!$this->typeResolver) {
       $this->typeResolver = TypeResolver::getInstance();
     }
 
     $this->defaultConverters[] = new GeneralConverters();
-    if ($customConvertors = ModuleManager::getInstance()->getConfig('convertors'))
-    {
+    if ($customConvertors = ModuleManager::getInstance()->getConfig('convertors')) {
       $this->customConverters[] = $customConvertors;
     }
+
+    $this->isDebug = ! in_array($_ENV['ENV'], ['PROD', 'PRODUCTION']) && boolval($_ENV['DEBUG_MODE']) === true;
   }
 
   /**
@@ -173,31 +182,23 @@ class EntityManager implements IEntityStoreOwner
     $results = [];
 
     /** @var object $targetOrEntity */
-    if (is_object($targetOrEntity))
-    {
-      if (empty($targetOrEntity->id))
-      {
+    if (is_object($targetOrEntity)) {
+      if (empty($targetOrEntity->id)) {
         $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity);
-      }
-      else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id])))
-      {
+      } else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id]))) {
         $saveResult = $this->update(entityClass: $targetOrEntity::class, partialEntity: $targetOrEntity, conditions: ['id' => $targetOrEntity->id]);
-      }
-      else
-      {
+      } else {
         $saveResult = new SQLQueryResult([], [new NotFoundException($targetOrEntity->id)]);
       }
 
-      if ($saveResult instanceof InsertResult || $saveResult instanceof UpdateResult || $saveResult instanceof  DeleteResult)
-      {
+      if ($saveResult instanceof InsertResult || $saveResult instanceof UpdateResult || $saveResult instanceof  DeleteResult) {
         return $saveResult;
       }
 
       return $this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $this->query->lastInsertId()]));
     }
 
-    foreach ($targetOrEntity as $entity)
-    {
+    foreach ($targetOrEntity as $entity) {
       $results[] = $this->save(targetOrEntity: $entity);
     }
 
@@ -370,8 +371,7 @@ class EntityManager implements IEntityStoreOwner
   ): InsertResult
   {
     # Check if the entity matches the given entity class
-    if (! $this->inspector->hasValidEntityStructure(entity: $entity, entityClass: $entityClass))
-    {
+    if (! $this->inspector->hasValidEntityStructure(entity: $entity, entityClass: $entityClass)) {
       return new InsertResult(
         identifiers: $entity,
         raw: $this->query->queryString(),
@@ -389,13 +389,17 @@ class EntityManager implements IEntityStoreOwner
       'columnTypes' => $columnsMeta['columnTypes'] ?? []
     ]);
 
-    $result =
-      $this
-        ->query
-        ->insertInto(tableName: $this->inspector->getTableName(entity: $instance))
-        ->singleRow(columns: $columns)
-        ->values(valuesList: $values)
-        ->execute();
+    $this
+      ->query
+      ->insertInto(tableName: $this->inspector->getTableName(entity: $instance))
+      ->singleRow(columns: $columns)
+      ->values(valuesList: $values);
+
+    if($this->isDebug) {
+      $this->query->debug();
+    }
+
+    $result = $this->query->execute();
 
     if ($result->isError()) {
       if (! headers_sent() ) {
@@ -474,35 +478,28 @@ class EntityManager implements IEntityStoreOwner
     $this->validateConditions(conditions: $conditions, methodName: __METHOD__);
     $conditionString = '';
 
-    if (empty($conditions))
-    {
+    if (empty($conditions)) {
       throw new ORMException("Empty criteria(s) are not allowed for the update method.");
     }
 
-    if (!is_string($conditions))
-    {
-      foreach ($conditions as $key => $value)
-      {
+    if (!is_string($conditions)) {
+      foreach ($conditions as $key => $value) {
         $conditionString .= "$key=" . match (true) {
           is_numeric($value) => $value,
           $value instanceof UnitEnum && property_exists($value, 'value') => $value->value,
           default => "'$value'"
         };
       }
-    }
-    else
-    {
+    } else {
       $conditionString = $conditions;
     }
 
-    if (is_array($partialEntity))
-    {
+    if (is_array($partialEntity)) {
       $raw = '';
       $affected = 0;
       $generatedMaps = new stdClass();
 
-      foreach ($partialEntity as $partialItem)
-      {
+      foreach ($partialEntity as $partialItem) {
         $result = $this->update(entityClass: $entityClass, partialEntity: $partialItem, conditions: $conditions);
         $generatedMaps = $result->generatedMaps;
       }
@@ -520,39 +517,41 @@ class EntityManager implements IEntityStoreOwner
     $columnOptions = [];
     $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $columnOptions);
 
-    foreach ($partialEntity as $prop => $value)
-    {
+    foreach ($partialEntity as $prop => $value) {
       # Get the correct prop name
       $columnName = $this->getColumnNameFromProperty($instance, $prop);
 
-      if ($this->mapContainsColumnName($columnMap, $columnName))
-      {
-        if (!is_null($value))
-        {
-          if ($value instanceof UnitEnum && property_exists($value, 'value'))
-          {
+      if ($this->mapContainsColumnName($columnMap, $columnName)) {
+        if (!is_null($value)) {
+          if ($value instanceof UnitEnum && property_exists($value, 'value')) {
             $value = $value->value;
           }
 
-          if ($value instanceof DateTime)
-          {
+          if ($value instanceof DateTime) {
             $value = $this->inspector->convertDateTimeToString($value, $prop, $columnOptions);
+          }
+
+          if ($value instanceof stdClass) {
+            $value = json_encode($value);
           }
           $assignmentList[$columnName] = $value;
         }
       }
     }
 
-    $result =
-      $this
-        ->query
-        ->update(tableName: $this->inspector->getTableName(entity: $instance))
-        ->set(assignmentList: $assignmentList)
-        ->where(condition: $conditionString)
-        ->execute();
+    $this
+      ->query
+      ->update(tableName: $this->inspector->getTableName(entity: $instance))
+      ->set(assignmentList: $assignmentList)
+      ->where(condition: $conditionString);
 
-    if ($result->isError())
-    {
+    if ($this->isDebug) {
+      $this->query->debug();
+    }
+
+    $result = $this->query->execute();
+
+    if ($result->isError()) {
       throw new GeneralSQLQueryException($this->query);
     }
 
@@ -623,26 +622,30 @@ class EntityManager implements IEntityStoreOwner
 
     $assignmentList = array_map(fn($column) => "$column=VALUES($column)", $updateColumns);
 
-    $result = $this
+    $this
       ->query
       ->insertInto(tableName: $this->inspector->getTableName(entity: $entityOrEntities))
       ->singleRow(columns: $columns)
       ->values(valuesList: $values)
       ->onDuplicateKeyUpdate(
         assignmentList: $assignmentList,
-      )->execute();
+      );
+
+    if ($this->isDebug) {
+      $this->query->debug();
+    }
+
+    $result = $this->query->execute();
 
     $errors = [];
-    if ($result->isError())
-    {
+    if ($result->isError()) {
       $errors[] = $this->query->getConnection()->errorInfo();
       $errors[] = new GeneralSQLQueryException($this->query);
     }
 
     $generatedMaps = $entityOrEntities;
 
-    if ($result->isOk())
-    {
+    if ($result->isOk()) {
       $generatedMaps->id = $this->lastInsertId();
     }
 
@@ -669,8 +672,7 @@ class EntityManager implements IEntityStoreOwner
     ?RemoveOptions $removeOptions = null
   ): DeleteResult
   {
-    if (is_object($entityOrEntities))
-    {
+    if (is_object($entityOrEntities)) {
       $id = $entityOrEntities->id ?? 0;
       $statement =
         $this
@@ -678,10 +680,13 @@ class EntityManager implements IEntityStoreOwner
           ->deleteFrom(tableName: $this->inspector->getTableName(entity: $entityOrEntities))
           ->where("id=$id");
 
+      if ($this->isDebug) {
+        $statement->debug();
+      }
+
       $result = $statement->execute();
 
-      if ($result->isError())
-      {
+      if ($result->isError()) {
         throw new GeneralSQLQueryException($this->query);
       }
 
@@ -690,8 +695,7 @@ class EntityManager implements IEntityStoreOwner
 
     $affected = 0;
     $raw = '';
-    foreach ($entityOrEntities as $entity)
-    {
+    foreach ($entityOrEntities as $entity) {
       $removeResult = $this->remove(entityOrEntities: $entity, removeOptions: $removeOptions);
       $affected += $removeResult->affected;
       $raw .= $removeResult->raw . PHP_EOL;
@@ -718,10 +722,8 @@ class EntityManager implements IEntityStoreOwner
     $result = null;
     $deletedAt = date(DATE_ATOM);
 
-    if (is_object($entityOrEntities))
-    {
-      if (!$entityOrEntities->id)
-      {
+    if (is_object($entityOrEntities)) {
+      if (!$entityOrEntities->id) {
         throw new ORMException("Entity must have an id to be soft removed.");
       }
 
@@ -732,17 +734,19 @@ class EntityManager implements IEntityStoreOwner
           ->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])
           ->where("id=$entityOrEntities->id");
 
+      if ($this->isDebug) {
+        $statement->debug();
+      }
+
       $result = $statement->execute();
 
-      if ($result->isError())
-      {
+      if ($result->isError()) {
         throw new GeneralSQLQueryException($this->query);
       }
 
       // TODO: #88 Verify that delete occurred @amasiye
       $generatedMaps = new stdClass();
-      foreach ($result->value() as $key => $value)
-      {
+      foreach ($result->value() as $key => $value) {
         $generatedMaps->$key = $value;
       }
 
@@ -758,8 +762,7 @@ class EntityManager implements IEntityStoreOwner
     $generatedMaps = new stdClass();
 
     $numberFormatter = new NumberFormatter('en', NumberFormatter::SPELLOUT);
-    foreach ($entityOrEntities as $id => $entity)
-    {
+    foreach ($entityOrEntities as $id => $entity) {
       $key = is_numeric($id) ? $numberFormatter->format($id) : $id;
       $result = $this->softRemove(entityOrEntities: $entity, removeOptions: $removeOptions);
       $identifiers->$key = $result;
@@ -808,10 +811,13 @@ class EntityManager implements IEntityStoreOwner
         ->deleteFrom(tableName: $this->inspector->getTableName(entity: $entity))
         ->where(condition: $this->getConditionsString(conditions: $conditions));
 
+    if ($this->isDebug) {
+      $statement->debug();
+    }
+
     $deletionResult = $statement->execute();
 
-    if ($deletionResult->isError())
-    {
+    if ($deletionResult->isError()) {
       throw new GeneralSQLQueryException($this->query);
     }
 
@@ -846,6 +852,10 @@ class EntityManager implements IEntityStoreOwner
         ->set([Filter::getDeleteDateColumnName(entity: $entity) => NULL])
         ->where(condition: $this->getConditionsString(conditions: $conditions));
 
+    if ($this->isDebug) {
+      $statement->debug();
+    }
+
     $restoreResult = $statement->execute();
 
     if ($restoreResult->isError()) {
@@ -854,8 +864,7 @@ class EntityManager implements IEntityStoreOwner
 
     $generatedMaps = new stdClass();
 
-    foreach ($restoreResult->value() as $key => $value)
-    {
+    foreach ($restoreResult->value() as $key => $value) {
       $generatedMaps->$key = $value;
     }
 
@@ -893,15 +902,17 @@ class EntityManager implements IEntityStoreOwner
         ->count()
         ->from(tableReferences: $this->inspector->getTableName(entity: $entity));
 
-    if (!empty($findOptions))
-    {
+    if (!empty($findOptions)) {
       $statement = $statement->where(condition: $options);
+    }
+
+    if ($this->isDebug) {
+      $statement->debug();
     }
 
     $result = $statement->execute();
 
-    if ($result->isError())
-    {
+    if ($result->isError()) {
       throw new GeneralSQLQueryException($this->query);
     }
 
@@ -926,8 +937,7 @@ class EntityManager implements IEntityStoreOwner
     $conditions = [];
     $availableRelations = [];
 
-    if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass))
-    {
+    if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
       $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
     }
 
@@ -946,48 +956,91 @@ class EntityManager implements IEntityStoreOwner
 
     $statement
       = $this
-      ->query
-      ->select()
-      ->all(columns: $columns)
-      ->from(tableReferences: $this->inspector->getTableName(entity: $entity));
+          ->query
+          ->select()
+          ->all(columns: $columns)
+          ->from(tableReferences: $this->inspector->getTableName(entity: $entity));
 
-    if (!empty($findOptions))
-    {
+    if (!empty($findOptions)) {
       # Resolve relations and joins
-      if ($findOptions->relations)
-      {
+      if ($findOptions->relations) {
         # $this->buildRelations($listOfRelations);
-        foreach ($findOptions->relations as $key => $value)
-        {
+
+        foreach ($findOptions->relations as $key => $value) {
           /** @var RelationPropertyMetadata $relationProperty */
           $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
 
-          if (property_exists($entity, $key))
-          {
-            # TODO: Resolve relations custom options
-          }
-
-          if (!$relationProperty->getEntity())
-          {
+          if (!$relationProperty) {
+            if ($_ENV['DEBUG_MODE'] === true) {
+              throw new ORMException("Relation $key does not exist in the entity $entityClass.");
+            }
+            $this->logger->warning("Relation $key does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
             continue;
           }
 
-          # If one-to-one
-          # LEFT JOIN
+          if (property_exists($entity, $key)) {
+            # TODO: Resolve relations custom options
+          }
+
+          if (!$relationProperty->getEntity()) {
+            continue;
+          }
+
           $tableName = $this->inspector->getTableName($entity);
-          $joinColumnName = $relationProperty->joinColumn->effectiveColumnName;
-          $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
-          $referencedTableName = $relationProperty->getEntity()->table;
-          $referencedTableAlias = $referencedTableName;
-          $statement =
-            $statement->leftJoin("$referencedTableName $referencedTableAlias")
-              ->on("$tableName.$joinColumnName=$referencedTableName.$referencedColumnName");
+
+          switch ($relationProperty->getRelationType()) {
+            case RelationType::ONE_TO_ONE:
+              # LEFT JOIN
+              $joinColumnName = $relationProperty->joinColumn->effectiveColumnName;
+              $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
+              $referencedTableName = $relationProperty->getEntity()->table;
+              $referencedTableAlias = $referencedTableName;
+              $statement =
+                $statement->leftJoin("$referencedTableName $referencedTableAlias")
+                  ->on("$tableName.$joinColumnName=$referencedTableName.$referencedColumnName");
+              break;
+
+            case RelationType::ONE_TO_MANY:
+              // TODO Implement one-to-many relation
+              break;
+
+            case RelationType::MANY_TO_ONE:
+              // TODO Implement many-to-one relation
+              break;
+
+            case RelationType::MANY_TO_MANY:
+              // TODO Implement many-to-many relation
+
+              # table_1 t1
+              $t1Name = $tableName;
+              $t1Alias = $t1Name;
+              $t1Column = $relationProperty->joinColumn;
+              $t1ColumnName = $t1Column?->name ?? 'id';
+
+              # table_2 t2
+              $t2Name = $relationProperty->getEntity()->table;
+              $t2Alias = 't2';
+              $t2ColumnName = $t1Column?->referencedColumnName ?? 'id';
+
+              # join_table
+              $joinTable = $relationProperty->joinTable;
+              $joinTableName = $joinTable?->name;
+              $joinTableNameAlias = $joinTableName;
+              $joinTableT1ColumnName = $joinTable->joinColumn ?? strtosingular($t1Name) . '_id';
+              $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
+
+              $statement = $statement
+                ->leftJoin("$joinTableName $joinTableNameAlias")
+                ->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")
+                ->leftJoin("$t2Name $t2Alias")
+                ->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
+              break;
+          }
         }
       }
 
       # Resolve where conditions
-      if ($conditions)
-      {
+      if ($conditions) {
         $findWhereOptions = new FindWhereOptions(conditions: $conditions, entityClass: $entityClass);
       }
       $statement = $statement->where(condition: $findWhereOptions ?? $findOptions);
@@ -996,10 +1049,15 @@ class EntityManager implements IEntityStoreOwner
     $limit = $findOptions->limit ?? $_GET['limit'] ?? Config::get('DEFAULT_LIMIT') ?? 10;
     $skip = $findOptions->skip ?? $_GET['skip'] ?? Config::get('DEFAULT_SKIP') ?? 0;
 
-    $result = $statement->limit(limit: $limit, offset: $skip)->execute();
+    $statement = $statement->limit(limit: $limit, offset: $skip);
 
-    if ($result->isError())
-    {
+    if ($this->isDebug) {
+      $statement->debug();
+    }
+
+    $result = $statement->execute();
+
+    if ($result->isError()) {
       return new FindResult(
         raw: $result->getRaw(),
         data: $result->value(),
@@ -1030,8 +1088,7 @@ class EntityManager implements IEntityStoreOwner
   public function findBy(string $entityClass, FindWhereOptions|array $where): FindResult
   {
     $entity = $this->create(entityClass: $entityClass);
-    if (is_array($where))
-    {
+    if (is_array($where)) {
       $where = $where['condition'] ?? '';
     }
     $statement =
@@ -1044,10 +1101,15 @@ class EntityManager implements IEntityStoreOwner
     $limit = $_GET['limit'] ?? 100;
     $skip = $_GET['skip'] ?? 0;
 
-    $result = $statement->limit(limit: $limit, offset: $skip)->execute();
+    $statement = $statement->limit(limit: $limit, offset: $skip);
 
-    if ($result->isError())
-    {
+    if ($this->isDebug) {
+      $statement->debug();
+    }
+
+    $result = $statement->execute();
+
+    if ($result->isError()) {
       throw new GeneralSQLQueryException($this->query);
     }
 
@@ -1065,7 +1127,7 @@ class EntityManager implements IEntityStoreOwner
    *
    * @param string $entityClass
    * @param FindManyOptions|null $options
-   * @return array<[object,int]>
+   * @return array{entities: array|null, count: int}
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
@@ -1111,7 +1173,7 @@ class EntityManager implements IEntityStoreOwner
    *
    * @param string $entityClass
    * @param FindOptions|FindOneOptions $options
-   * @return T|null
+   * @return FindResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
@@ -1157,8 +1219,7 @@ class EntityManager implements IEntityStoreOwner
    */
   private function validateConditions(string|object|array $conditions, string $methodName): void
   {
-    if (empty($conditions))
-    {
+    if (empty($conditions)) {
       throw new EmptyCriteriaException(methodName: $methodName);
     }
   }
@@ -1173,19 +1234,14 @@ class EntityManager implements IEntityStoreOwner
     $separator = ', ';
     $conditionsString = '';
 
-    if (empty($conditions))
-    {
+    if (empty($conditions)) {
       return '';
     }
 
-    if (is_int($conditions))
-    {
+    if (is_int($conditions)) {
       $conditionsString = sprintf("id=%s", $conditions);
-    }
-    else
-    {
-      foreach ($conditions as $key => $value)
-      {
+    } else {
+      foreach ($conditions as $key => $value) {
         $conditionsString .= sprintf("%s=%s%s", $key, (is_numeric($value) ? $value : "'$value'"), $separator);
       }
     }
@@ -1205,18 +1261,15 @@ class EntityManager implements IEntityStoreOwner
     $reflectionClass = new ReflectionClass($objectOrClass);
     $entityAttributes = $reflectionClass->getAttributes(Entity::class);
 
-    if ($entityAttributes)
-    {
+    if ($entityAttributes) {
       return true;
     }
 
-    if ($objectOrClass instanceof Entity)
-    {
+    if ($objectOrClass instanceof Entity) {
       return true;
     }
 
-    if (in_array(Entity::class, class_implements($objectOrClass)))
-    {
+    if (in_array(Entity::class, class_implements($objectOrClass))) {
       return true;
     }
 
@@ -1266,10 +1319,8 @@ class EntityManager implements IEntityStoreOwner
     $provider = new EntityProvider($this, $factory);
     $entity = $provider->get($entityClassName);
 
-    foreach ($object as $prop => $value)
-    {
-      if (property_exists($entity, $prop))
-      {
+    foreach ($object as $prop => $value) {
+      if (property_exists($entity, $prop)) {
         $sourceReflection = new ReflectionProperty($object, $prop);
         $targetReflection = new ReflectionProperty($entity, $prop);
 
@@ -1286,13 +1337,11 @@ class EntityManager implements IEntityStoreOwner
             default => gettype($entity->$prop)
         };
 
-        if (is_null($sourceType) || is_null($targetType))
-        {
+        if (is_null($sourceType) || is_null($targetType)) {
           continue;
         }
 
-        if ($sourceType !== $targetType)
-        {
+        if ($sourceType !== $targetType) {
           $value = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
         }
 
@@ -1465,17 +1514,18 @@ class EntityManager implements IEntityStoreOwner
     array $relationInfo
   ): array
   {
-    if (!$findOptions || !$findOptions->relations)
-    {
+    if (!$findOptions || !$findOptions->relations) {
       return $data;
     }
 
     $results = [];
 
-    foreach ($data as $datum)
-    {
-      foreach ($findOptions->relations as $relation)
-      {
+    foreach ($data as $datum) {
+      foreach ($findOptions->relations as $relation) {
+        if (!in_array($relation, array_keys($relationInfo))) {
+          $this->logger->warning("Relation $relation does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
+          continue;
+        }
         $results[] = $this->restructureRelatedEntity($entityClass, $datum, $relation, $relationInfo[$relation]);
       }
     }
@@ -1499,36 +1549,37 @@ class EntityManager implements IEntityStoreOwner
   {
     $restructuredEntity = new stdClass();
     $relation = new stdClass();
-//      $restructuredEntity = $this->create($entityClass);
-//      $relation = $this->create($relationInfo->relationAttribute->type);
+    $relationIsCollection = $relationInfo->type === 'array';
+//    $restructuredEntity = $this->create($entityClass);
+//    $this->logger->debug(json_encode($restructuredEntity, JSON_PRETTY_PRINT));
+//    $relation = $this->create($relationInfo->relationAttribute->type);
+    $this->logger->debug("Restructuring entity $entityClass with relation $relationName");
 
     # Foreach relation
-    foreach ($entity as $key => $value)
-    {
+    foreach ($entity as $key => $value) {
       $tableName = $relationInfo->getEntity()->table;
       $pattern = "/{$tableName}_|$relationName/";
 
-      if (preg_match($pattern, $key))
-      {
-        if (!$restructuredEntity->$relationName)
-        {
-          $restructuredEntity->$relationName = $relation;
+      if (preg_match($pattern, $key)) {
+        $relationPropertyName = lcfirst(preg_replace($pattern, '$2', $key));
+        if (!$relationPropertyName) {
+          $relationPropertyName = $relationInfo->joinColumn->name;
         }
-
-        $name = lcfirst(preg_replace($pattern, '$2', $key));
-        $relation->$name = $value;
-      }
-      else
-      {
+        $relation->$relationPropertyName = $value;
+      } else {
         $restructuredEntity->$key = $value;
       }
     }
-    $restructuredEntity->$relationName = $relation;
-
-    if (!$restructuredEntity->$relationName->id)
-    {
-      $restructuredEntity->$relationName = null;
+    if ($relationIsCollection) {
+      $restructuredEntity->$relationName[] = $relation;
+    } else {
+      $restructuredEntity->$relationName = $relation;
     }
+
+    $this->logger->debug(json_encode($restructuredEntity, JSON_PRETTY_PRINT));
+//    if (! isset($restructuredEntity->$relationName->id) ) {
+//      $restructuredEntity->$relationName = null;
+//    }
 
     return $restructuredEntity;
   }
@@ -1548,6 +1599,10 @@ class EntityManager implements IEntityStoreOwner
     foreach ($attributes as $attribute)
     {
       $attributeInstance = $attribute->newInstance();
+
+      if (! property_exists($attributeInstance, 'default') ) {
+        continue;
+      }
 
       try
       {
@@ -1585,11 +1640,16 @@ class EntityManager implements IEntityStoreOwner
    */
   private function getColumnNameFromProperty(object $entity, string $prop): string
   {
+    if (! property_exists($entity, $prop) ) {
+      # Check if this is a relation property
+
+      # Get all entities with
+      return $prop;
+    }
     $propertyReflection = new ReflectionProperty($entity, $prop);
     $attributes = $propertyReflection->getAttributes();
 
-    if (empty($attributes))
-    {
+    if (empty($attributes)) {
       return $prop;
     }
 
@@ -1605,16 +1665,13 @@ class EntityManager implements IEntityStoreOwner
       URLColumn::class
     ];
     $columnAttribute = null;
-    foreach ( $attributes as $attribute)
-    {
-      if (in_array($attribute->getName(), $columnClassNames))
-      {
+    foreach ( $attributes as $attribute) {
+      if (in_array($attribute->getName(), $columnClassNames)) {
         $columnAttribute = $attribute;
       }
     }
 
-    if (!$columnAttribute)
-    {
+    if (!$columnAttribute) {
       return $prop;
     }
 
