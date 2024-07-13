@@ -6,7 +6,9 @@ use Assegai\Orm\Traits\ExecutableTrait;
 use Assegai\Orm\Traits\SQLAggregatorTrait;
 
 /**
+ * Class SQLWhereClause represents a WHERE clause in an SQL query.
  *
+ * @package Assegai\Orm\Queries\Sql
  */
 final class SQLWhereClause
 {
