@@ -144,11 +144,11 @@ final class EntityInspector
         if ($attributeInstance instanceof Column) {
 
           if ($attributeInstance->alias) {
-            $columns[$attributeInstance->alias] = "`$tableName`.`$attributeInstance->name`";
+            $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
           } else if($attributeInstance->name) {
-            $columns[$propertyName] = "`$tableName`.`$attributeInstance->name`";
+            $columns[$propertyName] = "$tableName.$attributeInstance->name";
           } else {
-            $columns[] = "`$tableName`.`$propertyName`";
+            $columns[] = "$tableName.$propertyName";
           }
 
           # Set the ColumnType

@@ -24,8 +24,7 @@ final class SQLWhereClause
     private readonly string $condition
   )
   {
-    if (!empty($this->condition))
-    {
+    if (!empty($this->condition)) {
       $this->query->appendQueryString("WHERE " . $this->filterConditionColumnNames($this->condition));
     }
   }

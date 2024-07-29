@@ -25,7 +25,6 @@ use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
-use JetBrains\PhpStorm\ArrayShape;
 use ReflectionException;
 use stdClass;
 
@@ -49,8 +48,7 @@ readonly class Repository implements RepositoryInterface
     public EntityManager $manager
   )
   {
-    if (EntityManager::objectOrClassIsNotEntity(objectOrClass: $this->entityId))
-    {
+    if (EntityManager::objectOrClassIsNotEntity(objectOrClass: $this->entityId)) {
       throw new IllegalTypeException(expected: Entity::class, actual: $entityId);
     }
   }
@@ -135,8 +133,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function upsert(array|object|null $entity, UpsertOptions|array $options = []): UpdateResult|InsertResult
   {
-    if (empty($entity))
-    {
+    if (empty($entity)) {
       throw new NotFoundException($this->entityId);
     }
     $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entity);
@@ -169,8 +166,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function softRemove(array|object|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
   {
-    if (empty($entityOrEntities))
-    {
+    if (empty($entityOrEntities)) {
       throw new NotFoundException($this->entityId);
     }
     $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entityOrEntities);
@@ -210,8 +206,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function count(FindOptions|array|null $options = null): int
   {
-    if (is_array($options))
-    {
+    if (is_array($options)) {
       $options = FindOneOptions::fromArray($options);
     }
     return $this->manager->count(entityClass: $this->entityId, options: $options);
@@ -226,9 +221,8 @@ readonly class Repository implements RepositoryInterface
    */
   public function find(FindOptions|array|null $findOptions = new FindOptions()): FindResult
   {
-    if (is_array($findOptions))
-    {
-      $findOptions = FindOneOptions::fromArray($findOptions);
+    if (is_array($findOptions)) {
+      $findOptions = FindOptions::fromArray($findOptions);
     }
     return $this->manager->find(entityClass: $this->entityId, findOptions: $findOptions);
   }
@@ -242,8 +236,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function findBy(FindWhereOptions|array $where): FindResult
   {
-    if (is_array($where))
-    {
+    if (is_array($where)) {
       $where = FindWhereOptions::fromArray($where);
     }
     return $this->manager->findBy(entityClass: $this->entityId, where: $where);
@@ -251,35 +244,32 @@ readonly class Repository implements RepositoryInterface
 
   /**
    * @param FindManyOptions|array|null $options
-   * @return array
+   * @return FindResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
    */
-  #[ArrayShape(['entities' => "\array|null", 'count' => "int"])]
   public function findAndCount(FindManyOptions|array|null $options = null): FindResult
   {
-    if (is_array($options))
-    {
-      $options = FindOneOptions::fromArray($options);
+    if (is_array($options)) {
+      $options = FindManyOptions::fromArray($options);
     }
+
     return $this->manager->findAndCount(entityClass: $this->entityId, options: $options);
   }
 
   /**
-   * @param FindWhereOptions|array $where
-   * @return array
+   * @param FindWhereOptions|array{entities: mixed, count: int} $where
+   * @return FindResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
    */
-  #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
   public function findAndCountBy(FindWhereOptions|array $where): FindResult
   {
-    if (is_array($where))
-    {
+    if (is_array($where)) {
       $where = FindWhereOptions::fromArray($where);
     }
     return $this->manager->findAndCountBy(entityClass: $this->entityId, where: $where);
@@ -298,8 +288,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function findOne(FindOptions|FindOneOptions|array $options): FindResult
   {
-    if (is_array($options))
-    {
+    if (is_array($options)) {
       $options = FindOneOptions::fromArray($options);
     }
     return $this->manager->findOne(entityClass: $this->entityId, options: $options);

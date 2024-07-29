@@ -1127,7 +1127,7 @@ class EntityManager implements IEntityStoreOwner
    *
    * @param string $entityClass
    * @param FindManyOptions|null $options
-   * @return array{entities: array|null, count: int}
+   * @return FindResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
@@ -1137,11 +1137,16 @@ class EntityManager implements IEntityStoreOwner
   public function findAndCount(
     string $entityClass,
     ?FindManyOptions $options = null
-  ): array
+  ): FindResult
   {
-    $entities = $this->find(entityClass: $entityClass, findOptions: $options);
+    $result = $this->find(entityClass: $entityClass, findOptions: $options);
 
-    return ['entities' => $entities, 'count' => count($entities->getData())];
+    return new FindResult(
+      $result->getRaw(),
+      $result->getTotal(),
+      $result->getErrors(),
+      $result->getTotalAffectedRows()
+    );
   }
 
   /**
@@ -1150,21 +1155,25 @@ class EntityManager implements IEntityStoreOwner
    * but ignores pagination settings (from and take options).
    * @param string $entityClass
    * @param FindWhereOptions|array $where
-   * @return array
+   * @return FindResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
    */
-  #[ArrayShape(['entities' => "mixed", 'count' => "int"])]
   public function findAndCountBy(
     string $entityClass,
     FindWhereOptions|array $where
-  ): array
+  ): FindResult
   {
-    $entities = $this->findBy(entityClass: $entityClass, where: $where);
+    $result = $this->findBy(entityClass: $entityClass, where: $where);
 
-    return ['entities' => $entities, 'count' => count($entities->getData())];
+    return new FindResult(
+      $result->getRaw(),
+      $result->getTotal(),
+      $result->getErrors(),
+      $result->getTotalAffectedRows()
+    );
   }
 
   /**
