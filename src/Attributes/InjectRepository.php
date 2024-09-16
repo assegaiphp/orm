@@ -52,15 +52,14 @@ class InjectRepository
     $moduleManager = ModuleManager::getInstance();
 
     $driver = $entityAttribute->driver;
-    $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source');
+    $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source') ?? throw new ORMException('No data source name provided');
 
     if (preg_match('/[\w]+:[\w]+/', $dataSourceName)) {
       [$driver, $dataSourceName] = explode(':', $dataSourceName);
       $driver = DataSourceType::tryFrom($driver);
     }
 
-    if (empty($dataSourceName))
-    {
+    if (empty($dataSourceName)) {
       throw new ORMException('No data source name provided');
     }
 
