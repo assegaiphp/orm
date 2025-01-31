@@ -584,16 +584,13 @@ class EntityManager implements IEntityStoreOwner
   ): InsertResult|UpdateResult
   {
     // TODO: #83 Implement EntityManager::upsert @amasiye
-    if (is_array($entityOrEntities))
-    {
+    if (is_array($entityOrEntities)) {
       $results = [];
       $errors = [];
-      foreach ($entityOrEntities as $entity)
-      {
+      foreach ($entityOrEntities as $entity) {
         $result = $this->upsert(entityClass: $entityClass, entityOrEntities: $entity, options: $options);
 
-        if ($result->isError())
-        {
+        if ($result->isError()) {
           $errors[] = $result->getErrors();
         }
 
