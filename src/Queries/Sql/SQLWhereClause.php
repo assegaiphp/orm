@@ -6,7 +6,9 @@ use Assegai\Orm\Traits\ExecutableTrait;
 use Assegai\Orm\Traits\SQLAggregatorTrait;
 
 /**
+ * Class SQLWhereClause represents a WHERE clause in an SQL query.
  *
+ * @package Assegai\Orm\Queries\Sql
  */
 final class SQLWhereClause
 {
@@ -22,8 +24,7 @@ final class SQLWhereClause
     private readonly string $condition
   )
   {
-    if (!empty($this->condition))
-    {
+    if (!empty($this->condition)) {
       $this->query->appendQueryString("WHERE " . $this->filterConditionColumnNames($this->condition));
     }
   }

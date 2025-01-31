@@ -21,7 +21,8 @@ readonly class FindResult implements QueryResultInterface
   public function __construct(
     protected mixed $raw,
     protected mixed $data,
-    protected array $errors = []
+    protected array $errors = [],
+    protected int $affected = 0,
   )
   {
   }
@@ -73,11 +74,20 @@ readonly class FindResult implements QueryResultInterface
    */
   public function getTotal(): int
   {
-    if (is_countable($this->data))
-    {
+    if (is_countable($this->data)) {
       return count($this->data);
     }
 
     return 0;
+  }
+
+  /**
+   * Returns the total number of affected rows.
+   *
+   * @return int The total number of affected rows.
+   */
+  public function getTotalAffectedRows(): int
+  {
+    return $this->affected;
   }
 }

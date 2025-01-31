@@ -38,8 +38,7 @@ readonly class RelationLoader
     mixed $selectQueryBuilder = null
   ): mixed
   {
-    if ($queryRunner && $queryRunner->isReleased)
-    {
+    if ($queryRunner && $queryRunner->isReleased) {
       // Get a new one if already closed
       $queryRunner = null;
     }
@@ -97,6 +96,9 @@ readonly class RelationLoader
     $entities = is_array($entityOrEntities) ? $entityOrEntities : [$entityOrEntities];
     $joinAliasName = $relation->entityMetadata->name;
     $query = $selectQueryBuilder ?? new SQLQuery(db: $this->connection->getClient());
+    $mainAlias = $query->getMainAlias();
+
+
     return $this->connection;
   }
 

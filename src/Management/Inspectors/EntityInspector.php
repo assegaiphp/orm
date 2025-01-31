@@ -18,6 +18,7 @@ use DateTime;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
+use stdClass;
 
 /**
  * Provides for entity object introspection.
@@ -113,6 +114,8 @@ final class EntityInspector
    * @param array<string, mixed> $relationProperties A list of properties that are marked with the `JoinColumn` attribute.
    * @param array<string, mixed> $meta The metadata for the entity.
    * @return array Returns a list of properties that are marked with the `Column` attribute.
+   * @throws ClassNotFoundException
+   * @throws ORMException
    */
   public function getColumns(
     object $entity,
@@ -126,78 +129,54 @@ final class EntityInspector
     $reflectionClass = new ReflectionClass($entity);
     $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
 
-    try
-    {
-      $tableName = $this->getTableName($entity);
-    }
-    catch (ClassNotFoundException|ORMException $e)
-    {
-      die($e);
-    }
+    $tableName = $this->getTableName($entity);
 
-    foreach ($properties as $property)
-    {
-      if (in_array($property->getName(), $exclude))
-      {
+    foreach ($properties as $property) {
+      if (in_array($property->getName(), $exclude)) {
         continue;
       }
 
       $propertyName = $property->getName();
       $attributes = $property->getAttributes();
-      foreach ($attributes as $attribute)
-      {
+      foreach ($attributes as $attribute) {
         $attributeInstance = $attribute->newInstance();
-        if ($attributeInstance instanceof Column)
-        {
-          if ($attributeInstance->alias)
-          {
-            $columns[$attributeInstance->alias] = "$tableName." . $attributeInstance->name;
-          }
-          else if($attributeInstance->name)
-          {
-            $columns[$propertyName] = "$tableName." . $attributeInstance->name;
-          }
-          else
-          {
-            $columns[] = "$tableName." . $propertyName;
+
+        if ($attributeInstance instanceof Column) {
+
+          if ($attributeInstance->alias) {
+            $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
+          } else if($attributeInstance->name) {
+            $columns[$propertyName] = "$tableName.$attributeInstance->name";
+          } else {
+            $columns[] = "$tableName.$propertyName";
           }
 
           # Set the ColumnType
           $meta['columnTypes'][$propertyName] = $attributeInstance->type;
         }
 
-        if ($relations)
-        {
-          if ($attributeInstance instanceof JoinColumn)
-          {
-            if ($attributeInstance->name)
-            {
+        if ($relations) {
+          if ($attributeInstance instanceof JoinColumn) {
+
+            if ($attributeInstance->name) {
               $columns[$propertyName] = "$tableName." . $attributeInstance->name;
-            }
-            else
-            {
+            } else {
               $attributeInstance->effectiveColumnName = $this->getColumnName([$propertyName, 'Id']);
               $columns[] = "$tableName." . $attributeInstance->effectiveColumnName;
             }
 
-            if (!$relationProperties[$propertyName])
-            {
+            if (!$relationProperties[$propertyName]) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
             $relationProperties[$propertyName]->joinColumn = $attributeInstance;
-          }
-          else if ($attributeInstance instanceof JoinTable)
-          {
-            if (!$relationProperties[$propertyName])
-            {
+          } else if ($attributeInstance instanceof JoinTable) {
+            if (!$relationProperties[$propertyName]) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
             $relationProperties[$propertyName]->joinTable = $attributeInstance;
-          }
-          else if ($attributeInstance instanceof OneToOne)
-          {
+          } else if ($attributeInstance instanceof OneToOne) {
             if (!isset($relationProperties[$propertyName]) || !$relationProperties[$propertyName])
             {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
@@ -215,33 +194,24 @@ final class EntityInspector
 
             # Add relative columns to column list
             $columns = array_merge($columns, $entityRelativeColumns);
-          }
-          else if ($attributeInstance instanceof OneToMany)
-          {
-            if (!$relationProperties[$propertyName])
-            {
+          } else if ($attributeInstance instanceof OneToMany) {
+            if (!isset($relationProperties[$propertyName])) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
             $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
             $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
             $relationProperties[$propertyName]->inflate();
-          }
-          else if ($attributeInstance instanceof ManyToOne)
-          {
-            if (!$relationProperties[$propertyName])
-            {
+          } else if ($attributeInstance instanceof ManyToOne) {
+            if (!isset($relationProperties[$propertyName])) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
             $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
             $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
             $relationProperties[$propertyName]->inflate();
-          }
-          else if ($attributeInstance instanceof ManyToMany)
-          {
-            if (!$relationProperties[$propertyName])
-            {
+          } else if ($attributeInstance instanceof ManyToMany) {
+            if (!isset($relationProperties[$propertyName])) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
@@ -269,34 +239,24 @@ final class EntityInspector
     $reflectionClass = new ReflectionClass($entity);
     $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
 
-    try
-    {
+    try {
       $tableName = $this->getTableName($entity);
-      foreach ($properties as $property)
-      {
+      foreach ($properties as $property) {
         $propertyName = $property->getName();
         $columnAttributes = $property->getAttributes(Column::class);
 
-        if (!$columnAttributes || in_array($propertyName, $exclude))
-        {
+        if (!$columnAttributes || in_array($propertyName, $exclude)) {
           continue;
         }
 
-        foreach ($columnAttributes as $columnAttribute)
-        {
+        foreach ($columnAttributes as $columnAttribute) {
           $attributeInstance = $columnAttribute->newInstance();
-          if ($attributeInstance instanceof Column)
-          {
-            if ($attributeInstance->alias)
-            {
+          if ($attributeInstance instanceof Column) {
+            if ($attributeInstance->alias) {
               $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $attributeInstance->name;
-            }
-            else if($attributeInstance->name)
-            {
+            } else if($attributeInstance->name) {
               $columns[$propertyName] = "$tableName." . $attributeInstance->name;
-            }
-            else
-            {
+            } else {
               $columns["{$tableName}_" . $propertyName] = "$tableName." . $propertyName;
             }
           }
@@ -330,38 +290,35 @@ final class EntityInspector
     $this->validateEntityName($entityClassname);
     $columns = $this->getColumns(entity: $entity, exclude: $exclude);
 
-    foreach ($columns as $index => $column)
-    {
+    foreach ($columns as $index => $column) {
       $propName = is_numeric($index) ? $column : $index;
       $propName = str_replace($this->getTableName($entity) . ".", '', $propName);
       $property = $entity->$propName;
 
-      if (empty($property))
-      {
+      if (empty($property)) {
         $columnAttribute = new ReflectionProperty(get_class($entity), $propName);
         $attributes = $columnAttribute->getAttributes();
 
-        foreach ($attributes as $attribute)
-        {
+        foreach ($attributes as $attribute) {
           $attrInstance = $attribute->newInstance();
-          if (!empty($attrInstance->defaultValue))
-          {
+          if (!empty($attrInstance->defaultValue)) {
             $property = $attrInstance->defaultValue;
           }
         }
       }
 
       // TODO: Perform type conversion
-      if (is_object($property))
-      {
-        if (property_exists($property, 'value'))
-        {
+      if (is_object($property)) {
+        if (property_exists($property, 'value')) {
           $property = $property->value;
         }
 
-        if ($property instanceof DateTime)
-        {
+        if ($property instanceof DateTime) {
           $property = $this->convertDateTimeToString($property, $propName, $options);
+        }
+
+        if ($property instanceof stdClass) {
+          $property = json_encode($property);
         }
       }
       $filteredValue = match(gettype($entity->$propName)) {

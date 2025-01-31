@@ -45,4 +45,11 @@ interface QueryResultInterface
    * @return mixed Raw result.
    */
   public function getRaw(): mixed;
+
+  /**
+   * Returns the number of affected rows.
+   *
+   * @return int Number of affected rows.
+   */
+  public function getTotalAffectedRows(): int;
 }

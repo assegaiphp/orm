@@ -322,7 +322,7 @@ final class SQLQuery
           }
         }
 
-        return new SQLQueryResult(data: $data, errors: [], raw: $this->queryString);
+        return new SQLQueryResult(data: $data, errors: [], raw: $this->queryString, affected: $statement->rowCount());
       }
 
       $errors = [

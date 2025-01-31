@@ -23,7 +23,8 @@ readonly class InsertResult implements QueryResultInterface
     public ?object $identifiers,
     public mixed   $raw,
     public ?object $generatedMaps,
-    protected array $errors = []
+    protected array $errors = [],
+    protected int $affected = 0,
   )
   {
   }
@@ -68,5 +69,13 @@ readonly class InsertResult implements QueryResultInterface
   public function getRaw(): mixed
   {
     return $this->raw;
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function getTotalAffectedRows(): int
+  {
+    return $this->affected;
   }
 }

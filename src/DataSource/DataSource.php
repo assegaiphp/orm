@@ -7,12 +7,12 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
+use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Interfaces\DataSourceInterface;
 use Assegai\Orm\Interfaces\RepositoryInterface;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Repository;
 use Assegai\Orm\Queries\Sql\SQLQuery;
-use JetBrains\PhpStorm\ArrayShape;
 use PDO;
 use ReflectionClass;
 use ReflectionException;
@@ -24,39 +24,54 @@ use ReflectionException;
  */
 class DataSource implements DataSourceInterface
 {
+  /**
+   * @var EntityManager The entity manager.
+   */
   public readonly EntityManager $manager;
+  /**
+   * @var PDO|null The database connection.
+   */
   protected ?PDO $db = null;
+  /**
+   * @var DataSourceType The data source type.
+   */
   public readonly DataSourceType $type;
+  /**
+   * @var array<class-string> The entities.
+   */
   public readonly array $entities;
 
   /**
+   * Constructs a DataSource.
+   *
+   * @param DataSourceOptions|array{
+   *   entities: array<int|string, class-string>,
+   *   database: string,
+   *   type: DataSourceType,
+   *   host: string,
+   *   port: int,
+   *   username: string|null,
+   *   password: string|null
+   * }|null $options The data source options.
    * @throws DataSourceException
    */
-  #[ArrayShape([
-    'entities' => 'array',
-    'database' => 'string',
-    'type' => 'Assegai\Orm\Enumerations\DataSourceType',
-    'host' => 'string',
-    'port' => 'int',
-    'username' => 'string|null',
-    'password' => 'string|null'
-  ])]
   public function __construct(protected DataSourceOptions|array|null $options = null)
   {
     $this->connect($options);
   }
 
   /**
-   * @param string $entityName The target entity for the repository
-   * @return RepositoryInterface
+   * Gets a repository for the specified entity.
+   *
+   * @param class-string $entityName The target entity for the repository
+   * @return RepositoryInterface The repository for the specified entity
    * @throws ClassNotFoundException
    * @throws IllegalTypeException
    * @throws ReflectionException
    */
   public function getRepository(string $entityName): RepositoryInterface
   {
-    if (!class_exists($entityName))
-    {
+    if (!class_exists($entityName)) {
       throw new ClassNotFoundException(className: $entityName);
     }
 
@@ -74,8 +89,7 @@ class DataSource implements DataSourceInterface
     $databaseName = $this->db->query('SELECT DATABASE()')->fetchColumn();
 
     // If the query fails, return null to indicate that the database name cannot be determined.
-    if (false === $databaseName)
-    {
+    if (false === $databaseName) {
       return null;
     }
 
@@ -99,34 +113,29 @@ class DataSource implements DataSourceInterface
     $reflectionClass = new ReflectionClass($this);
     $refAttributes = $reflectionClass->getAttributes(DataSourceOptions::class);
 
-    if (empty($options) && empty($refAttributes))
-    {
+    if (empty($options) && empty($refAttributes)) {
       throw new DataSourceException("DataSourceOptions not set");
     }
 
-    if (is_array($options))
-    {
+    if (is_array($options)) {
       $options = (object)$options;
     }
 
     $this->type = $options->type;
 
-    if ($options->name && $options->type)
-    {
+    if ($options->name && $options->type) {
       $type = $options->type->value;
-      $databaseConfigs = Config::get('databases') ?? [];
+      $databaseConfigs = Config::get('databases') ?? throw new ORMException("Database configurations not found.");
 
       $databases = $databaseConfigs[$type] ?? [];
       $databaseConfig = $databases[$options->name];
 
-      if (isset($databaseConfig['user']))
-      {
+      if (isset($databaseConfig['user'])) {
         $databaseConfig['username'] = $databaseConfig['user'];
         unset($databaseConfig['user']);
       }
 
-      if ($databaseConfig)
-      {
+      if ($databaseConfig) {
         $options = new DataSourceOptions(...[
           ...$databaseConfig,
           'entities' => $options->entities ?? [],
