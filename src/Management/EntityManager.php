@@ -133,10 +133,10 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $this->defaultConverters[] = new GeneralConverters();
-    if ($customConvertors = ModuleManager::getInstance()->getConfig('convertors')) {
-      foreach ($customConvertors as $convertorClassName) {
-        $convertorReflection = new ReflectionClass($convertorClassName);
-        $customConvertor = $convertorReflection->newInstance();
+    if ($customConverters = ModuleManager::getInstance()->getConfig('converters')) {
+      foreach ($customConverters as $converterClassName) {
+        $converterReflection = new ReflectionClass($converterClassName);
+        $customConvertor = $converterReflection->newInstance();
         $this->customConverters[] = $customConvertor;
       }
     }
