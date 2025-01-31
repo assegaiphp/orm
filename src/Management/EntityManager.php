@@ -95,7 +95,7 @@ class EntityManager implements IEntityStoreOwner
   protected array $defaultConverters = [];
 
   /**
-   * @var array An array of custom converters.
+   * @var GeneralConverters[] An array of custom converters.
    */
   protected array $customConverters = [];
   /**
@@ -134,10 +134,15 @@ class EntityManager implements IEntityStoreOwner
 
     $this->defaultConverters[] = new GeneralConverters();
     if ($customConvertors = ModuleManager::getInstance()->getConfig('convertors')) {
-      $this->customConverters[] = $customConvertors;
+      foreach ($customConvertors as $convertorClassName) {
+        $convertorReflection = new ReflectionClass($convertorClassName);
+        $customConvertor = $convertorReflection->newInstance();
+        $this->customConverters[] = $customConvertor;
+      }
     }
 
-    $this->isDebug = ! in_array($_ENV['ENV'], ['PROD', 'PRODUCTION']) && boolval($_ENV['DEBUG_MODE']) === true;
+    $isDebugMode = strtolower($_ENV['DEBUG_MODE']);
+    $this->isDebug = ! in_array($_ENV['ENV'], ['PROD', 'PRODUCTION']) && boolval($isDebugMode) === true;
   }
 
   /**
@@ -1334,12 +1339,14 @@ class EntityManager implements IEntityStoreOwner
             'integer' => 'int',
             'double' => 'float',
             'NULL' => null,
+            'object' => get_class($object->$prop),
             default => gettype($object->$prop)
           };
         $targetType = $targetReflection->getType()?->getName() ?? match(gettype($entity->$prop)) {
             'integer' => 'int',
             'double' => 'float',
             'NULL' => null,
+            'object' => get_class($object->$prop),
             default => gettype($entity->$prop)
         };
 
@@ -1411,33 +1418,28 @@ class EntityManager implements IEntityStoreOwner
    */
   private function castValue(mixed $value, string $sourceType, string $targetType): mixed
   {
-    if (is_null($value))
-    {
+    if (is_null($value)) {
       return null;
     }
 
-    foreach ($this->customConverters as $converter)
-    {
+    foreach ($this->customConverters as $converter) {
       $result =
         $this->typeResolver->resolve(
           converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType
         );
 
-      if (! is_null($result) )
-      {
+      if (! is_null($result) ) {
         return $result;
       }
     }
 
-    foreach ($this->defaultConverters as $converter)
-    {
+    foreach ($this->defaultConverters as $converter) {
       $result =
         $this->typeResolver->resolve(
           converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType
         );
 
-      if (! is_null($result) )
-      {
+      if (! is_null($result) ) {
         return $result;
       }
     }
