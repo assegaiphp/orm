@@ -67,23 +67,18 @@ final class TypeResolver
     $reflectionClass = new ReflectionClass($converterHostClassName);
     $methods = $reflectionClass->getMethods();
 
-    foreach ($methods as $method)
-    {
-      if ($this->hasTypeConvertorAttribute($method))
-      {
+    foreach ($methods as $method) {
+      if ($this->hasTypeConvertorAttribute($method)) {
         $parameters = $method->getParameters();
 
-        if (empty($parameters))
-        {
+        if (empty($parameters)) {
           throw new TypeConversionException(
             "Incorrect parameter count. Type converter methods accept at least 1 parameter."
           );
         }
 
-        foreach ($parameters as $parameter)
-        {
-          if ($parameter->getType()->getName() === $sourceType && $method->getReturnType()->getName() === $targetType)
-          {
+        foreach ($parameters as $parameter) {
+          if ($parameter->getType()->getName() === $sourceType && $method->getReturnType()->getName() === $targetType) {
             return $method;
           }
         }
