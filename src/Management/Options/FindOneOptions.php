@@ -29,7 +29,6 @@ class FindOneOptions extends FindOptions
    * @param object|array|null $order Order, in which entities should be ordered.
    * @param array<string, string>|JoinOptions|null $join Join options.
    * @param string[] $exclude
-   * @param bool $withRealTotal
    */
   public function __construct(
     null|object|array $select = null,
@@ -38,7 +37,6 @@ class FindOneOptions extends FindOptions
     null|object|array $order = null,
     public readonly null|array|JoinOptions $join = null,
     array $exclude = ['password'],
-    bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL
   )
   {
     parent::__construct(
@@ -49,7 +47,7 @@ class FindOneOptions extends FindOptions
       skip: 0,
       limit: 1,
       exclude: $exclude,
-      withRealTotal: $withRealTotal
+      withRealTotal: false
     );
   }
 
@@ -66,7 +64,6 @@ class FindOneOptions extends FindOptions
     $order = $options['order'] ?? null;
     $join = $options['join'] ?? null;
     $exclude = $options['exclude'] ?? ['password'];
-    $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
 
     if (is_array($where)) {
       $where = new FindWhereOptions($where, $exclude);
@@ -79,7 +76,6 @@ class FindOneOptions extends FindOptions
       order: $order,
       join: $join,
       exclude: $exclude,
-      withRealTotal: $withRealTotal
     );
   }
 }
