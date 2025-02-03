@@ -7,12 +7,14 @@ use stdClass;
 
 /**
  * Specifies which relations need to be loaded with the main entity. (Shorthand for join and leftJoinAndSelect)
+ *
+ * @package Assegai\Orm\Management\Options
  */
 final class FindRelationsOptions
 {
   /**
    * @param stdClass | array<KeyBoolPair> $relations
-   * @param array $exclude
+   * @param string[] $exclude
    */
   public function __construct(
     public readonly object|array $relations,
@@ -22,12 +24,12 @@ final class FindRelationsOptions
   }
 
   /**
-   * @param array $options
+   * @param array{relations: ?array<KeyBoolPair>, exclude: ?string[]} $options
    * @return FindRelationsOptions
    */
   public static function fromArray(array $options): FindRelationsOptions
   {
-    $relations = $options['$relations'] ?? [];
+    $relations = $options['relations'] ?? [];
     $exclude = $options['exclude'] ?? ['password'];
 
     return new FindRelationsOptions(relations: $relations, exclude: $exclude);

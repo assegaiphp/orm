@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Management\Options;
 
+use Assegai\Orm\Exceptions\ORMException;
+
 /**
  * Defines the search criteria for finding a specific entity.
  *
@@ -25,26 +27,36 @@ class FindOneOptions extends FindOptions
    * @param object|array|null $relations Indicates what relations of entity should be loaded (simplified left join form).
    * @param FindWhereOptions|array|null $where Simple condition that should be applied to match entities.
    * @param object|array|null $order Order, in which entities should be ordered.
-   * @param array|JoinOptions|null $join Specifies what relations should be loaded.
-   * @param array $exclude
-   * @noinspection PhpMissingParentConstructorInspection
+   * @param array<string, string>|JoinOptions|null $join Join options.
+   * @param string[] $exclude
+   * @param bool $withRealTotal
    */
   public function __construct(
-    public readonly null|object|array $select = null,
-    public readonly null|object|array $relations = null,
-    public readonly null|FindWhereOptions|array $where = null,
-    public readonly null|object|array $order = null,
+    null|object|array $select = null,
+    null|object|array $relations = null,
+    null|FindWhereOptions|array $where = null,
+    null|object|array $order = null,
     public readonly null|array|JoinOptions $join = null,
-    public readonly array $exclude = ['password'],
+    array $exclude = ['password'],
+    bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL
   )
   {
-    $this->skip = 0;
-    $this->limit = 1;
+    parent::__construct(
+      select: $select,
+      relations: $relations,
+      where: $where,
+      order: $order,
+      skip: 0,
+      limit: 1,
+      exclude: $exclude,
+      withRealTotal: $withRealTotal
+    );
   }
 
   /**
-   * @param array $options
+   * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, join: array<string, string>|JoinOptions|null, exclude: array|string[], with_real_total: bool} $options
    * @return FindOptions
+   * @throws ORMException
    */
   public static function fromArray(array $options): FindOptions
   {
@@ -54,9 +66,9 @@ class FindOneOptions extends FindOptions
     $order = $options['order'] ?? null;
     $join = $options['join'] ?? null;
     $exclude = $options['exclude'] ?? ['password'];
+    $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
 
-    if (is_array($where))
-    {
+    if (is_array($where)) {
       $where = new FindWhereOptions($where, $exclude);
     }
 
@@ -66,7 +78,8 @@ class FindOneOptions extends FindOptions
       where: $where,
       order: $order,
       join: $join,
-      exclude: $exclude
+      exclude: $exclude,
+      withRealTotal: $withRealTotal
     );
   }
 }

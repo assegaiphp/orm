@@ -164,7 +164,7 @@ interface RepositoryInterface
   /**
    * Find entities that match the given `FindOptions`.
    *
-   * @param FindOptions|array|null $findOptions The options to find entities.
+   * @param FindOptions|array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool}|null $findOptions The options to find entities.
    * @return FindResult<T> Returns an instance of `FindResult` which contains a list of entities that match the
    *
    */
@@ -173,7 +173,7 @@ interface RepositoryInterface
   /**
    * Finds entities that match given `FindWhereOptions`.
    *
-   * @param FindWhereOptions|array $where The options to find entities.
+   * @param FindWhereOptions|array{} $where The options to find entities.
    * @return FindResult<T> Returns an instance of `FindResult` which contains a list of entities that match the
    * given `FindWhereOptions`.
    */
