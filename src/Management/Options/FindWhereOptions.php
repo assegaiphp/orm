@@ -10,7 +10,9 @@ use ReflectionException;
 use Symfony\Component\Console\Output\ConsoleOutput;
 
 /**
+ * Class FindWhereOptions. Defines the options for the FindWhere method.
  *
+ * @package Assegai\Orm\Management\Options
  */
 final readonly class FindWhereOptions
 {
@@ -20,15 +22,17 @@ final readonly class FindWhereOptions
   private ?string $tableName;
 
   /**
-   * @param object|array $conditions
-   * @param array $exclude
-   * @param string|null $entityClass
+   * @param object|array<string, mixed> $conditions The conditions to search for.
+   * @param string[] $exclude The columns to exclude.
+   * @param class-string|null $entityClass The entity class.
+   * @param bool $withRealTotal The flag to include the real count.
    * @throws ORMException
    */
   public function __construct(
     public object|array $conditions,
     public array        $exclude = ['password'],
     private ?string     $entityClass = null,
+    public bool         $withRealTotal = false
   )
   {
     if ($this->entityClass) {
@@ -48,17 +52,25 @@ final readonly class FindWhereOptions
   }
 
   /**
+   * Creates a new FindWhereOptions instance from an array.
    *
-   * @param array $options
-   * @return FindWhereOptions
+   * @param array{conditions: ?array<string, mixed>, exclude: ?string[], entity_class: ?class-string, with_real_total: ?bool} $options The options.
+   * @return FindWhereOptions The FindWhereOptions instance.
    * @throws ORMException
    */
   public static function fromArray(array $options): FindWhereOptions
   {
     $conditions = $options['conditions'] ?? $options;
     $exclude = $options['exclude'] ?? ['password'];
+    $entityClassName = $options['entity_class'] ?? null;
+    $withRealTotal = $options['with_real_total'] ?? false;
 
-    return new FindWhereOptions(conditions: $conditions, exclude: $exclude);
+    return new FindWhereOptions(
+      conditions: $conditions,
+      exclude: $exclude,
+      entityClass:  $entityClassName,
+      withRealTotal: $withRealTotal
+    );
   }
 
   /**

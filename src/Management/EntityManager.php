@@ -1070,6 +1070,16 @@ class EntityManager implements IEntityStoreOwner
 
     $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations);
 
+    if ($findOptions->withRealTotal) {
+      $total = $this->count(entityClass: $entityClass, options: $findOptions);
+      return new FindResult(
+        raw: $result->getRaw(),
+        data: $resultSet,
+        errors: $result->getErrors(),
+        total: $total
+      );
+    }
+
     return new FindResult(
       raw: $result->getRaw(),
       data: $resultSet,

@@ -2,19 +2,27 @@
 
 namespace Assegai\Orm\Management\Options;
 
+use Assegai\Orm\Exceptions\ORMException;
+
 /**
  * Defines the search criteria for finding entities.
  */
-class FindOptions
+class FindOptions implements \JsonSerializable
 {
   /**
-   * @param object|array|null $select
-   * @param object|array|null $relations
-   * @param FindWhereOptions|array|null $where
-   * @param object|array|null $order
-   * @param int|null $skip
-   * @param int|null $limit
-   * @param array $exclude
+   * The default value for withRealTotal.
+   */
+  const DEFAULT_WITH_REAL_TOTAL = true;
+
+  /**
+   * @param object|array|null $select The fields to select.
+   * @param object|array|null $relations The relations to include.
+   * @param FindWhereOptions|array|null $where The search criteria.
+   * @param object|array|null $order The order of the results.
+   * @param int|null $skip The number of results to skip.
+   * @param int|null $limit The number of results to return.
+   * @param array $exclude The fields to exclude.
+   * @param bool $withRealTotal Whether to get the real total.
    */
   public function __construct(
     public readonly null|object|array $select = null,
@@ -24,6 +32,7 @@ class FindOptions
     public readonly ?int $skip = null,
     public readonly ?int $limit = null,
     public readonly array $exclude = ['password'],
+    public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL
   ) { }
 
   /**
@@ -58,8 +67,11 @@ class FindOptions
   }
 
   /**
-   * @param array $options
+   * Creates a FindOptions instance from an array.
+   *
+   * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool} $options The array of options.
    * @return FindOptions
+   * @throws ORMException
    */
   public static function fromArray(array $options): FindOptions
   {
@@ -70,9 +82,9 @@ class FindOptions
     $skip = $options['skip'] ?? null;
     $limit = $options['limit'] ?? null;
     $exclude = $options['exclude'] ?? ['password'];
+    $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
 
-    if (is_array($where))
-    {
+    if (is_array($where)) {
       $where = new FindWhereOptions($where);
     }
 
@@ -83,13 +95,16 @@ class FindOptions
       order: $order,
       skip: $skip,
       limit: $limit,
-      exclude: $exclude
+      exclude: $exclude,
+      withRealTotal: $withRealTotal
     );
   }
 
   /**
+   * Converts a FindOptions instance to an array.
+   *
    * @param FindOptions $options
-   * @return array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[]}
+   * @return array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool}
    */
   public static function toArray(self $options): array
   {
@@ -100,7 +115,16 @@ class FindOptions
       'order' => $options->order,
       'skip' => $options->skip,
       'limit' => $options->limit,
-      'exclude' => $options->exclude
+      'exclude' => $options->exclude,
+      'with_real_total' => $options->withRealTotal,
     ];
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function jsonSerialize(): array
+  {
+    return self::toArray($this);
   }
 }

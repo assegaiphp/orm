@@ -23,6 +23,7 @@ readonly class FindResult implements QueryResultInterface
     protected mixed $data,
     protected array $errors = [],
     protected int $affected = 0,
+    protected ?int $total = null
   )
   {
   }
@@ -74,6 +75,10 @@ readonly class FindResult implements QueryResultInterface
    */
   public function getTotal(): int
   {
+    if ($this->total !== null) {
+      return $this->total;
+    }
+
     if (is_countable($this->data)) {
       return count($this->data);
     }
