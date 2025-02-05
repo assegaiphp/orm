@@ -1012,6 +1012,44 @@ class EntityManager implements IEntityStoreOwner
               // TODO Implement one-to-many relation
               // For exmaple: SQL Query: SELECT users.*, posts.* FROM users
               // LEFT JOIN posts ON users.id = posts.user_id WHERE users.id = $use
+              $referencedTableName = $tableName;
+              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
+              $referencedColumnName = $relationProperty->reflectionProperty->getName() . '_id';
+
+              $foreignClassName = $relationProperty->getEntityClass();
+
+              if (!$foreignClassName) {
+                $this->logger->warning("Foreign class name not found for $referencedColumnName");
+                break;
+              }
+
+              $joinColumnTableName = $this->inspector->getTableName(new $foreignClassName());
+              $joinColumnTableAlias = $this->generateAlias($joinColumnTableName, $knownAliases);
+              $joinColumnName = $relationProperty->joinColumn?->referencedColumnName ?? 'id';
+
+              $joinEntity = $this->create($relationProperty->getEntityClass());
+              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $findOptions->exclude);
+
+              $joinStatement = new SQLQuery($this->query->getConnection());
+              $joinStatement
+                ->select()
+                ->all($joinEntityColumns)
+                ->from([$joinColumnTableName, $referencedTableName])
+                ->where("$joinColumnTableName.$referencedColumnName=$referencedTableName.$joinColumnName")
+                ->debug();
+              $sql = "SELECT * FROM $joinColumnTableName, $referencedTableName WHERE $referencedTableName.$joinColumnName=$referencedTableName.$referencedColumnName";
+
+              $this->logger->debug(var_export([
+                'relation_property' => $relationProperty,
+                'sql' => $sql,
+                'referenced_table_name' => $referencedTableName,
+                'referenced_table_alias' => $referencedTableAlias,
+                'referenced_column_name' => $referencedColumnName,
+                'foreign_class_name' => $foreignClassName,
+                'join_column_table_name' => $joinColumnTableName,
+                'join_column_table_alias' => $joinColumnTableAlias,
+                'join_column_name' => $joinColumnName
+              ], true));
               exit('building one-to-many relations');
               break;
 
