@@ -21,14 +21,14 @@ class OneToMany
    */
   public function __construct(
     public readonly string $type,
+    public readonly string $referencedProperty,
     public readonly string $inverseSide,
     public readonly ?string $name = null,
     public readonly ?string $alias = null,
     public ?RelationOptions $options = null
   )
   {
-    if (is_null($this->options))
-    {
+    if (is_null($this->options)) {
       $this->options = new RelationOptions();
     }
   }
