@@ -3,11 +3,12 @@
 namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Exceptions\ORMException;
+use JsonSerializable;
 
 /**
  * Defines the search criteria for finding entities.
  */
-class FindOptions implements \JsonSerializable
+class FindOptions implements JsonSerializable
 {
   /**
    * The default value for withRealTotal.

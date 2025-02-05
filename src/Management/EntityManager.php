@@ -102,6 +102,9 @@ class EntityManager implements IEntityStoreOwner
    * @var bool Is debug mode enabled.
    */
   protected bool $isDebug = false;
+  /**
+   * @var LoggerInterface The logger instance.
+   */
   protected LoggerInterface $logger;
 
   /**
@@ -938,6 +941,8 @@ class EntityManager implements IEntityStoreOwner
     $entity = $this->create(entityClass: $entityClass);
     $conditions = [];
     $availableRelations = [];
+    $loadedRelations = [];
+    $knownAliases = [];
 
     if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
       $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
@@ -956,12 +961,15 @@ class EntityManager implements IEntityStoreOwner
         relationProperties: $availableRelations
       );
 
+    $tableName = $this->inspector->getTableName(entity: $entity);
+    $tableAlias = $this->generateAlias($tableName, $knownAliases);
+
     $statement
       = $this
           ->query
           ->select()
           ->all(columns: $columns)
-          ->from(tableReferences: $this->inspector->getTableName(entity: $entity));
+          ->from(tableReferences: $tableName);
 
     if (!empty($findOptions)) {
       # Resolve relations and joins
@@ -988,26 +996,62 @@ class EntityManager implements IEntityStoreOwner
             continue;
           }
 
-          $tableName = $this->inspector->getTableName($entity);
-
           switch ($relationProperty->getRelationType()) {
             case RelationType::ONE_TO_ONE:
               # LEFT JOIN
               $joinColumnName = $relationProperty->joinColumn->effectiveColumnName;
               $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
               $referencedTableName = $relationProperty->getEntity()->table;
-              $referencedTableAlias = $referencedTableName;
+              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
               $statement =
                 $statement->leftJoin("$referencedTableName $referencedTableAlias")
-                  ->on("$tableName.$joinColumnName=$referencedTableName.$referencedColumnName");
+                  ->on("$tableName.$joinColumnName=$referencedTableAlias.$referencedColumnName");
               break;
 
             case RelationType::ONE_TO_MANY:
               // TODO Implement one-to-many relation
+              // For exmaple: SQL Query: SELECT users.*, posts.* FROM users
+              // LEFT JOIN posts ON users.id = posts.user_id WHERE users.id = $use
+              exit('building one-to-many relations');
               break;
 
             case RelationType::MANY_TO_ONE:
-              // TODO Implement many-to-one relation
+              $referencedTableName = $tableName;
+              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
+              $referencedColumnName = $relationProperty->reflectionProperty->getName() . '_id';
+
+              if ($relationProperty->joinColumn?->name) {
+                $referencedColumnName = $relationProperty->joinColumn->name;
+              }
+
+              $foreignClassName = $relationProperty->getEntityClass();
+
+              if (!$foreignClassName) {
+                $this->logger->warning("Foreign class name not found for $referencedColumnName");
+                break;
+              }
+
+              $joinColumnTableName = $this->inspector->getTableName(new $foreignClassName());
+              $joinColumnTableAlias = $this->generateAlias($joinColumnTableName, $knownAliases);
+              $joinColumnName = $relationProperty->joinColumn?->referencedColumnName ?? 'id';
+
+              $joinEntity = $this->create($relationProperty->getEntityClass());
+              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $findOptions->exclude);
+              $cachedStatement = $statement;
+              $joinQuery = new SQLQuery($this->query->getConnection());
+              $joinStatement =
+                $joinQuery
+                  ->select()
+                  ->all($joinEntityColumns)
+                  ->from([$joinColumnTableName, $referencedTableName])
+                  ->where("$referencedTableName.$referencedColumnName=$joinColumnTableName.$joinColumnName")
+                  ->limit(1);
+
+              $joinResult = $joinStatement->execute();
+              if ($joinResult->isOK() && !empty($joinResult->getData())) {
+                $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData()[0];
+              }
+              $statement = $cachedStatement;
               break;
 
             case RelationType::MANY_TO_MANY:
@@ -1068,7 +1112,7 @@ class EntityManager implements IEntityStoreOwner
       );
     }
 
-    $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations);
+    $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
 
     if ($findOptions->withRealTotal) {
       $total = $this->count(entityClass: $entityClass, options: $findOptions);
@@ -1519,17 +1563,21 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * @param array $data
-   * @param string $entityClass
-   * @param FindWhereOptions|FindOptions|null $findOptions
-   * @param RelationPropertyMetadata[] $relationInfo
-   * @return array
+   * Processes the relations of the given data.
+   *
+   * @param object[] $data The data to process.
+   * @param string $entityClass The entity class name.
+   * @param FindWhereOptions|FindOptions|null $findOptions The find options.
+   * @param RelationPropertyMetadata[] $relationInfo The relation information.
+   * @param array $loadedRelations The loaded relations.
+   * @return object[] Returns the processed data.
    */
   private function processRelations(
     array $data,
     string $entityClass,
     FindWhereOptions|FindOptions|null $findOptions,
-    array $relationInfo
+    array $relationInfo,
+    array $loadedRelations
   ): array
   {
     if (!$findOptions || !$findOptions->relations) {
@@ -1544,60 +1592,67 @@ class EntityManager implements IEntityStoreOwner
           $this->logger->warning("Relation $relation does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
           continue;
         }
-        $results[] = $this->restructureRelatedEntity($entityClass, $datum, $relation, $relationInfo[$relation]);
+        $datum = $this->bindEntityRelations(
+          $entityClass,
+          $datum,
+          $relation,
+          $relationInfo[$relation],
+          $loadedRelations
+        );
       }
+
+      $results[] = $datum;
     }
 
     return $results;
   }
 
   /**
-   * @param string $entityClass
-   * @param object $entity
-   * @param string $relationName
-   * @param RelationPropertyMetadata $relationInfo
-   * @return object
+   * Binds entity relations to the entity.
+   *
+   * @param string $entityClass The entity class name.
+   * @param object $entity The entity to bind the relations to.
+   * @param string $relationName The name of the relation to bind.
+   * @param RelationPropertyMetadata $relationInfo The relation information.
+   * @param array<string, mixed> $loadedRelations The loaded relations. This list is used to prevent previously loaded relations from being loaded again.
+   * @return object Returns the entity with the relations bound.
    */
-  private function restructureRelatedEntity(
-    string       $entityClass,
-    object       $entity,
-    string       $relationName,
-    RelationPropertyMetadata $relationInfo
+  private function bindEntityRelations(
+    string                    $entityClass,
+    object                    $entity,
+    string                    $relationName,
+    RelationPropertyMetadata  $relationInfo,
+    array                     $loadedRelations
   ): object
   {
     $restructuredEntity = new stdClass();
     $relation = new stdClass();
     $relationIsCollection = $relationInfo->type === 'array';
-//    $restructuredEntity = $this->create($entityClass);
-//    $this->logger->debug(json_encode($restructuredEntity, JSON_PRETTY_PRINT));
-//    $relation = $this->create($relationInfo->relationAttribute->type);
-    $this->logger->debug("Restructuring entity $entityClass with relation $relationName");
+
+    if ($this->isDebug) {
+      $this->logger->debug("Restructuring entity $entityClass with relation $relationName");
+    }
 
     # Foreach relation
     foreach ($entity as $key => $value) {
+      $restructuredEntity->$key = $value;
+
       $tableName = $relationInfo->getEntity()->table;
       $pattern = "/{$tableName}_|$relationName/";
 
       if (preg_match($pattern, $key)) {
         $relationPropertyName = lcfirst(preg_replace($pattern, '$2', $key));
+
         if (!$relationPropertyName) {
           $relationPropertyName = $relationInfo->joinColumn->name;
         }
+
         $relation->$relationPropertyName = $value;
-      } else {
-        $restructuredEntity->$key = $value;
       }
     }
-    if ($relationIsCollection) {
-      $restructuredEntity->$relationName[] = $relation;
-    } else {
-      $restructuredEntity->$relationName = $relation;
-    }
 
-    $this->logger->debug(json_encode($restructuredEntity, JSON_PRETTY_PRINT));
-//    if (! isset($restructuredEntity->$relationName->id) ) {
-//      $restructuredEntity->$relationName = null;
-//    }
+    $relationValue = $loadedRelations[$relationName] ?? $relation;
+    $restructuredEntity->$relationName = $relationValue;
 
     return $restructuredEntity;
   }
@@ -1720,5 +1775,28 @@ class EntityManager implements IEntityStoreOwner
       }
     }
     return false;
+  }
+
+  /**
+   * Generates an alias for a given table name.
+   *
+   * @param string $tableName The table name to generate an alias for.
+   * @param array $knownAliases The list of known aliases.
+   * @return string Returns the generated alias.
+   */
+  private function generateAlias(string $tableName, array &$knownAliases): string
+  {
+    $tableNameLetters = str_split($tableName);
+    $alias = '';
+
+    foreach ($tableNameLetters as $letter) {
+      $alias .= $letter;
+      if (!in_array($alias, $knownAliases)) {
+        $knownAliases[] = $alias;
+        return $alias;
+      }
+    }
+
+    return $alias;
   }
 }
