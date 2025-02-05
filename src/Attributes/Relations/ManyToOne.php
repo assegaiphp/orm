@@ -24,8 +24,7 @@ class ManyToOne
     public ?RelationOptions $options = null
   )
   {
-    if (is_null($this->options))
-    {
+    if (is_null($this->options)) {
       $this->options = new RelationOptions();
     }
   }

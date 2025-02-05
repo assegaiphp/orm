@@ -22,6 +22,8 @@ use stdClass;
 
 /**
  * Provides for entity object introspection.
+ *
+ * @package Assegai\Orm\Management\Inspectors
  */
 final class EntityInspector
 {
@@ -44,8 +46,7 @@ final class EntityInspector
    */
   public static function getInstance(): EntityInspector
   {
-    if (!self::$instance)
-    {
+    if (!self::$instance) {
       self::$instance = new EntityInspector();
     }
 
@@ -62,16 +63,14 @@ final class EntityInspector
    */
   public function validateEntityName(string $entityClass): void
   {
-    if (!class_exists($entityClass))
-    {
+    if (!class_exists($entityClass)) {
       throw new ClassNotFoundException(className: $entityClass);
     }
 
     $reflectionClass = new ReflectionClass($entityClass);
     $entityAttribute = $reflectionClass->getAttributes(Entity::class);
 
-    if (empty($entityAttribute))
-    {
+    if (empty($entityAttribute)) {
       throw new ORMException(message: "Missing Entity attribute for $entityClass");
     }
   }
@@ -93,8 +92,7 @@ final class EntityInspector
     $entityReflection = new ReflectionClass($className);
     $entityAttributesReflections = $entityReflection->getAttributes(Entity::class);
 
-    if (empty($entityAttributesReflections))
-    {
+    if (empty($entityAttributesReflections)) {
       throw new ORMException("Entity attribute not found on class $className.");
     }
 
@@ -241,6 +239,7 @@ final class EntityInspector
 
     try {
       $tableName = $this->getTableName($entity);
+
       foreach ($properties as $property) {
         $propertyName = $property->getName();
         $columnAttributes = $property->getAttributes(Column::class);
@@ -251,6 +250,7 @@ final class EntityInspector
 
         foreach ($columnAttributes as $columnAttribute) {
           $attributeInstance = $columnAttribute->newInstance();
+
           if ($attributeInstance instanceof Column) {
             if ($attributeInstance->alias) {
               $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $attributeInstance->name;
@@ -262,9 +262,7 @@ final class EntityInspector
           }
         }
       }
-    }
-    catch (ClassNotFoundException|ORMException $e)
-    {
+    } catch (ClassNotFoundException|ORMException $e) {
       die($e);
     }
 
@@ -321,6 +319,7 @@ final class EntityInspector
           $property = json_encode($property);
         }
       }
+
       $filteredValue = match(gettype($entity->$propName)) {
         'integer' => filter_var($property, FILTER_SANITIZE_NUMBER_INT),
         'double' => filter_var($property, FILTER_SANITIZE_NUMBER_FLOAT),
@@ -350,8 +349,7 @@ final class EntityInspector
     $reflectionClass = new ReflectionClass($entity);
     $attributes = $reflectionClass->getAttributes(Entity::class);
 
-    foreach ($attributes as $attribute)
-    {
+    foreach ($attributes as $attribute) {
       $arguments = $attribute->getArguments();
       $tableName = $arguments['table'] ?? $this->getTableNameFromClassName(get_class($entity));
     }
@@ -373,26 +371,28 @@ final class EntityInspector
    */
   private function getTableNameFromClassName(string $className): string
   {
-    if (empty($className))
-    {
+    if (empty($className)) {
       throw new ORMException("Class name cannot be empty.");
     }
+
     $tokens = explode('\\', $className);
     $className = array_pop($tokens);
     return strtolower(str_replace('Entity', '', $className));
   }
 
   /**
-   * @param string $name
-   * @return string
+   * Returns the column name for the specified entity.
+   *
+   * @param string|string[] $name The name of the column.
+   * @return string The name of the column.
    */
   private function getColumnName(string|array $name): string
   {
     $output = $name;
-    if (is_array($output))
-    {
+    if (is_array($output)) {
       $output = implode(' ', $output);
     }
+
     $output = strtolower($output);
     $output = ucwords(preg_replace('/[\W+]/', ' ', $output));
     $output = str_replace(' ', '', $output);
@@ -409,20 +409,16 @@ final class EntityInspector
    */
   public function hasValidEntityStructure(object|array $entity, string $entityClass): bool
   {
-    if (is_array($entity))
-    {
+    if (is_array($entity)) {
       $entity = (object) $entity;
     }
 
-    if (!class_exists($entityClass))
-    {
+    if (!class_exists($entityClass)) {
       throw new ClassNotFoundException(className: $entityClass);
     }
 
-    foreach ($entity as $propertyName => $propertyValue)
-    {
-      if (!property_exists($entityClass, $propertyName))
-      {
+    foreach ($entity as $propertyName => $propertyValue) {
+      if (!property_exists($entityClass, $propertyName)) {
         return false;
       }
     }
@@ -442,8 +438,7 @@ final class EntityInspector
   {
     $dateTimeFormat = DATE_ATOM;
 
-    if (isset($options['columnTypes']))
-    {
+    if (isset($options['columnTypes'])) {
       /** @var ColumnType $columnType */
       $columnType = $options['columnTypes'][$propName];
       $dateTimeFormat = match ($columnType) {
@@ -455,5 +450,28 @@ final class EntityInspector
     }
 
     return $property->format($dateTimeFormat);
+  }
+
+  /**
+   * Returns the JoinColumn attribute for the specified entity.
+   *
+   * @param object|string $entityClassNameOrObject The entity class name or object.
+   * @param string $propertyName The name of the property.
+   * @return JoinColumn The JoinColumn attribute for the specified entity.
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  public function getJoinColumnAttribute(object|string $entityClassNameOrObject, string $propertyName): JoinColumn
+  {
+    $entityReflection = new ReflectionClass($entityClassNameOrObject);
+    $propertyReflection = $entityReflection->getProperty($propertyName);
+
+    $attributes = $propertyReflection->getAttributes(JoinColumn::class);
+
+    if (empty($attributes)) {
+      throw new ORMException(JoinColumn::class . " attribute not found on property $propertyName.");
+    }
+
+    return array_first($attributes)->newInstance();
   }
 }

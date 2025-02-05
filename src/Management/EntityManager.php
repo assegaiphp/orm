@@ -45,6 +45,8 @@ use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
+use Assegai\Orm\Queries\Sql\SQLTableReference;
+use Assegai\Orm\Queries\Sql\SQLWhereClause;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
@@ -942,17 +944,15 @@ class EntityManager implements IEntityStoreOwner
     $conditions = [];
     $availableRelations = [];
     $loadedRelations = [];
+    $pendingStatements = [];
     $knownAliases = [];
 
     if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
       $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
     }
 
-    $listOfRelations = match(gettype($findOptions->relations)) {
-      'object' => (array)$findOptions->relations,
-      'array' => $findOptions->relations,
-      default => []
-    };
+    // Get list of relations
+    $listOfRelations = $this->getListOfRelations($findOptions);
     $columns =
       $this->inspector->getColumns(
         entity: $entity,
@@ -1009,10 +1009,50 @@ class EntityManager implements IEntityStoreOwner
               break;
 
             case RelationType::ONE_TO_MANY:
-              // TODO Implement one-to-many relation
-              // For exmaple: SQL Query: SELECT users.*, posts.* FROM users
-              // LEFT JOIN posts ON users.id = posts.user_id WHERE users.id = $use
-              exit('building one-to-many relations');
+              $propertyName = $relationProperty->reflectionProperty->getName();
+
+              $referencedTableName = $tableName;
+              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
+              $referencedPropertyName = $relationProperty->relationAttribute->referencedProperty;
+              $referencedColumnName = $propertyName . '_id';
+
+              $foreignClassName = $relationProperty->getEntityClass();
+              $foreignClassProperty = $relationProperty->relationAttribute->inverseSide;
+
+              if (!$referencedPropertyName) {
+                throw new ORMException("Referenced property name not found for $propertyName");
+              }
+
+              if (!$foreignClassName) {
+                throw new ORMException("Foreign class name not found for $propertyName");
+              }
+
+              if (!$foreignClassProperty) {
+                throw new ORMException("Missing inverse side for $foreignClassName");
+              }
+
+              $foreignClassTableName = $this->inspector->getTableName(new $foreignClassName());
+              $foreignClassTableAlias = $this->generateAlias($foreignClassTableName, $knownAliases);
+              # Get the JoinColumn attribute from the inverse side
+              $joinColumnAttribute = $this->inspector->getJoinColumnAttribute($foreignClassName, $foreignClassProperty);
+              $joinColumnName = $joinColumnAttribute->effectiveColumnName ?? 'id';
+
+              $joinEntity = $this->create($relationProperty->getEntityClass());
+              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $findOptions->exclude);
+
+              $joinStatement = new SQLQuery($this->query->getConnection());
+              $joinStatement = $joinStatement
+                ->select()
+                ->all($joinEntityColumns)
+                ->from($foreignClassTableName);
+
+              $pendingStatements[] = [
+                'relation' => $relationProperty->name,
+                'statement' => $joinStatement,
+                'condition' => "$foreignClassTableName.$joinColumnName=:$referencedPropertyName",
+                'pattern' => ":$referencedPropertyName",
+                'replacement' => $referencedPropertyName
+              ];
               break;
 
             case RelationType::MANY_TO_ONE:
@@ -1031,8 +1071,8 @@ class EntityManager implements IEntityStoreOwner
                 break;
               }
 
-              $joinColumnTableName = $this->inspector->getTableName(new $foreignClassName());
-              $joinColumnTableAlias = $this->generateAlias($joinColumnTableName, $knownAliases);
+              $foreignClassTableName = $this->inspector->getTableName(new $foreignClassName());
+              $foreignClassTableAlias = $this->generateAlias($foreignClassTableName, $knownAliases);
               $joinColumnName = $relationProperty->joinColumn?->referencedColumnName ?? 'id';
 
               $joinEntity = $this->create($relationProperty->getEntityClass());
@@ -1043,8 +1083,8 @@ class EntityManager implements IEntityStoreOwner
                 $joinQuery
                   ->select()
                   ->all($joinEntityColumns)
-                  ->from([$joinColumnTableName, $referencedTableName])
-                  ->where("$referencedTableName.$referencedColumnName=$joinColumnTableName.$joinColumnName")
+                  ->from([$foreignClassTableName, $referencedTableName])
+                  ->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName")
                   ->limit(1);
 
               $joinResult = $joinStatement->execute();
@@ -1112,6 +1152,7 @@ class EntityManager implements IEntityStoreOwner
       );
     }
 
+    $loadedRelations = [...$loadedRelations, ...$this->processPendingStatements($result, $pendingStatements)];
     $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
 
     if ($findOptions->withRealTotal) {
@@ -1534,32 +1575,70 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * @param object $relations
-   * @param object $selection
-   * @param EntityMetadata $metadata
-   * @param string $alias
-   * @param string|null $embedPrefix
-   * @return void
+   * @param FindOptions|null $findOptions
+   * @return array|object|null
    */
-  private function buildRelations(
-    object $relations,
-    object $selection,
-    EntityMetadata $metadata,
-    string $alias,
-    ?string $embedPrefix
-  ): void
+  protected function getListOfRelations(?FindOptions $findOptions): array|null|object
   {
-    // TODO: Implement buildRelations() method.
-    if (!$relations)
-    {
-      return;
+    return match (gettype($findOptions->relations)) {
+      'object' => (array)$findOptions->relations,
+      'array' => $findOptions->relations,
+      default => []
+    };
+  }
+
+  /**
+   * Processes the pending statements.
+   *
+   * @param SQLQueryResult $result The result of the query.
+   * @param array<array{statement: SQLTableReference, condition: string, pattern: string, replacement: string}> $pendingStatements
+   * @return array<string, mixed> Returns the loaded relations.
+   * @throws ORMException
+   */
+  private function processPendingStatements(SQLQueryResult $result, array $pendingStatements): array
+  {
+    $loadedRelations = [];
+
+    if ($result->isError()) {
+      return $loadedRelations;
     }
 
-    foreach ($relations as $relationName => $relationValue)
-    {
-      $propertyPath = $embedPrefix ? "$embedPrefix.$relationName" : $relationName;
-//      $embed = $metadata->em
+    foreach ($result->getData() as $data) {
+      if (is_array($data)) {
+        $data = (object)$data;
+      }
+
+      foreach ($pendingStatements as $pendingStatement) {
+        // Execute the statement
+        if (! isset($pendingStatement['replacement']) ) {
+          $this->logger->error("Cannot find replacement property name");
+          continue;
+        }
+
+        $referencedPropertyName = $pendingStatement['replacement'];
+
+        if (! isset($data->$referencedPropertyName) ) {
+          $this->logger->error("Cannot find property $referencedPropertyName in the data");
+          continue;
+        }
+
+        $replacementValue = $data->$referencedPropertyName;
+        $condition = str_replace($pendingStatement['pattern'], $replacementValue, $pendingStatement['condition']);
+
+        // Process the result
+        $result = $pendingStatement['statement']->where($condition)->execute();
+
+        // Add the result to the loaded relations
+        if ($result->isError()) {
+          $error = $result->getErrors()[0] ??  new ORMException("An error occurred while processing the pending statement");
+          throw $error;
+        }
+
+        $loadedRelations[$pendingStatement['relation']] = $result->getData();
+      }
     }
+
+    return $loadedRelations;
   }
 
   /**
