@@ -201,7 +201,7 @@ class EntityManager implements IEntityStoreOwner
           $this->logger->warning("InsertOptions not provided. Using default InsertOptions.");
           $options = new InsertOptions();
         }
-        $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity, $options);
+        $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity, options: $options);
       } else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id]))) {
         if (!$options instanceof UpdateOptions) {
           $this->logger->warning("UpdateOptions not provided. Using default UpdateOptions.");
