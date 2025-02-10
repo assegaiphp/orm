@@ -67,7 +67,7 @@ readonly class Repository implements RepositoryInterface
    * @throws ReflectionException
    * @throws SaveException
    */
-  public function save(array|object $targetOrEntity, InsertOptions|UpdateOptions|null $options): QueryResultInterface
+  public function save(array|object $targetOrEntity, InsertOptions|UpdateOptions|null $options = null): QueryResultInterface
   {
     return $this->manager->save(targetOrEntity: $targetOrEntity, options: $options);
   }
