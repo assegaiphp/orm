@@ -136,6 +136,7 @@ final class EntityInspector
 
       $propertyName = $property->getName();
       $attributes = $property->getAttributes();
+
       foreach ($attributes as $attribute) {
         $attributeInstance = $attribute->newInstance();
 
