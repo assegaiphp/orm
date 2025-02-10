@@ -35,7 +35,9 @@ use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
+use Assegai\Orm\Management\Options\InsertOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
+use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Metadata\EntityMetadata;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
@@ -177,7 +179,8 @@ class EntityManager implements IEntityStoreOwner
    * Saves all given entities in the database.
    * If entities do not exist in the database then inserts, otherwise updates.
    *
-   * @param object|object[] $targetOrEntity
+   * @param object|object[] $targetOrEntity The entity or entities to save.
+   * @param InsertOptions|null $options The insert options.
    * @return QueryResultInterface
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
@@ -187,16 +190,29 @@ class EntityManager implements IEntityStoreOwner
    * @throws ReflectionException
    * @throws SaveException
    */
-  public function save(object|array $targetOrEntity): QueryResultInterface
+  public function save(object|array $targetOrEntity, InsertOptions|UpdateOptions|null $options = null): QueryResultInterface
   {
     $results = [];
 
     /** @var object $targetOrEntity */
     if (is_object($targetOrEntity)) {
       if (empty($targetOrEntity->id)) {
-        $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity);
+        if (!$options instanceof InsertOptions) {
+          $this->logger->warning("InsertOptions not provided. Using default InsertOptions.");
+          $options = new InsertOptions();
+        }
+        $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity, $options);
       } else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id]))) {
-        $saveResult = $this->update(entityClass: $targetOrEntity::class, partialEntity: $targetOrEntity, conditions: ['id' => $targetOrEntity->id]);
+        if (!$options instanceof UpdateOptions) {
+          $this->logger->warning("UpdateOptions not provided. Using default UpdateOptions.");
+          $options = new UpdateOptions();
+        }
+        $saveResult = $this->update(
+          entityClass: $targetOrEntity::class,
+          partialEntity: $targetOrEntity,
+          conditions: ['id' => $targetOrEntity->id],
+          options: $options
+        );
       } else {
         $saveResult = new SQLQueryResult([], [new NotFoundException($targetOrEntity->id)]);
       }
@@ -366,18 +382,19 @@ class EntityManager implements IEntityStoreOwner
    * duplicate entity is being inserted.
    * You can execute bulk inserts using this method.
    *
-   * @param string $entityClass
-   * @param array|object $entity
+   * @param string $entityClass The entity class name.
+   * @param array|object $entity The entity to insert.
+   * @param InsertOptions|null $options The options to use when inserting the entity.
    * @return InsertResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
-   * @throws IllegalTypeException
    * @throws ORMException
    * @throws ReflectionException
    */
   public function insert(
     string $entityClass,
-    array|object $entity
+    array|object $entity,
+    ?InsertOptions $options = null
   ): InsertResult
   {
     # Check if the entity matches the given entity class
@@ -392,12 +409,24 @@ class EntityManager implements IEntityStoreOwner
 
     $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
     $columnsMeta = [];
+    $relations = [];
 
-    $columns = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $columnsMeta);
+    if ($options?->relations) {
+      $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
+    }
+
+    $columns = $this->inspector->getColumns(
+      entity: $instance,
+      exclude: $this->readonlyColumns,
+      relations: $relations,
+      meta: $columnsMeta
+    );
     $values = $this->inspector->getValues(entity: $instance, exclude: $this->readonlyColumns, options: [
       'filter' => true,
       'columnTypes' => $columnsMeta['columnTypes'] ?? []
     ]);
+
+    $this->logger->info(var_export($columnsMeta, true));
 
     $this
       ->query
@@ -451,10 +480,8 @@ class EntityManager implements IEntityStoreOwner
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
     $generatedMaps->id = $this->lastInsertId();
 
-    foreach ($generatedMaps as $prop => $value)
-    {
-      if (in_array($prop, $this->getSecure()))
-      {
+    foreach ($generatedMaps as $prop => $value) {
+      if (in_array($prop, $this->getSecure())) {
         unset($generatedMaps->$prop);
       }
     }
@@ -469,20 +496,23 @@ class EntityManager implements IEntityStoreOwner
    * Does not check if entity exist in the database.
    * Condition(s) cannot be empty.
    *
-   * @param string $entityClass
-   * @param object|array $partialEntity
-   * @param string|object|array $conditions
+   * @param string $entityClass The entity class name.
+   * @param object|array $partialEntity The entity or entities to update.
+   * @param string|object|array $conditions The condition(s) to find the entity.
+   * @param UpdateOptions|null $options The options to use when updating the entity.
    * @return UpdateResult
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
    * @throws GeneralSQLQueryException
    * @throws ORMException
    * @throws ReflectionException
+   * @throws ValidationException
    */
   public function update(
     string $entityClass,
     object|array $partialEntity,
-    string|object|array $conditions
+    string|object|array $conditions,
+    ?UpdateOptions $options = null
   ): UpdateResult
   {
     $this->validateConditions(conditions: $conditions, methodName: __METHOD__);
@@ -525,7 +555,18 @@ class EntityManager implements IEntityStoreOwner
     $instance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
     $assignmentList = [];
     $columnOptions = [];
-    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, meta: $columnOptions);
+    $relations = [];
+
+    if ($options?->relations) {
+      $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
+    }
+
+    $columnMap = $this->inspector->getColumns(
+      entity: $instance,
+      exclude: $this->readonlyColumns,
+      relations: $relations,
+      meta: $columnOptions
+    );
 
     foreach ($partialEntity as $prop => $value) {
       # Get the correct prop name
@@ -1091,6 +1132,7 @@ class EntityManager implements IEntityStoreOwner
               if ($joinResult->isOK() && !empty($joinResult->getData())) {
                 $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData()[0];
               }
+
               $statement = $cachedStatement;
               break;
 
@@ -1105,7 +1147,7 @@ class EntityManager implements IEntityStoreOwner
 
               # table_2 t2
               $t2Name = $relationProperty->getEntity()->table;
-              $t2Alias = 't2';
+              $t2Alias = $t2Name;
               $t2ColumnName = $t1Column?->referencedColumnName ?? 'id';
 
               # join_table

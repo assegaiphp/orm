@@ -66,7 +66,7 @@ final class SQLSelectDefinition
   }
 
   /**
-   * Creates and returns a list of comma-separatred column names from a given 
+   * Creates and returns a list of comma-separated column names from a given
    * array of strings.
    * 
    * @param array<string> $columns The list of column names.
@@ -79,19 +79,14 @@ final class SQLSelectDefinition
     $columnListString = '';
     $separator = ', ';
 
-    if (empty($columns))
-    {
+    if (empty($columns)) {
       $columnListString .= "*";
-    }
-    else
-    {
-      foreach ($columns as $key => $value)
-      {
-        $columnListString .= is_numeric($key) ? "${value}${separator}" : "$value as ${key}${separator}";
+    } else {
+      foreach ($columns as $key => $value) {
+        $columnListString .= is_numeric($key) ? "{$value}{$separator}" : "$value as `{$key}`{$separator}";
       }
     }
-    $columnListString = trim($columnListString, $separator);
 
-    return $columnListString;
+    return trim($columnListString, $separator);
   }
 }

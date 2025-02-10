@@ -19,7 +19,9 @@ use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
+use Assegai\Orm\Management\Options\InsertOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
+use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
@@ -65,9 +67,9 @@ readonly class Repository implements RepositoryInterface
    * @throws ReflectionException
    * @throws SaveException
    */
-  public function save(array|object $targetOrEntity): QueryResultInterface
+  public function save(array|object $targetOrEntity, InsertOptions|UpdateOptions|null $options): QueryResultInterface
   {
-    return $this->manager->save(targetOrEntity: $targetOrEntity);
+    return $this->manager->save(targetOrEntity: $targetOrEntity, options: $options);
   }
 
   /**
@@ -107,7 +109,7 @@ readonly class Repository implements RepositoryInterface
    * @inheritDoc
    * @throws ReflectionException
    */
-  public function insert(array|object $entity): InsertResult
+  public function insert(array|object $entity, ?InsertOptions $options = null): InsertResult
   {
     return $this->manager->insert(entityClass: $this->entityId, entity: $entity);
   }
@@ -116,7 +118,7 @@ readonly class Repository implements RepositoryInterface
    * @inheritDoc
    * @throws ReflectionException
    */
-  public function update(string|object|array $conditions, object|array|null $entity): UpdateResult
+  public function update(string|object|array $conditions, object|array|null $entity, ?UpdateOptions $options = null): UpdateResult
   {
     return $this->manager->update(entityClass: $this->entityId, partialEntity: $entity, conditions: $conditions);
   }

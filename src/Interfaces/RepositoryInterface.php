@@ -9,7 +9,9 @@ use Assegai\Orm\Management\Options\FindManyOptions;
 use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
+use Assegai\Orm\Management\Options\InsertOptions;
 use Assegai\Orm\Management\Options\RemoveOptions;
+use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
@@ -34,10 +36,11 @@ interface RepositoryInterface
    * undefined properties are skipped.
    *
    * @param object|array<object> $targetOrEntity The target entity/entities to be saved.
+   * @param InsertOptions|UpdateOptions|null $options The options to use when saving the entity.
    * @return QueryResultInterface Returns a QueryResultInterface instance. Use it to check if the operation was successful.
    * @throws IllegalTypeException
    */
-  public function save(object|array $targetOrEntity): QueryResultInterface;
+  public function save(object|array $targetOrEntity, InsertOptions|UpdateOptions|null $options): QueryResultInterface;
 
   /**
    * Creates a new entity instance or instances. Optionally accepts an object literal with entity
@@ -77,11 +80,12 @@ interface RepositoryInterface
    * duplicate entity is being inserted.
    * You can execute bulk inserts using this method.
    *
-   * @param array|object $entity
+   * @param array|object $entity The entity to insert.
+   * @param InsertOptions|null $options The options to use when inserting the entity.
    * @return InsertResult
    * @throws ORMException
    */
-  public function insert(array|object $entity): InsertResult;
+  public function insert(array|object $entity, ?InsertOptions $options = null): InsertResult;
 
   /**
    * Updates entity partially. Entity can be found by a given condition(s).
@@ -90,12 +94,13 @@ interface RepositoryInterface
    * Does not check if entity exist in the database.
    * Condition(s) cannot be empty.
    *
-   * @param string|object|array $conditions
-   * @param object|array|null $entity
+   * @param string|object|array $conditions The condition(s) to find the entity.
+   * @param object|array|null $entity The entity or entities to update.
+   * @param UpdateOptions|null $options The options to use when updating the entity.
    * @return UpdateResult
    * @throws ORMException
    */
-  public function update(string|object|array $conditions, object|array|null $entity): UpdateResult;
+  public function update(string|object|array $conditions, object|array|null $entity, ?UpdateOptions $options = null): UpdateResult;
 
   /**
    * Inserts or updates a given entity or entities.
