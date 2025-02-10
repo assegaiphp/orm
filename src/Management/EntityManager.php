@@ -432,8 +432,7 @@ class EntityManager implements IEntityStoreOwner
       ->query
       ->insertInto(tableName: $this->inspector->getTableName(entity: $instance))
       ->singleRow(columns: $columns)
-      ->values(valuesList: $values)
-      ->debug();
+      ->values(valuesList: $values);
 
     if($this->isDebug) {
       $this->query->debug();
