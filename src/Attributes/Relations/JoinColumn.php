@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Relations;
 
+use Assegai\Orm\Queries\Sql\ColumnType;
 use Attribute;
 
 /**
@@ -12,9 +13,19 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class JoinColumn
 {
+  /**
+   * @var string|null The effective column name.
+   */
   public ?string $effectiveColumnName;
+  /**
+   * @var string|null The effective referenced column name.
+   */
   public ?string $effectiveReferencedColumnName;
+  /**
+   * @var string|null The effective foreign key constraint name.
+   */
   public ?string $effectiveForeignKeyConstraintName;
+
   /**
    * @param string|null $name Name of the column.
    * @param string|null $referencedColumnName Name of the column in the entity to which this column is referenced.
@@ -24,6 +35,7 @@ class JoinColumn
     public readonly ?string $name = null,
     public readonly ?string $referencedColumnName = null,
     public readonly ?string $foreignKeyConstraintName = null,
+    public readonly ColumnType $type = ColumnType::BIGINT_UNSIGNED,
   )
   {
     $this->effectiveColumnName = $this->name;
