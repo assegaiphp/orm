@@ -33,7 +33,8 @@ class FindOptions implements JsonSerializable
     public readonly ?int $skip = null,
     public readonly ?int $limit = null,
     public readonly array $exclude = ['password'],
-    public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL
+    public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL,
+    public readonly bool $isDebug = false
   ) { }
 
   /**

@@ -3,7 +3,6 @@
 namespace Assegai\Orm\Util\Log;
 
 use Psr\Log\LoggerInterface;
-use Stringable;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**

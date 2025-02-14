@@ -14,11 +14,13 @@ use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\Sql\ColumnType;
+use Assegai\Orm\Util\Log\Logger;
 use DateTime;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
 use stdClass;
+use Symfony\Component\Console\Output\ConsoleOutput;
 
 /**
  * Provides for entity object introspection.
@@ -31,12 +33,14 @@ final class EntityInspector
    * @var EntityInspector|null The singleton instance of the EntityInspector.
    */
   private static ?EntityInspector $instance = null;
+  private Logger $logger;
 
   /**
    * Constructs a new EntityInspector
    */
   private final function __construct()
   {
+    $this->logger = new Logger(new ConsoleOutput());
   }
 
   /**
@@ -51,6 +55,11 @@ final class EntityInspector
     }
 
     return self::$instance;
+  }
+
+  public function setLogger(Logger $logger): void
+  {
+    $this->logger = $logger;
   }
 
   /**
@@ -151,7 +160,7 @@ final class EntityInspector
           }
 
           # Set the ColumnType
-          $meta['columnTypes'][$propertyName] = $attributeInstance->type;
+          $meta['column_types'][$propertyName] = $attributeInstance->type;
         }
 
         if ($relations) {
@@ -159,6 +168,7 @@ final class EntityInspector
 
             if ($attributeInstance->name) {
               $columns[$propertyName] = "$tableName." . $attributeInstance->name;
+              assert($attributeInstance instanceof JoinColumn);
             } else {
               $attributeInstance->effectiveColumnName = $this->getColumnName([$propertyName, 'Id']);
               $columns[] = "$tableName." . $attributeInstance->effectiveColumnName;
@@ -169,6 +179,7 @@ final class EntityInspector
             }
 
             $relationProperties[$propertyName]->joinColumn = $attributeInstance;
+            $meta['column_types'][$propertyName] = $attributeInstance->type;
           } else if ($attributeInstance instanceof JoinTable) {
             if (!$relationProperties[$propertyName]) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
@@ -284,51 +295,58 @@ final class EntityInspector
   public function getValues(object $entity, array $exclude = [], array $options = ['filter' => true]): array
   {
     $filterValues = $options['filter'] ?? true;
+    $relations = $options['relations'] ?? [];
+
     $values = [];
     $entityClassname = get_class($entity);
     $this->validateEntityName($entityClassname);
-    $columns = $this->getColumns(entity: $entity, exclude: $exclude);
+    $columns = $this->getColumns(entity: $entity, exclude: $exclude, relations: $relations);
 
     foreach ($columns as $index => $column) {
       $propName = is_numeric($index) ? $column : $index;
       $propName = str_replace($this->getTableName($entity) . ".", '', $propName);
-      $property = $entity->$propName;
+      $propertyValue = $entity->$propName;
 
-      if (empty($property)) {
+      if (empty($propertyValue)) {
         $columnAttribute = new ReflectionProperty(get_class($entity), $propName);
         $attributes = $columnAttribute->getAttributes();
 
         foreach ($attributes as $attribute) {
           $attrInstance = $attribute->newInstance();
           if (!empty($attrInstance->defaultValue)) {
-            $property = $attrInstance->defaultValue;
+            $propertyValue = $attrInstance->defaultValue;
           }
         }
       }
 
       // TODO: Perform type conversion
-      if (is_object($property)) {
-        if (property_exists($property, 'value')) {
-          $property = $property->value;
+      if (is_object($propertyValue)) {
+        if (property_exists($propertyValue, 'value')) {
+          $propertyValue = $propertyValue->value;
         }
 
-        if ($property instanceof DateTime) {
-          $property = $this->convertDateTimeToString($property, $propName, $options);
+        if ($propertyValue instanceof DateTime) {
+          $propertyValue = $this->convertDateTimeToString($propertyValue, $propName, $options);
         }
 
-        if ($property instanceof stdClass) {
-          $property = json_encode($property);
+        if ($propertyValue instanceof stdClass) {
+          $propertyValue = json_encode($propertyValue);
+        }
+
+        // If join column property
+        if (in_array($propName, $relations)) {
+          $propertyValue = $propertyValue->id;
         }
       }
 
       $filteredValue = match(gettype($entity->$propName)) {
-        'integer' => filter_var($property, FILTER_SANITIZE_NUMBER_INT),
-        'double' => filter_var($property, FILTER_SANITIZE_NUMBER_FLOAT),
-        'boolean' => boolval($property),
-        'string' => filter_var($property, FILTER_SANITIZE_ADD_SLASHES),
-        default => $property
+        'integer' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_INT),
+        'double' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_FLOAT),
+        'boolean' => boolval($propertyValue),
+        'string' => filter_var($propertyValue, FILTER_SANITIZE_ADD_SLASHES),
+        default => $propertyValue
       };
-      $values[] = ($filterValues) ? $filteredValue : $property;
+      $values[] = ($filterValues) ? $filteredValue : $propertyValue;
     }
 
     return $values;
@@ -439,9 +457,9 @@ final class EntityInspector
   {
     $dateTimeFormat = DATE_ATOM;
 
-    if (isset($options['columnTypes'])) {
+    if (isset($options['column_types'])) {
       /** @var ColumnType $columnType */
-      $columnType = $options['columnTypes'][$propName];
+      $columnType = $options['column_types'][$propName];
       $dateTimeFormat = match ($columnType) {
         ColumnType::DATE => 'Y-m-d',
         ColumnType::TIME => 'h:i:s',
