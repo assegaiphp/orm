@@ -291,7 +291,7 @@ class EntityManager implements IEntityStoreOwner
 
     $this->query->insertInto(tableName: $this->inspector->getTableName(entity: $instance))->singleRow(columns: $columns)->values(valuesList: $values);
 
-    if ($this->isDebug) {
+    if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
     }
 
@@ -670,7 +670,7 @@ class EntityManager implements IEntityStoreOwner
 
     $statement = $statement->limit(limit: $limit, offset: $skip);
 
-    if ($this->isDebug) {
+    if ($this->isDebug || $findOptions->isDebug) {
       $statement->debug();
     }
 
@@ -910,7 +910,7 @@ class EntityManager implements IEntityStoreOwner
       $statement = $statement->where(condition: $options);
     }
 
-    if ($this->isDebug) {
+    if ($this->isDebug || $options?->isDebug) {
       $statement->debug();
     }
 
@@ -1074,7 +1074,7 @@ class EntityManager implements IEntityStoreOwner
 
     $this->query->update(tableName: $this->inspector->getTableName(entity: $instance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
 
-    if ($this->isDebug) {
+    if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
     }
 
