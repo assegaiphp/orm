@@ -60,6 +60,7 @@ use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
+use ReflectionUnionType;
 use stdClass;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use UnitEnum;
@@ -365,9 +366,15 @@ class EntityManager implements IEntityStoreOwner
             }
           }
 
-          $entityLikeReflectionPropertyType = $entityLikeReflectionProperty->getType()?->getName();
-          $entityClassReflectionPropertyType = $entityClassReflectionProperty->getType()?->getName();
-          $typesMatch = $entityLikeReflectionPropertyType === $entityClassReflectionPropertyType;
+          $entityLikeReflectionPropertyType = match (true) {
+            $entityLikeReflectionProperty->getType() instanceof ReflectionUnionType => strtolower(gettype($entityLikePropertyValue)),
+            default => $entityLikeReflectionProperty->getType()?->getName()
+          };
+          $entityClassReflectionPropertyType = match (true) {
+            $entityClassReflectionProperty->getType() instanceof ReflectionUnionType => strval($entityClassReflectionProperty->getType()),
+            default => $entityClassReflectionProperty->getType()?->getName()
+          };
+          $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || str_contains($entityClassReflectionPropertyType, $entityLikeReflectionPropertyType);
 
           $sourceType = $entityLikeReflectionPropertyType ?? gettype($entityLikePropertyValue);
           $targetType = $entityClassReflectionPropertyType ?? gettype($entityLikePropertyValue);
@@ -906,7 +913,7 @@ class EntityManager implements IEntityStoreOwner
 
     $statement = $this->query->select()->count()->from(tableReferences: $this->inspector->getTableName(entity: $entity));
 
-    if (!empty($findOptions)) {
+    if ($options) {
       $statement = $statement->where(condition: $options);
     }
 
@@ -1571,30 +1578,51 @@ class EntityManager implements IEntityStoreOwner
       if (property_exists($entity, $prop)) {
         $sourceReflection = new ReflectionProperty($object, $prop);
         $targetReflection = new ReflectionProperty($entity, $prop);
+        $sourceReflectionType = $sourceReflection->getType();
+        $targetReflectionType = $targetReflection->getType();
 
-        $sourceType = $sourceReflection->getType()?->getName() ?? match (gettype($object->$prop)) {
-          'integer' => 'int',
-          'double' => 'float',
-          'NULL' => null,
-          'object' => get_class($object->$prop),
-          default => gettype($object->$prop)
-        };
-        $targetType = $targetReflection->getType()?->getName() ?? match (gettype($entity->$prop)) {
-          'integer' => 'int',
-          'double' => 'float',
-          'NULL' => null,
-          'object' => get_class($object->$prop),
-          default => gettype($entity->$prop)
-        };
+        if ($sourceReflectionType instanceof ReflectionUnionType) {
+          $this->logger->warning("Source instance of ReflectionUnionType");
+          $sourceType = strval($sourceReflectionType);
+          if ($sourceReflectionType->allowsNull()) {
+            $sourceType = "null|$sourceType";
+          }
+        } else {
+          $sourceType = $sourceReflectionType?->getName() ?? match (gettype($object->$prop)) {
+            'integer' => 'int',
+            'double' => 'float',
+            'NULL' => null,
+            'object' => get_class($object->$prop),
+            default => gettype($object->$prop)
+          };
+        }
+
+        if ($targetReflectionType instanceof ReflectionUnionType) {
+          $this->logger->warning("Target instance of ReflectionUnionType");
+          $targetType = strval($targetReflectionType);
+          if ($targetReflectionType->allowsNull()) {
+            $targetType = "null|$targetType";
+          }
+        } else {
+          $targetType = $targetReflectionType?->getName() ?? match (gettype($entity->$prop)) {
+            'integer' => 'int',
+            'double' => 'float',
+            'NULL' => null,
+            'object' => get_class($object->$prop),
+            default => gettype($entity->$prop)
+          };
+        }
 
         if (is_null($sourceType) || is_null($targetType)) {
           continue;
         }
 
-        if ($sourceType !== $targetType) {
+        if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
+          $this->logger->error("Source type $sourceType does not match target type $targetType");
           $value = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
         }
 
+        $this->logger->info("Setting $prop to " . var_export($value, true));
         $entity->$prop = $value;
       }
     }

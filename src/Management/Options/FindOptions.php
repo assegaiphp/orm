@@ -25,47 +25,8 @@ class FindOptions implements JsonSerializable
    * @param array $exclude The fields to exclude.
    * @param bool $withRealTotal Whether to get the real total.
    */
-  public function __construct(
-    public readonly null|object|array $select = null,
-    public readonly null|object|array $relations = null,
-    public readonly null|FindWhereOptions|array $where = null,
-    public readonly null|object|array $order = null,
-    public readonly ?int $skip = null,
-    public readonly ?int $limit = null,
-    public readonly array $exclude = ['password'],
-    public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL,
-    public readonly bool $isDebug = false
-  ) { }
-
-  /**
-   * @return string
-   */
-  public function __toString(): string
+  public function __construct(public readonly null|object|array $select = null, public readonly null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false)
   {
-    $output = match(true) {
-      is_array($this->where) => (function() {
-        $where = '';
-        foreach ($this->where as $key => $value)
-        {
-          $where .= "$key = $value";
-        }
-        return $where;
-      })(),
-      $this->where instanceof FindWhereOptions => strval($this->where),
-      default => '',
-    };
-
-    if (!empty($limit))
-    {
-      $output .= " LIMIT $limit";
-
-      if (!empty($skip))
-      {
-        $output .= " OFFSET $skip";
-      }
-    }
-
-    return trim($output);
   }
 
   /**
@@ -90,16 +51,43 @@ class FindOptions implements JsonSerializable
       $where = new FindWhereOptions($where);
     }
 
-    return new FindOptions(
-      select: $select,
-      relations: $relations,
-      where: $where,
-      order: $order,
-      skip: $skip,
-      limit: $limit,
-      exclude: $exclude,
-      withRealTotal: $withRealTotal
-    );
+    return new FindOptions(select: $select, relations: $relations, where: $where, order: $order, skip: $skip, limit: $limit, exclude: $exclude, withRealTotal: $withRealTotal);
+  }
+
+  /**
+   * @return string
+   */
+  public function __toString(): string
+  {
+    $output = match (true) {
+      is_array($this->where) => (function () {
+        $where = '';
+        foreach ($this->where as $key => $value) {
+          $where .= ($value === 'NULL' || $value === null) ? "$key IS $value" : "$key = $value";
+        }
+        return $where;
+      })(),
+      $this->where instanceof FindWhereOptions => strval($this->where),
+      default => '',
+    };
+
+    if (!empty($limit)) {
+      $output .= " LIMIT $limit";
+
+      if (!empty($skip)) {
+        $output .= " OFFSET $skip";
+      }
+    }
+
+    return trim($output);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function jsonSerialize(): array
+  {
+    return self::toArray($this);
   }
 
   /**
@@ -110,23 +98,6 @@ class FindOptions implements JsonSerializable
    */
   public static function toArray(self $options): array
   {
-    return [
-      'select' => $options->select,
-      'relations' => $options->relations,
-      'where' => $options->where,
-      'order' => $options->order,
-      'skip' => $options->skip,
-      'limit' => $options->limit,
-      'exclude' => $options->exclude,
-      'with_real_total' => $options->withRealTotal,
-    ];
-  }
-
-  /**
-   * @inheritDoc
-   */
-  public function jsonSerialize(): array
-  {
-    return self::toArray($this);
+    return ['select' => $options->select, 'relations' => $options->relations, 'where' => $options->where, 'order' => $options->order, 'skip' => $options->skip, 'limit' => $options->limit, 'exclude' => $options->exclude, 'with_real_total' => $options->withRealTotal,];
   }
 }
