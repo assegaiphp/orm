@@ -19,31 +19,21 @@ final class SQLInsertIntoStatement
    * @param SQLQuery $query The SQLQuery object.
    * @param array $columns A parenthesized list of comma-separated column names for which the statment provides values.
    */
-  public function __construct(
-    private readonly SQLQuery $query,
-    private readonly array $columns = []
-  )
+  public function __construct(private readonly SQLQuery $query, private readonly array $columns = [])
   {
     $queryString = "";
 
-    if (!empty($columns))
-    {
+    if (!empty($columns)) {
       $queryString = "(" . implode(', ', $columns) . ") ";
-      
+
       $columnIndex = 0;
-      foreach ($columns as $index => $column)
-      {
-        if (is_numeric($index))
-        {
-          if(in_array($column, $this->query->passwordHashFields()))
-          {
+      foreach ($columns as $index => $column) {
+        if (is_numeric($index)) {
+          if (in_array($column, $this->query->passwordHashFields())) {
             $this->hashableIndexes[] = $index;
           }
-        }
-        else
-        {
-          if (in_array($index, $this->query->passwordHashFields()))
-          {
+        } else {
+          if (in_array($index, $this->query->passwordHashFields())) {
             $this->hashableIndexes[] = $columnIndex;
           }
         }
@@ -64,24 +54,20 @@ final class SQLInsertIntoStatement
     $separator = ', ';
     $quoteExemptions = ['CURRENT_TIMESTAMP', 'NULL'];
 
-    foreach ($valuesList as $index => $value)
-    {
-      if (in_array($index, $this->hashableIndexes))
-      {
+    foreach ($valuesList as $index => $value) {
+      if (in_array($index, $this->hashableIndexes)) {
         $value = password_hash($value, $this->query->passwordHashAlgorithm());
       }
-      if (is_bool($value))
-      {
+      if (is_bool($value)) {
         $value = (int)$value;
       }
-      if (is_null($value))
-      {
+      if (is_null($value)) {
         $value = 'NULL';
       }
-      $queryString .=
-        (is_numeric($value) || in_array($value, $quoteExemptions))
-        ? "$value$separator"
-        : "'$value'$separator";
+      if (is_array($value)) {
+        $value = json_encode($value);
+      }
+      $queryString .= (is_numeric($value) || in_array($value, $quoteExemptions)) ? "$value$separator" : "'$value'$separator";
     }
 
     $queryString = trim(string: $queryString, characters: $separator) . ") ";

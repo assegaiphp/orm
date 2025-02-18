@@ -7,6 +7,7 @@ use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\ORMException;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionUnionType;
 use Symfony\Component\Console\Output\ConsoleOutput;
 
 /**
@@ -87,7 +88,12 @@ final readonly class FindWhereOptions
     if ($this->entityClass) {
       $entityClassReflection = new ReflectionClass($this->entityClass);
       foreach ($entityClassReflection->getProperties() as $property) {
-        $column = ['name' => $property->getName(), 'type' => $property->getType()?->getName() ?? ''];
+        $propertyType = $property->getType();
+        $type = match(true) {
+          $propertyType instanceof ReflectionUnionType => strval($propertyType),
+          default => $property->getType()?->getName() ?? ''
+        };
+        $column = ['name' => $property->getName(), 'type' => $type];
         if (! isset($this->conditions[$column['name']])) {
           $attributes = $property->getAttributes();
 
