@@ -63,9 +63,9 @@ class FindOptions implements JsonSerializable
       is_array($this->where) => (function () {
         $where = '';
         foreach ($this->where as $key => $value) {
-          $where .= ($value === 'NULL' || $value === null) ? "$key IS $value" : "$key = $value";
+          $where .= (($value === 'NULL' || $value === null) ? "$key IS $value" : "$key = $value") . " AND ";
         }
-        return $where;
+        return rtrim($where, ' AND ');
       })(),
       $this->where instanceof FindWhereOptions => strval($this->where),
       default => '',
