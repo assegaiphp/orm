@@ -661,8 +661,6 @@ class EntityManager implements IEntityStoreOwner
               $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
 
               $statement = $statement->leftJoin("$joinTableName $joinTableNameAlias")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("$t2Name $t2Alias")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
-              exit(var_export($relationProperty->getEntityClass(), true));
-              $statement->debug();
               break;
           }
         }
