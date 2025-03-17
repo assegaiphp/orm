@@ -14,6 +14,7 @@ use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
 use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Attributes\Relations\OneToMany;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\RelationType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
@@ -601,7 +602,7 @@ class EntityManager implements IEntityStoreOwner
               $joinStatement = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinStatement->select()->all($joinEntityColumns)->from($foreignClassTableName);
 
-              $pendingStatements[] = ['relation' => $relationProperty->name, 'statement' => $joinStatement, 'condition' => "$foreignClassTableName.$joinColumnName=:$referencedPropertyName", 'pattern' => ":$referencedPropertyName", 'replacement' => $referencedPropertyName];
+              $pendingStatements[] = ['relation' => $relationProperty->name, 'type' => $relationProperty->getRelationType(), 'statement' => $joinStatement, 'condition' => "$foreignClassTableName.$joinColumnName=:$referencedPropertyName", 'pattern' => ":$referencedPropertyName", 'replacement' => $referencedPropertyName,];
               break;
 
             case RelationType::MANY_TO_ONE:
@@ -660,6 +661,8 @@ class EntityManager implements IEntityStoreOwner
               $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
 
               $statement = $statement->leftJoin("$joinTableName $joinTableNameAlias")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("$t2Name $t2Alias")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
+              exit(var_export($relationProperty->getEntityClass(), true));
+              $statement->debug();
               break;
           }
         }
@@ -811,7 +814,16 @@ class EntityManager implements IEntityStoreOwner
           throw $error;
         }
 
-        $loadedRelations[$pendingStatement['relation']] = $result->getData();
+        $pendingStatementRelation = $pendingStatement['relation'];
+        $pendingStatementType = $pendingStatement['type'] ?? null;
+
+        if ($pendingStatementType) {
+          if ($pendingStatementType === RelationType::ONE_TO_MANY) {
+            $loadedRelations[$pendingStatementRelation][$data->$referencedPropertyName] = $result->getData();
+          }
+        } else {
+          $loadedRelations[$pendingStatementRelation] = $result->getData();
+        }
       }
     }
 
@@ -866,6 +878,7 @@ class EntityManager implements IEntityStoreOwner
     $restructuredEntity = new stdClass();
     $relation = new stdClass();
     $relationIsCollection = $relationInfo->type === 'array';
+    $relationIsOneToMany = $relationInfo->relationAttributeReflection->getName() === OneToMany::class;
 
     if ($this->isDebug) {
       $this->logger->debug("Restructuring entity $entityClass with relation $relationName");
@@ -890,6 +903,12 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $relationValue = $loadedRelations[$relationName] ?? $relation;
+
+    if ($relationIsCollection && $relationIsOneToMany) {
+      $id = $entity->{$relationInfo->relationAttribute->referencedProperty};
+      $relationValue = $relationValue[$id];
+    }
+
     $restructuredEntity->$relationName = $relationValue;
 
     return $restructuredEntity;
@@ -1618,11 +1637,9 @@ class EntityManager implements IEntityStoreOwner
         }
 
         if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
-          $this->logger->error("Source type $sourceType does not match target type $targetType");
           $value = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
         }
 
-        $this->logger->info("Setting $prop to " . var_export($value, true));
         $entity->$prop = $value;
       }
     }

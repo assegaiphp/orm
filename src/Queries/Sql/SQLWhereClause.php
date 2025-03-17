@@ -25,7 +25,11 @@ final class SQLWhereClause
   )
   {
     if (!empty($this->condition)) {
-      $this->query->appendQueryString("WHERE " . $this->filterConditionColumnNames($this->condition));
+      if (!str_contains($this->query->queryString(), 'WHERE')) {
+       $this->query->appendQueryString("WHERE " . $this->filterConditionColumnNames($this->condition));
+      } else {
+        $this->query->replaceWhereClause($this->condition);
+      }
     }
   }
 
