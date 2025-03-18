@@ -536,10 +536,10 @@ class EntityManager implements IEntityStoreOwner
       # Resolve relations and joins
       if ($findOptions->relations) {
         # $this->buildRelations($listOfRelations);
-
         foreach ($findOptions->relations as $key => $value) {
           /** @var RelationPropertyMetadata $relationProperty */
           $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
+          $relationOptions = $relationProperty->relationAttribute->options;
 
           if (!$relationProperty) {
             if ($_ENV['DEBUG_MODE'] === true) {
@@ -597,7 +597,11 @@ class EntityManager implements IEntityStoreOwner
               $joinColumnName = $joinColumnAttribute->effectiveColumnName ?? 'id';
 
               $joinEntity = $this->create($relationProperty->getEntityClass());
-              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $findOptions->exclude);
+              $excludeColumns = $findOptions->exclude ?? [];
+              if ($relationOptions) {
+                $excludeColumns = $relationOptions->exclude;
+              }
+              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $excludeColumns);
 
               $joinStatement = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinStatement->select()->all($joinEntityColumns)->from($foreignClassTableName);
@@ -626,7 +630,11 @@ class EntityManager implements IEntityStoreOwner
               $joinColumnName = $relationProperty->joinColumn?->referencedColumnName ?? 'id';
 
               $joinEntity = $this->create($relationProperty->getEntityClass());
-              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $findOptions->exclude);
+              $excludeColumns = $findOptions->exclude ?? [];
+              if ($relationOptions) {
+                $excludeColumns = $relationOptions->exclude;
+              }
+              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $excludeColumns);
               $cachedStatement = $statement;
               $joinQuery = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName")->limit(1);
