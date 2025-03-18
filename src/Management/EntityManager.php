@@ -543,7 +543,7 @@ class EntityManager implements IEntityStoreOwner
           $relationOptions = $relationProperty?->relationAttribute->options ?? new RelationOptions();
 
           if (!$relationProperty) {
-            if ($_ENV['DEBUG_MODE'] === true) {
+            if ($this->isDebug) {
               throw new ORMException("Relation $key does not exist in the entity $entityClass.");
             }
             $this->logger->warning("Relation $key does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
