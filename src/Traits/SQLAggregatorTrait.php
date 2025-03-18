@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Traits;
 
+use Assegai\Orm\Queries\Sql\SQLKeyPart;
 use Assegai\Orm\Queries\Sql\SQLLimitClause;
 
 trait SQLAggregatorTrait
@@ -26,12 +27,17 @@ trait SQLAggregatorTrait
   }
 
   /**
-   * @param array $keyParts A list of **SQLKeyPart** objects.
+   * @param array<string, string>|SQLKeyPart[] $keyParts A list of **SQLKeyPart** objects.
    */
   public function orderBy(array $keyParts): static
   {
     if (property_exists($this, 'query'))
     {
+      if (array_is_associative($keyParts)) {
+        $keyParts = array_map(function ($key, $value) {
+          return new SQLKeyPart($key, $value);
+        }, array_keys($keyParts), $keyParts);
+      }
       $queryString = "ORDER BY " . implode(', ', $keyParts);
       $this->query->appendQueryString($queryString);
     }

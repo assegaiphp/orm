@@ -682,6 +682,10 @@ class EntityManager implements IEntityStoreOwner
       $statement = $statement->where(condition: $findWhereOptions ?? $findOptions);
     }
 
+    if ($findOptions->order) {
+      $statement->orderBy($findOptions->order);
+    }
+
     $limit = $findOptions->limit ?? $_GET['limit'] ?? Config::get('DEFAULT_LIMIT') ?? 10;
     $skip = $findOptions->skip ?? $_GET['skip'] ?? Config::get('DEFAULT_SKIP') ?? 0;
 
@@ -998,7 +1002,6 @@ class EntityManager implements IEntityStoreOwner
     if (is_array($where)) {
       $where = $where['condition'] ?? '';
     }
-
     $statement = $this->query->select()->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))->from(tableReferences: $this->inspector->getTableName(entity: $entity))->where(condition: $where);
 
     $limit = $_GET['limit'] ?? 100;
