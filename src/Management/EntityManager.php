@@ -48,6 +48,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Queries\Sql\SQLTableReference;
+use Assegai\Orm\Relations\RelationOptions;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
@@ -539,7 +540,7 @@ class EntityManager implements IEntityStoreOwner
         foreach ($findOptions->relations as $key => $value) {
           /** @var RelationPropertyMetadata $relationProperty */
           $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
-          $relationOptions = $relationProperty->relationAttribute->options;
+          $relationOptions = $relationProperty?->relationAttribute->options ?? new RelationOptions();
 
           if (!$relationProperty) {
             if ($_ENV['DEBUG_MODE'] === true) {
