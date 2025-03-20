@@ -219,21 +219,23 @@ final class EntityInspector
         $attributeInstance = $attribute->newInstance();
 
         if ($attributeInstance instanceof Column) {
-          if ($hasRelations && !in_array($propertyName, $relations)) {
-            if ($attributeInstance->alias) {
-              $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
-            } else if ($attributeInstance->name) {
-              $columns[$propertyName] = "$tableName.$attributeInstance->name";
-            } else {
-              $columns[] = "$tableName.$propertyName";
-            }
-
-            # Set the ColumnType
-            $meta['column_types'][$propertyName] = $attributeInstance->type;
+          if ($attributeInstance->alias) {
+            $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
+          } else if ($attributeInstance->name) {
+            $columns[$propertyName] = "$tableName.$attributeInstance->name";
+          } else {
+            $columns[] = "$tableName.$propertyName";
           }
+
+          # Set the ColumnType
+          $meta['column_types'][$propertyName] = $attributeInstance->type;
         }
 
-        if ($hasRelations && in_array($propertyName, $relations)) {
+        if ($hasRelations) {
+          if (!in_array($propertyName, $relations)) {
+            continue;
+          }
+
           if ($attributeInstance instanceof JoinColumn) {
 
             if ($attributeInstance->name) {
