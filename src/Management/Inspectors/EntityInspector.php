@@ -33,7 +33,10 @@ final class EntityInspector
    * @var EntityInspector|null The singleton instance of the EntityInspector.
    */
   private static ?EntityInspector $instance = null;
-  private Logger $logger;
+  /**
+   * @var Logger The logger for the EntityInspector.
+   */
+  protected Logger $logger;
 
   /**
    * Constructs a new EntityInspector
@@ -60,28 +63,6 @@ final class EntityInspector
   public function setLogger(Logger $logger): void
   {
     $this->logger = $logger;
-  }
-
-  /**
-   * Asserts that the specified class name is a valid entity and throws an exception if it is not.
-   *
-   * @param string $entityClass The name of the class to validate.
-   * @return void
-   * @throws ClassNotFoundException If the class does not exist.
-   * @throws ORMException If the class does not have the required attributes.
-   */
-  public function validateEntityName(string $entityClass): void
-  {
-    if (!class_exists($entityClass)) {
-      throw new ClassNotFoundException(className: $entityClass);
-    }
-
-    $reflectionClass = new ReflectionClass($entityClass);
-    $entityAttribute = $reflectionClass->getAttributes(Entity::class);
-
-    if (empty($entityAttribute)) {
-      throw new ORMException(message: "Missing Entity attribute for $entityClass");
-    }
   }
 
   /**
@@ -113,172 +94,25 @@ final class EntityInspector
   }
 
   /**
-   * Returns a list of class property names that are marked with the `Column` attribute.
+   * Asserts that the specified class name is a valid entity and throws an exception if it is not.
    *
-   * @param object $entity The entity to inspect.
-   * @param string[] $exclude A list of properties to exclude.
-   * @param string[] $relations A list of properties that are marked with the `JoinColumn` attribute.
-   * @param array<string, mixed> $relationProperties A list of properties that are marked with the `JoinColumn` attribute.
-   * @param array<string, mixed> $meta The metadata for the entity.
-   * @return array Returns a list of properties that are marked with the `Column` attribute.
-   * @throws ClassNotFoundException
-   * @throws ORMException
+   * @param string $entityClass The name of the class to validate.
+   * @return void
+   * @throws ClassNotFoundException If the class does not exist.
+   * @throws ORMException If the class does not have the required attributes.
    */
-  public function getColumns(
-    object $entity,
-    array $exclude = [],
-    array $relations = [],
-    array &$relationProperties = [],
-    array &$meta = []
-  ): array
+  public function validateEntityName(string $entityClass): void
   {
-    $columns = [];
-    $reflectionClass = new ReflectionClass($entity);
-    $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
-
-    $tableName = $this->getTableName($entity);
-
-    foreach ($properties as $property) {
-      if (in_array($property->getName(), $exclude)) {
-        continue;
-      }
-
-      $propertyName = $property->getName();
-      $attributes = $property->getAttributes();
-
-      foreach ($attributes as $attribute) {
-        $attributeInstance = $attribute->newInstance();
-
-        if ($attributeInstance instanceof Column) {
-
-          if ($attributeInstance->alias) {
-            $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
-          } else if($attributeInstance->name) {
-            $columns[$propertyName] = "$tableName.$attributeInstance->name";
-          } else {
-            $columns[] = "$tableName.$propertyName";
-          }
-
-          # Set the ColumnType
-          $meta['column_types'][$propertyName] = $attributeInstance->type;
-        }
-
-        if ($relations) {
-          if ($attributeInstance instanceof JoinColumn) {
-
-            if ($attributeInstance->name) {
-              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
-              assert($attributeInstance instanceof JoinColumn);
-            } else {
-              $attributeInstance->effectiveColumnName = $this->getColumnName([$propertyName, 'Id']);
-              $columns[] = "$tableName." . $attributeInstance->effectiveColumnName;
-            }
-
-            if (!$relationProperties[$propertyName]) {
-              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
-            }
-
-            $relationProperties[$propertyName]->joinColumn = $attributeInstance;
-            $meta['column_types'][$propertyName] = $attributeInstance->type;
-          } else if ($attributeInstance instanceof JoinTable) {
-            if (!$relationProperties[$propertyName]) {
-              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
-            }
-
-            $relationProperties[$propertyName]->joinTable = $attributeInstance;
-          } else if ($attributeInstance instanceof OneToOne) {
-            if (!isset($relationProperties[$propertyName]) || !$relationProperties[$propertyName])
-            {
-              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
-            }
-
-            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
-            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
-            $relationProperties[$propertyName]->inflate();
-
-            # Instantiate relative
-            $entityRelative = new $attributeInstance->type;
-
-            # Get relative columns
-            $entityRelativeColumns = $this->getRelationColumns(entity: $entityRelative, exclude: $exclude);
-
-            # Add relative columns to column list
-            $columns = array_merge($columns, $entityRelativeColumns);
-          } else if ($attributeInstance instanceof OneToMany) {
-            if (!isset($relationProperties[$propertyName])) {
-              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
-            }
-
-            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
-            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
-            $relationProperties[$propertyName]->inflate();
-          } else if ($attributeInstance instanceof ManyToOne) {
-            if (!isset($relationProperties[$propertyName])) {
-              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
-            }
-
-            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
-            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
-            $relationProperties[$propertyName]->inflate();
-          } else if ($attributeInstance instanceof ManyToMany) {
-            if (!isset($relationProperties[$propertyName])) {
-              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
-            }
-
-            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
-            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
-            $relationProperties[$propertyName]->inflate();
-          }
-        }
-      }
+    if (!class_exists($entityClass)) {
+      throw new ClassNotFoundException(className: $entityClass);
     }
 
-    return $columns;
-  }
+    $reflectionClass = new ReflectionClass($entityClass);
+    $entityAttribute = $reflectionClass->getAttributes(Entity::class);
 
-  /**
-   * Returns the columns for the specified entity.
-   *
-   * @param object $entity The entity to inspect.
-   * @param array $exclude A list of properties to exclude.
-   * @return array<string, string> Returns the columns for the specified entity.
-   */
-  private function getRelationColumns(object $entity, array $exclude = []): array
-  {
-    $columns = [];
-    $reflectionClass = new ReflectionClass($entity);
-    $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
-
-    try {
-      $tableName = $this->getTableName($entity);
-
-      foreach ($properties as $property) {
-        $propertyName = $property->getName();
-        $columnAttributes = $property->getAttributes(Column::class);
-
-        if (!$columnAttributes || in_array($propertyName, $exclude)) {
-          continue;
-        }
-
-        foreach ($columnAttributes as $columnAttribute) {
-          $attributeInstance = $columnAttribute->newInstance();
-
-          if ($attributeInstance instanceof Column) {
-            if ($attributeInstance->alias) {
-              $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $attributeInstance->name;
-            } else if($attributeInstance->name) {
-              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
-            } else {
-              $columns["{$tableName}_" . $propertyName] = "$tableName." . $propertyName;
-            }
-          }
-        }
-      }
-    } catch (ClassNotFoundException|ORMException $e) {
-      die($e);
+    if (empty($entityAttribute)) {
+      throw new ORMException(message: "Missing Entity attribute for $entityClass");
     }
-
-    return $columns;
   }
 
   /**
@@ -339,7 +173,7 @@ final class EntityInspector
         }
       }
 
-      $filteredValue = match(gettype($entity->$propName)) {
+      $filteredValue = match (gettype($entity->$propName)) {
         'integer' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_INT),
         'double' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_FLOAT),
         'boolean' => boolval($propertyValue),
@@ -350,6 +184,125 @@ final class EntityInspector
     }
 
     return $values;
+  }
+
+  /**
+   * Returns a list of class property names that are marked with the `Column` attribute.
+   *
+   * @param object $entity The entity to inspect.
+   * @param string[] $exclude A list of properties to exclude.
+   * @param string[] $relations A list of properties that are marked with the `JoinColumn` attribute.
+   * @param array<string, mixed> $relationProperties A list of properties that are marked with the `JoinColumn` attribute.
+   * @param array<string, mixed> $meta The metadata for the entity.
+   * @return array Returns a list of properties that are marked with the `Column` attribute.
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   */
+  public function getColumns(object $entity, array $exclude = [], array $relations = [], array &$relationProperties = [], array &$meta = []): array
+  {
+    $columns = [];
+    $reflectionClass = new ReflectionClass($entity);
+    $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
+    $hasRelations = !empty($relations);
+
+    $tableName = $this->getTableName($entity);
+
+    foreach ($properties as $property) {
+      if (in_array($property->getName(), $exclude)) {
+        continue;
+      }
+
+      $propertyName = $property->getName();
+      $attributes = $property->getAttributes();
+
+      foreach ($attributes as $attribute) {
+        $attributeInstance = $attribute->newInstance();
+
+        if ($attributeInstance instanceof Column) {
+          if ($hasRelations && !in_array($propertyName, $relations)) {
+            if ($attributeInstance->alias) {
+              $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
+            } else if ($attributeInstance->name) {
+              $columns[$propertyName] = "$tableName.$attributeInstance->name";
+            } else {
+              $columns[] = "$tableName.$propertyName";
+            }
+
+            # Set the ColumnType
+            $meta['column_types'][$propertyName] = $attributeInstance->type;
+          }
+        }
+
+        if ($hasRelations && in_array($propertyName, $relations)) {
+          if ($attributeInstance instanceof JoinColumn) {
+
+            if ($attributeInstance->name) {
+              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
+              assert($attributeInstance instanceof JoinColumn);
+            } else {
+              $attributeInstance->effectiveColumnName = $this->getColumnName([$propertyName, 'Id']);
+              $columns[] = "$tableName." . $attributeInstance->effectiveColumnName;
+            }
+
+            if (!$relationProperties[$propertyName]) {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->joinColumn = $attributeInstance;
+            $meta['column_types'][$propertyName] = $attributeInstance->type;
+          } else if ($attributeInstance instanceof JoinTable) {
+            if (!$relationProperties[$propertyName]) {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->joinTable = $attributeInstance;
+          } else if ($attributeInstance instanceof OneToOne) {
+            if (!isset($relationProperties[$propertyName]) || !$relationProperties[$propertyName]) {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+
+            # Instantiate relative
+            $entityRelative = new $attributeInstance->type;
+
+            # Get relative columns
+            $entityRelativeColumns = $this->getRelationColumns(entity: $entityRelative, exclude: $exclude);
+
+            # Add relative columns to column list
+            $columns = array_merge($columns, $entityRelativeColumns);
+          } else if ($attributeInstance instanceof OneToMany) {
+            if (!isset($relationProperties[$propertyName])) {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+          } else if ($attributeInstance instanceof ManyToOne) {
+            if (!isset($relationProperties[$propertyName])) {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+          } else if ($attributeInstance instanceof ManyToMany) {
+            if (!isset($relationProperties[$propertyName])) {
+              $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
+            }
+
+            $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
+            $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
+            $relationProperties[$propertyName]->inflate();
+          }
+        }
+      }
+    }
+
+    return $columns;
   }
 
   /**
@@ -419,30 +372,48 @@ final class EntityInspector
   }
 
   /**
-   * Checks if the specified entity has a valid structure.
+   * Returns the columns for the specified entity.
    *
-   * @param object|array $entity The entity to check.
-   * @param string $entityClass The name of the entity class.
-   * @return bool Returns `true` if the entity has a valid structure, `false` otherwise.
-   * @throws ClassNotFoundException If the entity class does not exist.
+   * @param object $entity The entity to inspect.
+   * @param array $exclude A list of properties to exclude.
+   * @return array<string, string> Returns the columns for the specified entity.
    */
-  public function hasValidEntityStructure(object|array $entity, string $entityClass): bool
+  private function getRelationColumns(object $entity, array $exclude = []): array
   {
-    if (is_array($entity)) {
-      $entity = (object) $entity;
-    }
+    $columns = [];
+    $reflectionClass = new ReflectionClass($entity);
+    $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
 
-    if (!class_exists($entityClass)) {
-      throw new ClassNotFoundException(className: $entityClass);
-    }
+    try {
+      $tableName = $this->getTableName($entity);
 
-    foreach ($entity as $propertyName => $propertyValue) {
-      if (!property_exists($entityClass, $propertyName)) {
-        return false;
+      foreach ($properties as $property) {
+        $propertyName = $property->getName();
+        $columnAttributes = $property->getAttributes(Column::class);
+
+        if (!$columnAttributes || in_array($propertyName, $exclude)) {
+          continue;
+        }
+
+        foreach ($columnAttributes as $columnAttribute) {
+          $attributeInstance = $columnAttribute->newInstance();
+
+          if ($attributeInstance instanceof Column) {
+            if ($attributeInstance->alias) {
+              $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $attributeInstance->name;
+            } else if ($attributeInstance->name) {
+              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
+            } else {
+              $columns["{$tableName}_" . $propertyName] = "$tableName." . $propertyName;
+            }
+          }
+        }
       }
+    } catch (ClassNotFoundException|ORMException $e) {
+      die($e);
     }
 
-    return true;
+    return $columns;
   }
 
   /**
@@ -469,6 +440,33 @@ final class EntityInspector
     }
 
     return $property->format($dateTimeFormat);
+  }
+
+  /**
+   * Checks if the specified entity has a valid structure.
+   *
+   * @param object|array $entity The entity to check.
+   * @param string $entityClass The name of the entity class.
+   * @return bool Returns `true` if the entity has a valid structure, `false` otherwise.
+   * @throws ClassNotFoundException If the entity class does not exist.
+   */
+  public function hasValidEntityStructure(object|array $entity, string $entityClass): bool
+  {
+    if (is_array($entity)) {
+      $entity = (object)$entity;
+    }
+
+    if (!class_exists($entityClass)) {
+      throw new ClassNotFoundException(className: $entityClass);
+    }
+
+    foreach ($entity as $propertyName => $propertyValue) {
+      if (!property_exists($entityClass, $propertyName)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**

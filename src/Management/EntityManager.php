@@ -48,6 +48,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Queries\Sql\SQLTableReference;
+use Assegai\Orm\Relations\RelationOptions;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
@@ -539,10 +540,10 @@ class EntityManager implements IEntityStoreOwner
         foreach ($findOptions->relations as $key => $value) {
           /** @var RelationPropertyMetadata $relationProperty */
           $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
-          $relationOptions = $relationProperty->relationAttribute->options;
+          $relationOptions = $relationProperty?->relationAttribute->options ?? new RelationOptions();
 
           if (!$relationProperty) {
-            if ($_ENV['DEBUG_MODE'] === true) {
+            if ($this->isDebug) {
               throw new ORMException("Relation $key does not exist in the entity $entityClass.");
             }
             $this->logger->warning("Relation $key does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
@@ -679,6 +680,10 @@ class EntityManager implements IEntityStoreOwner
         $findWhereOptions = new FindWhereOptions(conditions: $conditions, entityClass: $entityClass);
       }
       $statement = $statement->where(condition: $findWhereOptions ?? $findOptions);
+    }
+
+    if ($findOptions->order) {
+      $statement->orderBy($findOptions->order);
     }
 
     $limit = $findOptions->limit ?? $_GET['limit'] ?? Config::get('DEFAULT_LIMIT') ?? 10;
@@ -997,7 +1002,6 @@ class EntityManager implements IEntityStoreOwner
     if (is_array($where)) {
       $where = $where['condition'] ?? '';
     }
-
     $statement = $this->query->select()->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))->from(tableReferences: $this->inspector->getTableName(entity: $entity))->where(condition: $where);
 
     $limit = $_GET['limit'] ?? 100;
