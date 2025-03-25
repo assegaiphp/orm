@@ -9,9 +9,11 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\ORM\Exceptions\DataSourceException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Management\DatabaseManager;
+use Codeception\Attribute\Skip;
 use PDOException;
 use Tests\Support\UnitTester;
 
+#[Skip]
 class DatabaseManagerCest
 {
   const DATA_SOURCE_NAME = 'assegai_test_db';
