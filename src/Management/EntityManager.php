@@ -14,6 +14,7 @@ use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
 use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Attributes\Relations\ManyToOne;
 use Assegai\Orm\Attributes\Relations\OneToMany;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\RelationType;
@@ -228,12 +229,14 @@ class EntityManager implements IEntityStoreOwner
           $this->logger->warning("InsertOptions not provided. Using default InsertOptions.");
           $options = new InsertOptions();
         }
+
         $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity, options: $options);
       } else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id]))) {
         if (!$options instanceof UpdateOptions) {
           $this->logger->warning("UpdateOptions not provided. Using default UpdateOptions.");
           $options = new UpdateOptions();
         }
+
         $saveResult = $this->update(entityClass: $targetOrEntity::class, partialEntity: $targetOrEntity, conditions: ['id' => $targetOrEntity->id], options: $options);
       } else {
         $saveResult = new SQLQueryResult([], [new NotFoundException($targetOrEntity->id)]);
@@ -565,7 +568,7 @@ class EntityManager implements IEntityStoreOwner
               $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
               $referencedTableName = $relationProperty->getEntity()->table;
               $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
-              $statement = $statement->leftJoin("$referencedTableName $referencedTableAlias")->on("$tableName.$joinColumnName=$referencedTableAlias.$referencedColumnName");
+              $statement = $statement->leftJoin("$referencedTableName")->on("$tableName.$joinColumnName=$referencedTableName.$referencedColumnName");
               break;
 
             case RelationType::ONE_TO_MANY:
@@ -638,11 +641,11 @@ class EntityManager implements IEntityStoreOwner
               $joinEntityColumns = $this->inspector->getColumns($joinEntity, $excludeColumns);
               $cachedStatement = $statement;
               $joinQuery = new SQLQuery($this->query->getConnection());
-              $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName")->limit(1);
+              $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName");
 
               $joinResult = $joinStatement->execute();
               if ($joinResult->isOK() && !empty($joinResult->getData())) {
-                $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData()[0];
+                $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData();
               }
 
               $statement = $cachedStatement;
@@ -890,11 +893,13 @@ class EntityManager implements IEntityStoreOwner
     $relation = new stdClass();
     $relationIsCollection = $relationInfo->type === 'array';
     $relationIsOneToMany = $relationInfo->relationAttributeReflection->getName() === OneToMany::class;
+    $relationIsManyToOne = $relationInfo->relationAttributeReflection->getName() === ManyToOne::class;
 
     if ($this->isDebug) {
       $this->logger->debug("Restructuring entity $entityClass with relation $relationName");
     }
 
+    header('Content-Type: application/json');
     # Foreach relation
     foreach ($entity as $key => $value) {
       $restructuredEntity->$key = $value;
@@ -920,8 +925,20 @@ class EntityManager implements IEntityStoreOwner
       $relationValue = $relationValue[$id];
     }
 
-    $restructuredEntity->$relationName = $relationValue;
+    if ($relationIsManyToOne && is_array($relationValue)) {
+      $relationValue = array_find($relationValue, function(object|array $value) use ($entity, $relationInfo) {
+        if (is_array($value)) {
+          $value = (object)$value;
+        }
+        if (property_exists($value, 'id')) {
+          return $value->id === $entity->{$relationInfo->name};
+        }
 
+        return null;
+      });
+    }
+
+    $restructuredEntity->$relationName = $relationValue;
     return $restructuredEntity;
   }
 

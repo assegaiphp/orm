@@ -175,11 +175,12 @@ final class EntityInspector
 
       $filteredValue = match (gettype($entity->$propName)) {
         'integer' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_INT),
-        'double' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_FLOAT),
+        'double' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION),
         'boolean' => boolval($propertyValue),
         'string' => filter_var($propertyValue, FILTER_SANITIZE_ADD_SLASHES),
         default => $propertyValue
       };
+      
       $values[] = ($filterValues) ? $filteredValue : $propertyValue;
     }
 
