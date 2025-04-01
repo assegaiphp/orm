@@ -120,7 +120,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function update(string|object|array $conditions, object|array|null $entity, ?UpdateOptions $options = null): UpdateResult
   {
-    return $this->manager->update(entityClass: $this->entityId, partialEntity: $entity, conditions: $conditions);
+    return $this->manager->update(entityClass: $this->entityId, partialEntity: $entity, conditions: $conditions, options: $options);
   }
 
   /**

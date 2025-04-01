@@ -180,7 +180,7 @@ final class EntityInspector
         'string' => filter_var($propertyValue, FILTER_SANITIZE_ADD_SLASHES),
         default => $propertyValue
       };
-      
+
       $values[] = ($filterValues) ? $filteredValue : $propertyValue;
     }
 
