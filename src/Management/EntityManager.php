@@ -672,7 +672,7 @@ class EntityManager implements IEntityStoreOwner
               $joinTableT1ColumnName = $joinTable->joinColumn ?? strtosingular($t1Name) . '_id';
               $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
 
-              $statement = $statement->leftJoin("$joinTableName $joinTableNameAlias")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("$t2Name $t2Alias")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
+              $statement = $statement->leftJoin("`$joinTableName` `$joinTableNameAlias`")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("`$t2Name` `$t2Alias`")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
               break;
           }
         }
@@ -1075,6 +1075,7 @@ class EntityManager implements IEntityStoreOwner
             default => "'$value'"
           };
       }
+
     } else {
       $conditionString = $conditions;
     }
@@ -1092,20 +1093,21 @@ class EntityManager implements IEntityStoreOwner
       return new UpdateResult(raw: $this->query->queryString(), affected: $this->query->rowCount(), identifiers: (object)$partialEntity, generatedMaps: $generatedMaps);
     }
 
-    $instance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
+    $entityInstance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
     $assignmentList = [];
     $columnOptions = [];
     $relations = [];
+    $relationProperties = [];
 
     if ($options?->relations) {
       $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
     }
 
-    $columnMap = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, relations: $relations, meta: $columnOptions);
+    $columnMap = $this->inspector->getColumns(entity: $entityInstance, exclude: $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
 
     foreach ($partialEntity as $prop => $value) {
       # Get the correct prop name
-      $columnName = $this->getColumnNameFromProperty($instance, $prop);
+      $columnName = $this->getColumnNameFromProperty($entityInstance, $prop);
 
       if ($this->mapContainsColumnName($columnMap, $columnName)) {
         if (!is_null($value)) {
@@ -1120,12 +1122,31 @@ class EntityManager implements IEntityStoreOwner
           if ($value instanceof stdClass) {
             $value = json_encode($value);
           }
+
+          if (isset($columnMap[$columnName])) {
+            if (isset($relationProperties[$columnName])) {
+              assert($relationProperties[$columnName] instanceof RelationPropertyMetadata);
+
+              if (is_object($value) && property_exists($value, $relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName)) {
+                $value = $value->{$relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName};
+              }
+
+              $columnName = $relationProperties[$columnName]->joinColumn->effectiveColumnName;
+            } else {
+              $columnName = $columnMap[$columnName];
+            }
+          }
+
           $assignmentList[$columnName] = $value;
         }
       }
     }
 
-    $this->query->update(tableName: $this->inspector->getTableName(entity: $instance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
+    if (empty($assignmentList)) {
+      return new UpdateResult(null, 0, $partialEntity, new stdClass());
+    }
+
+    $this->query->update(tableName: $this->inspector->getTableName(entity: $entityInstance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
 
     if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();

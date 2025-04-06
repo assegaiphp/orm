@@ -39,7 +39,7 @@ class JoinColumn
   )
   {
     $this->effectiveColumnName = $this->name;
-    $this->effectiveReferencedColumnName = $this->referencedColumnName;
+    $this->effectiveReferencedColumnName = $this->referencedColumnName ?? 'id';
     $this->effectiveForeignKeyConstraintName = $this->foreignKeyConstraintName;
   }
 }

@@ -19,7 +19,8 @@ final class SQLDeleteFromStatement
     private readonly ?string $alias = null
   )
   {
-    $queryString = "DELETE FROM $tableName";
+    $tableName = str_replace('`', '', $tableName);
+    $queryString = "DELETE FROM `$tableName`";
     if (!is_null($alias))
     {
       $queryString .= "AS $alias";

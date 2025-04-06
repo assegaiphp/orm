@@ -16,6 +16,7 @@ use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Util\Log\Logger;
 use DateTime;
+use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
@@ -159,7 +160,7 @@ final class EntityInspector
           $propertyValue = $propertyValue->value;
         }
 
-        if ($propertyValue instanceof DateTime) {
+        if ($propertyValue instanceof DateTime || $propertyValue instanceof DateTimeImmutable) {
           $propertyValue = $this->convertDateTimeToString($propertyValue, $propName, $options);
         }
 
@@ -180,7 +181,7 @@ final class EntityInspector
         'string' => filter_var($propertyValue, FILTER_SANITIZE_ADD_SLASHES),
         default => $propertyValue
       };
-      
+
       $values[] = ($filterValues) ? $filteredValue : $propertyValue;
     }
 
@@ -422,12 +423,12 @@ final class EntityInspector
   /**
    * Converts a DateTime object to a string.
    *
-   * @param DateTime $property The DateTime object to convert.
+   * @param DateTime|DateTimeImmutable $property The DateTime object to convert.
    * @param string $propName The name of the property.
    * @param array $options The options to use when converting the DateTime object.
    * @return string Returns the DateTime object as a string.
    */
-  public function convertDateTimeToString(DateTime $property, string $propName, array $options): string
+  public function convertDateTimeToString(DateTime|DateTimeImmutable $property, string $propName, array $options): string
   {
     $dateTimeFormat = DATE_ATOM;
 
