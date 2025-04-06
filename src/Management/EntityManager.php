@@ -1142,6 +1142,10 @@ class EntityManager implements IEntityStoreOwner
       }
     }
 
+    if (empty($assignmentList)) {
+      return new UpdateResult(null, 0, $partialEntity, new stdClass());
+    }
+
     $this->query->update(tableName: $this->inspector->getTableName(entity: $entityInstance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
 
     if ($this->isDebug || $options?->isDebug) {
