@@ -24,6 +24,8 @@ class DataSourceFactory
         return new PostgreSQLDataSource($name);
       case DataSourceType::SQLITE:
         return new SQLiteDataSource($name);
+      case DataSourceType::REDIS:
+        return new RedisDataSource($name);
       default:
         throw new InvalidArgumentException("Data source $dataSource->value is not supported.");
     }

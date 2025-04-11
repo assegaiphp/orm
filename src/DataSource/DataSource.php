@@ -5,6 +5,7 @@ namespace Assegai\Orm\DataSource;
 use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
+use Assegai\Orm\Exceptions\DataSourceConnectionException;
 use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Exceptions\IllegalTypeException;
 use Assegai\Orm\Exceptions\ORMException;
@@ -31,7 +32,7 @@ class DataSource implements DataSourceInterface
   /**
    * @var PDO|null The database connection.
    */
-  protected ?PDO $db = null;
+  protected ?PDO $connection = null;
   /**
    * @var DataSourceType The data source type.
    */
@@ -86,7 +87,7 @@ class DataSource implements DataSourceInterface
   public function getDatabaseName(): ?string
   {
     // Execute a SQL query to retrieve the current database name.
-    $databaseName = $this->db->query('SELECT DATABASE()')->fetchColumn();
+    $databaseName = $this->connection->query('SELECT DATABASE()')->fetchColumn();
 
     // If the query fails, return null to indicate that the database name cannot be determined.
     if (false === $databaseName) {
@@ -107,6 +108,11 @@ class DataSource implements DataSourceInterface
 
   /**
    * @inheritDoc
+   * @param DataSourceOptions|array|null $options
+   * @throws DataSourceException
+   * @throws ORMException
+   * @throws ReflectionException
+   * @throws DataSourceConnectionException
    */
   public function connect(DataSourceOptions|array|null $options): void
   {
@@ -164,16 +170,17 @@ class DataSource implements DataSourceInterface
         default => "mysql:host=$host;port=$port;dbname=$name"
       };
 
-      $this->db = new PDO(dsn: $dsn, username: $options->username, password: $options->password);
+      $this->connection = new PDO(dsn: $dsn, username: $options->username, password: $options->password);
     }
     else
     {
-      $this->db = match ($this->type) {
+      $this->connection = match ($this->type) {
         DataSourceType::POSTGRESQL  => DBFactory::getPostgresSQLConnection(dbName: $options->name),
         DataSourceType::SQLITE      => DBFactory::getSQLiteConnection(dbName: $options->name),
         DataSourceType::MONGODB     => DBFactory::getMongoDbConnection(dbName: $options->name),
         DataSourceType::MARIADB,
         DataSourceType::MYSQL       => DBFactory::getMySQLConnection(dbName: $options->name),
+        DataSourceType::REDIS       => DataSourceFactory::create($this->type, $options->name),
         default                     => DBFactory::getSQLConnection(dbName: $options->name)
       };
     }
@@ -181,7 +188,7 @@ class DataSource implements DataSourceInterface
     $this->manager = isset($options->entities) && count($options->entities) === 1
       ? new EntityManager(
         connection: $this,
-        query: new SQLQuery(db: $this->db, fetchClass: $options->entities[0]::class, fetchMode: PDO::FETCH_CLASS)
+        query: new SQLQuery(db: $this->connection, fetchClass: $options->entities[0]::class, fetchMode: PDO::FETCH_CLASS)
       )
       : new EntityManager(connection: $this);
   }
@@ -191,7 +198,7 @@ class DataSource implements DataSourceInterface
    */
   public function disconnect(): void
   {
-    $this->db = null;
+    $this->connection = null;
   }
 
   /**
@@ -199,7 +206,7 @@ class DataSource implements DataSourceInterface
    */
   public function isConnected(): bool
   {
-    return isset($this->db);
+    return isset($this->connection);
   }
 
   /**
@@ -207,6 +214,6 @@ class DataSource implements DataSourceInterface
    */
   public function getClient(): PDO
   {
-    return $this->db;
+    return $this->connection;
   }
 }
