@@ -38,7 +38,7 @@ class JoinColumn
     public readonly ColumnType $type = ColumnType::BIGINT_UNSIGNED,
   )
   {
-    $this->effectiveColumnName = $this->name;
+    $this->effectiveColumnName = $this->name ?? 'id';
     $this->effectiveReferencedColumnName = $this->referencedColumnName ?? 'id';
     $this->effectiveForeignKeyConstraintName = $this->foreignKeyConstraintName;
   }
