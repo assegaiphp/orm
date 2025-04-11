@@ -14,8 +14,10 @@ use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
 use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Attributes\Relations\JoinColumn;
 use Assegai\Orm\Attributes\Relations\ManyToOne;
 use Assegai\Orm\Attributes\Relations\OneToMany;
+use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\RelationType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
@@ -379,7 +381,7 @@ class EntityManager implements IEntityStoreOwner
             $entityClassReflectionProperty->getType() instanceof ReflectionUnionType => strval($entityClassReflectionProperty->getType()),
             default => $entityClassReflectionProperty->getType()?->getName()
           };
-          $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || str_contains($entityClassReflectionPropertyType, $entityLikeReflectionPropertyType);
+          $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || str_contains($entityClassReflectionPropertyType, $entityLikeReflectionPropertyType ?? '');
 
           $sourceType = $entityLikeReflectionPropertyType ?? gettype($entityLikePropertyValue);
           $targetType = $entityClassReflectionPropertyType ?? gettype($entityLikePropertyValue);
@@ -563,12 +565,56 @@ class EntityManager implements IEntityStoreOwner
 
           switch ($relationProperty->getRelationType()) {
             case RelationType::ONE_TO_ONE:
-              # LEFT JOIN
-              $joinColumnName = $relationProperty->joinColumn->effectiveColumnName;
+              $isJoinColumnSide = true;
+              $joinColumn = $relationProperty->joinColumn;
+
+              if (!$joinColumn) {
+                $isJoinColumnSide = false;
+                $reversEntityClassName = $relationProperty->relationAttribute->type;
+
+                $reverseEntityReflectionClass = new ReflectionClass($reversEntityClassName);
+
+                foreach ($reverseEntityReflectionClass->getProperties() as $reverseEntityPropertyReflection) {
+                  $attributes = $reverseEntityPropertyReflection->getAttributes();
+
+                  $oneToOneAttributeReflection = null;
+                  $joinColumnAttributeReflection = null;
+
+                  foreach ($attributes as $attribute) {
+                    if ($attribute->getName() === OneToOne::class) {
+                      $oneToOneAttributeReflection = $attribute;
+                    }
+
+                    if ($attribute->getName() === JoinColumn::class) {
+                      $joinColumnAttributeReflection = $attribute;
+                    }
+                  }
+
+                  if (!$oneToOneAttributeReflection) {
+                    continue;
+                  }
+
+                  if ($joinColumnAttributeReflection) {
+                    $joinColumn = $joinColumnAttributeReflection->newInstance();
+                  }
+
+                  if (!$joinColumn) {
+                    $this->logger->warning("Failed to find JoinColumn in reverse entity $reversEntityClassName.");
+                  }
+                }
+              }
+              $joinColumnName = $joinColumn->effectiveColumnName;
               $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
               $referencedTableName = $relationProperty->getEntity()->table;
               $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
-              $statement = $statement->leftJoin("$referencedTableName")->on("$tableName.$joinColumnName=$referencedTableName.$referencedColumnName");
+
+              $searchCondition = "$referencedTableName.$referencedColumnName=$tableName.$joinColumnName";
+
+              if (!$isJoinColumnSide) {
+                $searchCondition = "$tableName.$referencedColumnName=$referencedTableName.$joinColumnName";
+              }
+
+              $statement = $statement->leftJoin("$referencedTableName")->on($searchCondition);
               break;
 
             case RelationType::ONE_TO_MANY:

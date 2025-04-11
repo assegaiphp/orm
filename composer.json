@@ -29,7 +29,8 @@
         "ext-pdo_sqlite": "*",
         "assegaiphp/core": ">=0.3.0",
         "assegaiphp/util": "^0.4.3",
-        "symfony/console": "^7.1"
+        "symfony/console": "^7.1",
+        "predis/predis": "^2.3"
     },
     "require-dev": {
         "codeception/codeception": "^5.0",
