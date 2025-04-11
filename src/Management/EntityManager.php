@@ -1151,8 +1151,6 @@ class EntityManager implements IEntityStoreOwner
 
     $columnMap = $this->inspector->getColumns(entity: $entityInstance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
 
-    header('Content-Type: application/json');
-    exit(json_encode($columnMap, JSON_PRETTY_PRINT));
     foreach ($partialEntity as $prop => $value) {
       # Get the correct prop name
       $columnName = $this->getColumnNameFromProperty($entityInstance, $prop);
