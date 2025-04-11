@@ -17,7 +17,8 @@ readonly class InsertOptions
    */
   public function __construct(
     public object|array|null $relations = null,
-    public bool $isDebug = false
+    public bool              $isDebug = false,
+    public ?array            $readonlyColumns = null,
   )
   {
   }

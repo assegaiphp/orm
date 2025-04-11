@@ -291,8 +291,8 @@ class EntityManager implements IEntityStoreOwner
       $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
     }
 
-    $columns = $this->inspector->getColumns(entity: $instance, exclude: $this->readonlyColumns, relations: $relations, meta: $columnsMeta);
-    $values = $this->inspector->getValues(entity: $instance, exclude: $this->readonlyColumns, options: ['relations' => $relations, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
+    $columns = $this->inspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, meta: $columnsMeta);
+    $values = $this->inspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
 
     $columnCount = count($columns);
     $valueCount = count($values);
@@ -1149,8 +1149,10 @@ class EntityManager implements IEntityStoreOwner
       $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
     }
 
-    $columnMap = $this->inspector->getColumns(entity: $entityInstance, exclude: $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
+    $columnMap = $this->inspector->getColumns(entity: $entityInstance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
 
+    header('Content-Type: application/json');
+    exit(json_encode($columnMap, JSON_PRETTY_PRINT));
     foreach ($partialEntity as $prop => $value) {
       # Get the correct prop name
       $columnName = $this->getColumnNameFromProperty($entityInstance, $prop);
@@ -1392,7 +1394,7 @@ class EntityManager implements IEntityStoreOwner
     // TODO: Configure the upsert options
 
     $columns = $this->inspector->getColumns(entity: $entityOrEntities);
-    $updateColumns = $this->inspector->getColumns(entity: $entityOrEntities, exclude: $this->readonlyColumns);
+    $updateColumns = $this->inspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
     $values = $this->inspector->getValues(entity: $entityOrEntities);
 
     $assignmentList = array_map(fn($column) => "$column=VALUES($column)", $updateColumns);

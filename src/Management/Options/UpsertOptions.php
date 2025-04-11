@@ -20,6 +20,7 @@ readonly class UpsertOptions
     public array $conflictPaths,
     public bool $skipUpdateIfNoValuesChanged = true,
     public UpsertType $upsertType = UpsertType::UPSERT,
+    public ?array $readonlyColumns = null,
   )
   {}
 

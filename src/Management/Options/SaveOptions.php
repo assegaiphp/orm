@@ -38,6 +38,7 @@ readonly class SaveOptions
     public ?bool $transaction = false,
     public ?int  $chunk = null,
     public ?bool $reload = null,
+    public ?array $readonlyColumns = null,
   ) { }
 
   /**
@@ -51,13 +52,15 @@ readonly class SaveOptions
     $transaction = $options['transaction'] ?? false;
     $chunk = $options['chunk'] ?? null;
     $reload = $options['reload'] ?? null;
+    $readonlyColumns = $options['readonlyColumns'] ?? null;
 
     return new SaveOptions(
       data: $data,
       listeners: $listeners,
       transaction: $transaction,
       chunk: $chunk,
-      reload: $reload
+      reload: $reload,
+      readonlyColumns: $readonlyColumns,
     );
   }
 }
