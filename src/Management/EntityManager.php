@@ -381,7 +381,7 @@ class EntityManager implements IEntityStoreOwner
             $entityClassReflectionProperty->getType() instanceof ReflectionUnionType => strval($entityClassReflectionProperty->getType()),
             default => $entityClassReflectionProperty->getType()?->getName()
           };
-          $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || str_contains($entityClassReflectionPropertyType, $entityLikeReflectionPropertyType ?? '');
+          $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || ( (!empty($entityClassReflectionPropertyType) && !empty($entityLikeReflectionPropertyType))  && str_contains($entityClassReflectionPropertyType, ($entityLikeReflectionPropertyType ?? '')) );
 
           $sourceType = $entityLikeReflectionPropertyType ?? gettype($entityLikePropertyValue);
           $targetType = $entityClassReflectionPropertyType ?? gettype($entityLikePropertyValue);
