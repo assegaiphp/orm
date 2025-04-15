@@ -741,6 +741,7 @@ class EntityManager implements IEntityStoreOwner
       if ($conditions) {
         $findWhereOptions = new FindWhereOptions(conditions: $conditions, entityClass: $entityClass);
       }
+
       $statement = $statement->where(condition: $findWhereOptions ?? $findOptions);
     }
 
@@ -768,6 +769,11 @@ class EntityManager implements IEntityStoreOwner
 
     if ($findOptions->withRealTotal) {
       $total = $this->count(entityClass: $entityClass, options: $findOptions);
+
+      if (count($resultSet) === 0) {
+        $total = 0;
+      }
+
       return new FindResult(raw: $result->getRaw(), data: $resultSet, errors: $result->getErrors(), total: $total);
     }
 
@@ -966,6 +972,10 @@ class EntityManager implements IEntityStoreOwner
       } else {
         $results[] = $datum;
       }
+    }
+
+    if ($previousDatum) {
+      $results[] = $previousDatum;
     }
 
     return $results;
