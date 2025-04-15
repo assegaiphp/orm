@@ -95,4 +95,14 @@ readonly class FindResult implements QueryResultInterface
   {
     return $this->affected;
   }
+
+  /**
+   * Checks if the result is empty.
+   *
+   * @return bool True if the result is empty, false otherwise.
+   */
+  public function isEmpty(): bool
+  {
+    return $this->getTotal() === 0;
+  }
 }
