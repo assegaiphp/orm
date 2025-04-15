@@ -551,6 +551,7 @@ class EntityManager implements IEntityStoreOwner
             if ($this->isDebug) {
               throw new ORMException("Relation $key does not exist in the entity $entityClass.");
             }
+
             $this->logger->warning("Relation $key does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
             continue;
           }
@@ -698,7 +699,8 @@ class EntityManager implements IEntityStoreOwner
               break;
 
             case RelationType::MANY_TO_MANY:
-              // TODO Implement many-to-many relation
+              $relationEntityReflection = new ReflectionClass($relationProperty->relationAttribute->type);
+              $joinEntity = $this->create($relationProperty->relationAttribute->type);
 
               # table_1 t1
               $t1Name = $tableName;
@@ -718,7 +720,18 @@ class EntityManager implements IEntityStoreOwner
               $joinTableT1ColumnName = $joinTable->joinColumn ?? strtosingular($t1Name) . '_id';
               $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
 
-              $statement = $statement->leftJoin("`$joinTableName` `$joinTableNameAlias`")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("`$t2Name` `$t2Alias`")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
+              $unprocessedJoinColumns = $this->inspector->getColumns(entity: $joinEntity);
+              $joinColumns = [];
+              foreach ($unprocessedJoinColumns as $alias => $column) {
+                if (is_string($alias)) {
+                  $joinColumns["REL_{$t2Name}_{$alias}"] = $column;
+                } else {
+                  [$targetTableName, $targetColumnName] = explode('.', $column);
+                  $joinColumns["REL_{$t2Name}_{$targetColumnName}"] = $column;
+                }
+              }
+              $columns = [...$columns, ...$joinColumns];
+              $statement = $this->query->select()->all(columns: $columns)->from(tableReferences: $tableName)->leftJoin("`$joinTableName` `$joinTableNameAlias`")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("`$t2Name` `$t2Alias`")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
               break;
           }
         }
@@ -907,17 +920,52 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $results = [];
+    $previousDatum = null;
+    $datumCollection = [];
 
     foreach ($data as $datum) {
+      $isManyToMany = false;
       foreach ($findOptions->relations as $relation) {
         if (!in_array($relation, array_keys($relationInfo))) {
           $this->logger->warning("Relation $relation does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
           continue;
         }
+
+        $isManyToMany = $relationInfo[$relation]->getRelationType() === RelationType::MANY_TO_MANY;
         $datum = $this->bindEntityRelations($entityClass, $datum, $relation, $relationInfo[$relation], $loadedRelations);
       }
 
-      $results[] = $datum;
+      if ($isManyToMany) {
+        if (!$previousDatum) {
+          $previousDatum = $datum;
+        }
+
+        $relatedEntity = new stdClass();
+
+        foreach ($datum as $property => $value) {
+          if (str_starts_with($property, 'REL_')) {
+            unset($datum->$property);
+          }
+
+          if (in_array($property, array_keys($relationInfo))) {
+            $object = new stdClass();
+            foreach ($value as $key => $val) {
+              $prop = str_replace('rEL_', '', $key);
+              $object->$prop = $val;
+            }
+            $datumCollection[] = $object;
+            $datum->$property = $datumCollection;
+          }
+        }
+
+        if ($previousDatum->id !== $datum->id) {
+          $results[] = $previousDatum;
+          $previousDatum = $datum;
+          $datumCollection = [];
+        }
+      } else {
+        $results[] = $datum;
+      }
     }
 
     return $results;
