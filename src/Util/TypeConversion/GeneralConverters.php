@@ -11,6 +11,8 @@ use Exception;
  */
 class GeneralConverters
 {
+  public const DEFAULT_DATE_FORMAT = 'Y-m-d\TH:i:s';
+
   /**
    * @param DateTime $dateTime
    * @return string
@@ -18,7 +20,8 @@ class GeneralConverters
   #[TypeConverter]
   public function fromDateTimeToString(DateTime $dateTime): string
   {
-    return $dateTime->format(DATE_ATOM);
+    $format = $_ENV['DATETIME_FORMAT'] ?? self::DEFAULT_DATE_FORMAT;
+    return $dateTime->format($format);
   }
 
   /**
