@@ -50,7 +50,7 @@ final class SQLInsertIntoMultipleStatement
         {
           $value = password_hash($value, $this->query->passwordHashAlgorithm());
         }
-        $queryString .= is_numeric($value) ? "${value}${separator}" : "'${value}'${separator}";
+        $queryString .= is_numeric($value) ? "{$value}{$separator}" : "'{$value}'{$separator}";
       }
       $queryString = trim($queryString, $separator);
       $queryString .= ")$separator";

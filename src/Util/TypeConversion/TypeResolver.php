@@ -15,6 +15,9 @@ final class TypeResolver
 {
   private static ?TypeResolver $instance = null;
 
+  /**
+   * Constructs
+   */
   private final function __construct()
   {
   }

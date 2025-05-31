@@ -9,7 +9,7 @@ foreach ($columnClassFileNames as $filename)
   if (str_ends_with($filename, 'Column.php'))
   {
     $className = substr($filename, 0, -4);
-    $types[] = "Assegaiphp\\Orm\\Attributes\\Columns\\${className}";
+    $types[] = "Assegaiphp\\Orm\\Attributes\\Columns\\{$className}";
   }
 }
 

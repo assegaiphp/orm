@@ -34,11 +34,11 @@ final class SQLTableReference
         if (is_numeric($alias))
         {
           # We don't have an alias
-          $queryString .= "`${reference}`${separate}";
+          $queryString .= "`{$reference}`{$separate}";
         }
         else
         {
-          $queryString .= "`${reference}` AS ${alias}${separate}";
+          $queryString .= "`{$reference}` AS {$alias}{$separate}";
         }
       }
       $queryString = trim($queryString, $separate);
