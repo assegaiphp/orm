@@ -25,7 +25,17 @@ class FindOptions implements JsonSerializable
    * @param array $exclude The fields to exclude.
    * @param bool $withRealTotal Whether to get the real total.
    */
-  public function __construct(public readonly null|object|array $select = null, public readonly null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false)
+  public function __construct(
+    public readonly null|object|array $select = null,
+    public readonly null|object|array $relations = null,
+    public readonly null|FindWhereOptions|array $where = null,
+    public readonly null|object|array $order = null,
+    public readonly ?int $skip = null,
+    public readonly ?int $limit = null,
+    public readonly array $exclude = ['password'],
+    public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL,
+    public readonly bool $isDebug = false
+  )
   {
   }
 

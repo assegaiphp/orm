@@ -1069,7 +1069,13 @@ class EntityManager implements IEntityStoreOwner
     $statement = $this->query->select()->count()->from(tableReferences: $this->inspector->getTableName(entity: $entity));
 
     if ($options) {
-      $statement = $statement->where(condition: $options);
+      $conditions = [];
+
+      if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
+        $conditions = array_merge($options->where->conditions ?? $options->where ?? [], [$deleteColumnName => 'NULL']);
+      }
+
+      $statement = $statement->where(condition: new FindWhereOptions(conditions: $conditions));
     }
 
     if ($this->isDebug || $options?->isDebug) {
