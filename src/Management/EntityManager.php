@@ -57,6 +57,7 @@ use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\GeneralConverters;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
 use DateTime;
+use DateTimeZone;
 use Exception;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
@@ -79,6 +80,9 @@ use UnitEnum;
 class EntityManager implements IEntityStoreOwner
 {
   const LOG_TAG = '[Entity Manager]';
+  const DEFAULT_TIMEZONE = 'UTC';
+  const DEFAULT_DELETED_AT_FORMAT = 'Y-m-d H:i:s';
+
   /**
    * Once created and then reused by repositories.
    */
@@ -1531,7 +1535,10 @@ class EntityManager implements IEntityStoreOwner
   public function softRemove(object|array $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
   {
     $result = null;
-    $deletedAt = date(DATE_ATOM);
+    $timezone = getenv('TIMEZONE') ?: self::DEFAULT_TIMEZONE;
+    $deletedAtFormat = getenv('DELETED_AT_FORMAT') ?: self::DEFAULT_DELETED_AT_FORMAT;
+    $deletedAt = new \DateTimeImmutable('now', new DateTimeZone($timezone));
+    $deletedAt = $deletedAt->format($deletedAtFormat);
 
     if (is_object($entityOrEntities)) {
       if (!$entityOrEntities->id) {
