@@ -45,8 +45,7 @@ final class TypeResolver
     if ( $method =
           $this->findConverter(
             converterHostClassName: $converterHost::class, sourceType: $fromType, targetType: $toType
-          ) )
-    {
+          ) ) {
       return $method->invokeArgs($converterHost, [$value]);
     }
 

@@ -17,7 +17,13 @@ use ReflectionException;
 #[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
 class InjectRepository
 {
+  /**
+   * @var DataSource The data source for the repository.
+   */
   public readonly DataSource $dataSource;
+  /**
+   * @var Repository The repository for the entity.
+   */
   public readonly Repository $repository;
 
   /**
@@ -36,8 +42,7 @@ class InjectRepository
 
     $reflectionAttributes = $reflectionEntity->getAttributes(Entity::class);
 
-    if ( empty($reflectionAttributes) )
-    {
+    if ( empty($reflectionAttributes) ) {
       throw new ClassNotFoundException(className: Entity::class);
     }
 
