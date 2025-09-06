@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
+use Traversable;
 
 /**
  * Class FindResult represents a result of a find query.
@@ -66,6 +67,26 @@ readonly class FindResult implements QueryResultInterface
   public function getRaw(): mixed
   {
     return $this->raw;
+  }
+
+  /**
+   * Returns the first record from the result set.
+   *
+   * @return mixed<T> The first record, or null if the result set is empty.
+   */
+  public function getFirst(): mixed
+  {
+    if (is_array($this->data) && count($this->data) > 0) {
+      return $this->data[0];
+    }
+
+    if (is_countable($this->data) || $this->data instanceof Traversable) {
+      foreach ($this->data as $item) {
+        return $item;
+      }
+    }
+
+    return null;
   }
 
   /**
