@@ -35,7 +35,7 @@ interface QueryResultInterface
   /**
    * Returns the result data.
    *
-   * @return T Result data.
+   * @return mixed<T> Result data.
    */
   public function getData(): mixed;
 
