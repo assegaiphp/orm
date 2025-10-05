@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
+use Throwable;
 use Traversable;
 
 /**
@@ -17,7 +18,7 @@ readonly class FindResult implements QueryResultInterface
   /**
    * @param mixed $raw Raw SQL result returned by executed query.
    * @param mixed $data The result data.
-   * @param array $errors List of errors.
+   * @param Throwable[] $errors List of errors.
    */
   public function __construct(
     protected mixed $raw,
@@ -47,6 +48,7 @@ readonly class FindResult implements QueryResultInterface
 
   /**
    * @inheritDoc
+   * @return Throwable[] List of errors.
    */
   public function getErrors(): array
   {
@@ -83,6 +85,26 @@ readonly class FindResult implements QueryResultInterface
     if (is_countable($this->data) || $this->data instanceof Traversable) {
       foreach ($this->data as $item) {
         return $item;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Returns the first error from the error list.
+   *
+   * @return Throwable|null The first error, or null if there are no errors.
+   */
+  public function getFirstError(): ?Throwable
+  {
+    if (is_array($this->errors) && count($this->errors) > 0) {
+      return $this->errors[0];
+    }
+
+    if (is_countable($this->errors) || $this->errors instanceof Traversable) {
+      foreach ($this->errors as $error) {
+        return $error;
       }
     }
 
