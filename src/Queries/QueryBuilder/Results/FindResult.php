@@ -92,11 +92,11 @@ readonly class FindResult implements QueryResultInterface
   }
 
   /**
-   * Returns the first error from the error list.
+   * Returns the last thrown error from the result set. The last thrown error is considered the most recent error.
    *
-   * @return Throwable|null The first error, or null if there are no errors.
+   * @return Throwable|null The last thrown error, or null if there are no errors.
    */
-  public function getFirstError(): ?Throwable
+  public function getLastThrownError(): ?Throwable
   {
     if (is_array($this->errors) && count($this->errors) > 0) {
       return $this->errors[0];
@@ -106,6 +106,28 @@ readonly class FindResult implements QueryResultInterface
       foreach ($this->errors as $error) {
         return $error;
       }
+    }
+
+    return null;
+  }
+
+  /**
+   * Returns the first error from the result set. The first error is considered the earliest raised error.
+   *
+   * @return Throwable|null The first error, or null if there are no errors.
+   */
+  public function getFirstThrownError(): ?Throwable
+  {
+    if (is_array($this->errors) && count($this->errors) > 0) {
+      return $this->errors[count($this->errors) - 1];
+    }
+
+    if (is_countable($this->errors) || $this->errors instanceof Traversable) {
+      $lastError = null;
+      foreach ($this->errors as $error) {
+        $lastError = $error;
+      }
+      return $lastError;
     }
 
     return null;
