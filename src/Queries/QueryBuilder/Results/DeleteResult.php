@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
+use Assegai\Orm\Traits\ResultErrorIntrospectorTrait;
 
 /**
  * DeleteResult class. Represents result of delete query execution.
@@ -13,6 +14,8 @@ use Assegai\Orm\Interfaces\QueryResultInterface;
  */
 readonly class DeleteResult implements QueryResultInterface
 {
+  use ResultErrorIntrospectorTrait;
+
   /**
    * Construct a new DeleteResult instance.
    *

@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
+use Assegai\Orm\Traits\ResultErrorIntrospectorTrait;
 use Throwable;
 use Traversable;
 
@@ -15,6 +16,8 @@ use Traversable;
  */
 readonly class FindResult implements QueryResultInterface
 {
+  use ResultErrorIntrospectorTrait;
+
   /**
    * @param mixed $raw Raw SQL result returned by executed query.
    * @param mixed $data The result data.
@@ -86,48 +89,6 @@ readonly class FindResult implements QueryResultInterface
       foreach ($this->data as $item) {
         return $item;
       }
-    }
-
-    return null;
-  }
-
-  /**
-   * Returns the last thrown error from the result set. The last thrown error is considered the most recent error.
-   *
-   * @return Throwable|null The last thrown error, or null if there are no errors.
-   */
-  public function getLastThrownError(): ?Throwable
-  {
-    if (is_array($this->errors) && count($this->errors) > 0) {
-      return $this->errors[0];
-    }
-
-    if (is_countable($this->errors) || $this->errors instanceof Traversable) {
-      foreach ($this->errors as $error) {
-        return $error;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Returns the first error from the result set. The first error is considered the earliest raised error.
-   *
-   * @return Throwable|null The first error, or null if there are no errors.
-   */
-  public function getFirstThrownError(): ?Throwable
-  {
-    if (is_array($this->errors) && count($this->errors) > 0) {
-      return $this->errors[count($this->errors) - 1];
-    }
-
-    if (is_countable($this->errors) || $this->errors instanceof Traversable) {
-      $lastError = null;
-      foreach ($this->errors as $error) {
-        $lastError = $error;
-      }
-      return $lastError;
     }
 
     return null;
