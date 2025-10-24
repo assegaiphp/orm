@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
+use Assegai\Orm\Traits\ResultErrorIntrospectorTrait;
 
 /**
  * UpdateResult class. Represents result of update query execution.
@@ -13,6 +14,8 @@ use Assegai\Orm\Interfaces\QueryResultInterface;
  */
 readonly class UpdateResult implements QueryResultInterface
 {
+  use ResultErrorIntrospectorTrait;
+
   /**
    * @param mixed $raw Raw SQL result returned by executed query.
    * @param int|null $affected Number of affected rows/documents. Not all drivers support this.

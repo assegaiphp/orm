@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\QueryBuilder\Results;
 
 use Assegai\Orm\Interfaces\QueryResultInterface;
+use Assegai\Orm\Traits\ResultErrorIntrospectorTrait;
 
 /**
  * Class InsertResult represents a result of an insert query.
@@ -13,6 +14,8 @@ use Assegai\Orm\Interfaces\QueryResultInterface;
  */
 readonly class InsertResult implements QueryResultInterface
 {
+  use ResultErrorIntrospectorTrait;
+
   /**
    * @param object|null $identifiers Contains inserted entity id. Has entity-like structure (not just column database name and values).
    * @param mixed $raw Raw SQL result returned by executed query.
