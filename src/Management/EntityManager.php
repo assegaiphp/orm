@@ -54,7 +54,7 @@ use Assegai\Orm\Queries\Sql\SQLTableReference;
 use Assegai\Orm\Relations\RelationOptions;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
-use Assegai\Orm\Util\TypeConversion\GeneralConverters;
+use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
 use DateTime;
 use DateTimeZone;
@@ -107,7 +107,7 @@ class EntityManager implements IEntityStoreOwner
   protected array $defaultConverters = [];
 
   /**
-   * @var GeneralConverters[] An array of custom converters.
+   * @var BasicTypeConverter[] An array of custom converters.
    */
   protected array $customConverters = [];
   /**
@@ -144,7 +144,7 @@ class EntityManager implements IEntityStoreOwner
       $this->typeResolver = TypeResolver::getInstance();
     }
 
-    $this->defaultConverters[] = new GeneralConverters();
+    $this->defaultConverters[] = new BasicTypeConverter();
     if ($customConverters = ModuleManager::getInstance()->getConfig('converters')) {
       foreach ($customConverters as $converterClassName) {
         $converterReflection = new ReflectionClass($converterClassName);
