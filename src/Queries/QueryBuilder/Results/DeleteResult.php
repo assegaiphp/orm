@@ -77,6 +77,6 @@ readonly class DeleteResult implements QueryResultInterface
    */
   public function getTotalAffectedRows(): int
   {
-    return $this->affected ?? 0;
+    return $this->affected ?? -1;
   }
 }
