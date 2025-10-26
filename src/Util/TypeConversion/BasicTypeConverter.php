@@ -9,7 +9,7 @@ use Exception;
 /**
  * Defines methods for basic type conversion.
  */
-class GeneralConverters
+class BasicTypeConverter
 {
   public const DEFAULT_DATE_FORMAT = 'Y-m-d\TH:i:s';
 

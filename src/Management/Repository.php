@@ -27,6 +27,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
+use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use ReflectionException;
 use stdClass;
 
@@ -294,6 +295,17 @@ readonly class Repository implements RepositoryInterface
       $options = FindOneOptions::fromArray($options);
     }
     return $this->manager->findOne(entityClass: $this->entityId, options: $options);
+  }
+
+  /**
+   * Sets the list of custom converters to use for type conversion.
+   *
+   * @param BasicTypeConverter[] $converters An array of type converters to be used.
+   * @return void
+   */
+  public function useConverters(array $converters): void
+  {
+    $this->manager->useConverters($converters);
   }
 
   /**
