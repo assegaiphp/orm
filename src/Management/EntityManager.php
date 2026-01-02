@@ -226,7 +226,6 @@ class EntityManager implements IEntityStoreOwner
    */
   public function save(object|array $targetOrEntity, InsertOptions|UpdateOptions|null $options = null): QueryResultInterface
   {
-    exit('here we go!');
     $results = [];
     $primaryKeyField = $options->primaryKeyField ?? 'id';
     $primaryKeyColumn = $this->getPrimaryKeyColumnName(entity: is_object($targetOrEntity) ? $targetOrEntity : $targetOrEntity[0], primaryKeyField: $primaryKeyField);
