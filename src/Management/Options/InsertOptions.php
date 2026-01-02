@@ -19,6 +19,7 @@ readonly class InsertOptions
     public object|array|null $relations = null,
     public bool              $isDebug = false,
     public ?array            $readonlyColumns = null,
+    public string            $primaryKeyField = 'id',
   )
   {
   }

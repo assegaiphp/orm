@@ -124,19 +124,19 @@ class EntityManager implements IEntityStoreOwner
    *
    * @param DataSource $connection The data source to use.
    * @param SQLQuery|null $query The query to use.
-   * @param EntityInspector|null $inspector The entity inspector to use.
+   * @param EntityInspector|null $entityInspector The entity inspector to use.
    * @param TypeResolver|null $typeResolver The type resolver to use.
    * @throws ReflectionException
    */
-  public function __construct(protected DataSource $connection, protected ?SQLQuery $query = null, protected ?EntityInspector $inspector = null, protected ?TypeResolver $typeResolver = null)
+  public function __construct(protected DataSource $connection, protected ?SQLQuery $query = null, protected ?EntityInspector $entityInspector = null, protected ?TypeResolver $typeResolver = null)
   {
     $this->logger = new Logger(new ConsoleOutput());
     $this->query = $query ?? new SQLQuery(db: $connection->getClient());
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
-    if (!$this->inspector) {
-      $this->inspector = EntityInspector::getInstance();
-      $this->inspector->setLogger($this->logger);
+    if (!$this->entityInspector) {
+      $this->entityInspector = EntityInspector::getInstance();
+      $this->entityInspector->setLogger($this->logger);
     }
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
@@ -226,18 +226,21 @@ class EntityManager implements IEntityStoreOwner
    */
   public function save(object|array $targetOrEntity, InsertOptions|UpdateOptions|null $options = null): QueryResultInterface
   {
+    exit('here we go!');
     $results = [];
+    $primaryKeyField = $options->primaryKeyField ?? 'id';
+    $primaryKeyColumn = $this->getPrimaryKeyColumnName(entity: is_object($targetOrEntity) ? $targetOrEntity : $targetOrEntity[0], primaryKeyField: $primaryKeyField);
 
     /** @var object $targetOrEntity */
     if (is_object($targetOrEntity)) {
-      if (empty($targetOrEntity->id)) {
+      if (empty($targetOrEntity->{$primaryKeyField})) {
         if (!$options instanceof InsertOptions) {
           $this->logger->warning("InsertOptions not provided. Using default InsertOptions.");
           $options = new InsertOptions();
         }
 
         $saveResult = $this->insert(entityClass: $targetOrEntity::class, entity: $targetOrEntity, options: $options);
-      } else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->id]))) {
+      } else if ($this->findBy($targetOrEntity::class, new FindWhereOptions(conditions: ['id' => $targetOrEntity->{$primaryKeyField}]))) {
         if (!$options instanceof UpdateOptions) {
           $this->logger->warning("UpdateOptions not provided. Using default UpdateOptions.");
           $options = new UpdateOptions();
@@ -283,7 +286,7 @@ class EntityManager implements IEntityStoreOwner
   public function insert(string $entityClass, array|object $entity, ?InsertOptions $options = null): InsertResult
   {
     # Check if the entity matches the given entity class
-    if (!$this->inspector->hasValidEntityStructure(entity: $entity, entityClass: $entityClass)) {
+    if (!$this->entityInspector->hasValidEntityStructure(entity: $entity, entityClass: $entityClass)) {
       return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: null, errors: [new ORMException("Entity does not match the given entity class.")]);
     }
 
@@ -295,13 +298,13 @@ class EntityManager implements IEntityStoreOwner
       $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
     }
 
-    $columns = $this->inspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, meta: $columnsMeta);
-    $values = $this->inspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
+    $columns = $this->entityInspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, meta: $columnsMeta);
+    $values = $this->entityInspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
 
     $columnCount = count($columns);
     $valueCount = count($values);
 
-    $this->query->insertInto(tableName: $this->inspector->getTableName(entity: $instance))->singleRow(columns: $columns)->values(valuesList: $values);
+    $this->query->insertInto(tableName: $this->entityInspector->getTableName(entity: $instance))->singleRow(columns: $columns)->values(valuesList: $values);
 
     if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
@@ -535,9 +538,9 @@ class EntityManager implements IEntityStoreOwner
 
     // Get list of relations
     $listOfRelations = $this->getListOfRelations($findOptions);
-    $columns = $this->inspector->getColumns(entity: $entity, exclude: $findOptions->exclude ?? [], relations: $listOfRelations, relationProperties: $availableRelations);
+    $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $findOptions->exclude ?? [], relations: $listOfRelations, relationProperties: $availableRelations);
 
-    $tableName = $this->inspector->getTableName(entity: $entity);
+    $tableName = $this->entityInspector->getTableName(entity: $entity);
     $tableAlias = $this->generateAlias($tableName, $knownAliases);
 
     $statement = $this->query->select()->all(columns: $columns)->from(tableReferences: $tableName);
@@ -645,10 +648,10 @@ class EntityManager implements IEntityStoreOwner
                 throw new ORMException("Missing inverse side for $foreignClassName");
               }
 
-              $foreignClassTableName = $this->inspector->getTableName(new $foreignClassName());
+              $foreignClassTableName = $this->entityInspector->getTableName(new $foreignClassName());
               $foreignClassTableAlias = $this->generateAlias($foreignClassTableName, $knownAliases);
               # Get the JoinColumn attribute from the inverse side
-              $joinColumnAttribute = $this->inspector->getJoinColumnAttribute($foreignClassName, $foreignClassProperty);
+              $joinColumnAttribute = $this->entityInspector->getJoinColumnAttribute($foreignClassName, $foreignClassProperty);
               $joinColumnName = $joinColumnAttribute->effectiveColumnName ?? 'id';
 
               $joinEntity = $this->create($relationProperty->getEntityClass());
@@ -656,7 +659,7 @@ class EntityManager implements IEntityStoreOwner
               if ($relationOptions) {
                 $excludeColumns = $relationOptions->exclude;
               }
-              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $excludeColumns);
+              $joinEntityColumns = $this->entityInspector->getColumns($joinEntity, $excludeColumns);
 
               $joinStatement = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinStatement->select()->all($joinEntityColumns)->from($foreignClassTableName);
@@ -680,7 +683,7 @@ class EntityManager implements IEntityStoreOwner
                 break;
               }
 
-              $foreignClassTableName = $this->inspector->getTableName(new $foreignClassName());
+              $foreignClassTableName = $this->entityInspector->getTableName(new $foreignClassName());
               $foreignClassTableAlias = $this->generateAlias($foreignClassTableName, $knownAliases);
               $joinColumnName = $relationProperty->joinColumn?->referencedColumnName ?? 'id';
 
@@ -689,7 +692,7 @@ class EntityManager implements IEntityStoreOwner
               if ($relationOptions) {
                 $excludeColumns = $relationOptions->exclude;
               }
-              $joinEntityColumns = $this->inspector->getColumns($joinEntity, $excludeColumns);
+              $joinEntityColumns = $this->entityInspector->getColumns($joinEntity, $excludeColumns);
               $cachedStatement = $statement;
               $joinQuery = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName");
@@ -724,7 +727,7 @@ class EntityManager implements IEntityStoreOwner
               $joinTableT1ColumnName = $joinTable->joinColumn ?? strtosingular($t1Name) . '_id';
               $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
 
-              $unprocessedJoinColumns = $this->inspector->getColumns(entity: $joinEntity);
+              $unprocessedJoinColumns = $this->entityInspector->getColumns(entity: $joinEntity);
               $joinColumns = [];
               foreach ($unprocessedJoinColumns as $alias => $column) {
                 if (is_string($alias)) {
@@ -1066,7 +1069,7 @@ class EntityManager implements IEntityStoreOwner
   {
     $entity = $this->create(entityClass: $entityClass);
 
-    $statement = $this->query->select()->count()->from(tableReferences: $this->inspector->getTableName(entity: $entity));
+    $statement = $this->query->select()->count()->from(tableReferences: $this->entityInspector->getTableName(entity: $entity));
 
     if ($options) {
       $conditions = [];
@@ -1133,7 +1136,7 @@ class EntityManager implements IEntityStoreOwner
     if (is_array($where)) {
       $where = $where['condition'] ?? '';
     }
-    $statement = $this->query->select()->all(columns: $this->inspector->getColumns(entity: $entity, exclude: $where->exclude))->from(tableReferences: $this->inspector->getTableName(entity: $entity))->where(condition: $where);
+    $statement = $this->query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $where->exclude))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
 
     $limit = $_GET['limit'] ?? 100;
     $skip = $_GET['skip'] ?? 0;
@@ -1217,7 +1220,7 @@ class EntityManager implements IEntityStoreOwner
       $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
     }
 
-    $columnMap = $this->inspector->getColumns(entity: $entityInstance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
+    $columnMap = $this->entityInspector->getColumns(entity: $entityInstance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
 
     foreach ($partialEntity as $prop => $value) {
       # Get the correct prop name
@@ -1230,7 +1233,7 @@ class EntityManager implements IEntityStoreOwner
           }
 
           if ($value instanceof DateTime) {
-            $value = $this->inspector->convertDateTimeToString($value, $prop, $columnOptions);
+            $value = $this->entityInspector->convertDateTimeToString($value, $prop, $columnOptions);
           }
 
           if ($value instanceof stdClass) {
@@ -1260,7 +1263,7 @@ class EntityManager implements IEntityStoreOwner
       return new UpdateResult(null, 0, $partialEntity, new stdClass());
     }
 
-    $this->query->update(tableName: $this->inspector->getTableName(entity: $entityInstance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
+    $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityInstance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
 
     if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
@@ -1459,13 +1462,13 @@ class EntityManager implements IEntityStoreOwner
 
     // TODO: Configure the upsert options
 
-    $columns = $this->inspector->getColumns(entity: $entityOrEntities);
-    $updateColumns = $this->inspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
-    $values = $this->inspector->getValues(entity: $entityOrEntities);
+    $columns = $this->entityInspector->getColumns(entity: $entityOrEntities);
+    $updateColumns = $this->entityInspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
+    $values = $this->entityInspector->getValues(entity: $entityOrEntities);
 
     $assignmentList = array_map(fn($column) => "$column=VALUES($column)", $updateColumns);
 
-    $this->query->insertInto(tableName: $this->inspector->getTableName(entity: $entityOrEntities))->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
+    $this->query->insertInto(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
 
     if ($this->isDebug) {
       $this->query->debug();
@@ -1502,7 +1505,7 @@ class EntityManager implements IEntityStoreOwner
   {
     if (is_object($entityOrEntities)) {
       $id = $entityOrEntities->id ?? 0;
-      $statement = $this->query->deleteFrom(tableName: $this->inspector->getTableName(entity: $entityOrEntities))->where("id=$id");
+      $statement = $this->query->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->where("id=$id");
 
       if ($this->isDebug) {
         $statement->debug();
@@ -1551,7 +1554,7 @@ class EntityManager implements IEntityStoreOwner
         throw new ORMException("Entity must have an id to be soft removed.");
       }
 
-      $statement = $this->query->update(tableName: $this->inspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("id=$entityOrEntities->id");
+      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("id=$entityOrEntities->id");
 
       if ($this->isDebug) {
         $statement->debug();
@@ -1611,7 +1614,7 @@ class EntityManager implements IEntityStoreOwner
 
     $entity = $this->create(entityClass: $entityClass);
 
-    $statement = $this->query->deleteFrom(tableName: $this->inspector->getTableName(entity: $entity))->where(condition: $this->getConditionsString(conditions: $conditions));
+    $statement = $this->query->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entity))->where(condition: $this->getConditionsString(conditions: $conditions));
 
     if ($this->isDebug) {
       $statement->debug();
@@ -1669,7 +1672,7 @@ class EntityManager implements IEntityStoreOwner
   {
     $entity = $this->create(entityClass: $entityClass);
 
-    $statement = $this->query->update(tableName: $this->inspector->getTableName(entity: $entity))->set([Filter::getDeleteDateColumnName(entity: $entity) => NULL])->where(condition: $this->getConditionsString(conditions: $conditions));
+    $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entity))->set([Filter::getDeleteDateColumnName(entity: $entity) => NULL])->where(condition: $this->getConditionsString(conditions: $conditions));
 
     if ($this->isDebug) {
       $statement->debug();
@@ -1857,5 +1860,33 @@ class EntityManager implements IEntityStoreOwner
   public function removeStoreEntry(string $key, object $value): int
   {
     return count($this->entities);
+  }
+
+  /**
+   * Gets the primary key column name for a given entity class.
+   *
+   * @param string $entityClass
+   * @param string $primaryKeyField
+   * @return string
+   * @throws ORMException
+   */
+  private function getPrimaryKeyColumnName(object $entity, string $primaryKeyField = 'id'): string
+  {
+    $this->entityInspector->validateEntityName($entity::class);
+
+    $primaryColumn = null;
+    $columns = $this->entityInspector->getColumns(entity: $entity);
+    foreach ($columns as $alias => $column) {
+      if ($alias === $primaryKeyField || $column === $primaryKeyField) {
+        $primaryColumn = $column;
+        break;
+      }
+    }
+
+    if (!$primaryColumn) {
+      throw new ORMException("Entity " . $entity::class . " does not have a primary key column.");
+    }
+
+    return $primaryColumn;
   }
 }

@@ -6,7 +6,7 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Attribute;
 
 #[Attribute(Attribute::TARGET_CLASS)]
-class DataSourceConfig
+readonly class DataSourceConfig
 {
   /**
    * Constructs a DataSourceConfig attribute.
@@ -20,14 +20,14 @@ class DataSourceConfig
    * @param bool $synchronize
    */
   public function __construct(
-    public readonly DataSourceType|string|null $type,
-    public readonly ?string $name,
-    public readonly string $host = 'localhost',
-    public readonly string $user = 'root',
-    public readonly string $password = '',
-    public readonly int $port = 3306,
-    public readonly array $entities = [],
-    public readonly bool $synchronize = false,
+    public DataSourceType|string|null $type,
+    public ?string                    $name,
+    public string                     $host = 'localhost',
+    public string                     $user = 'root',
+    public string                     $password = '',
+    public int                        $port = 3306,
+    public array                      $entities = [],
+    public bool                       $synchronize = false,
   )
   {
   }
