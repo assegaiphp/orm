@@ -33,6 +33,10 @@ final class SQLQuery
    * @var int|null The number of rows affected by the query.
    */
   private ?int $rowCount = null;
+  /**
+   * @var int|null The number of columns affected by the query.
+   */
+  private ?int $columnCount = null;
 
   /**
    * Constructs a new SQLQuery instance.
@@ -44,7 +48,14 @@ final class SQLQuery
    * @param array $passwordHashFields The fields to hash.
    * @param string $passwordHashAlgorithm The algorithm to use for hashing.
    */
-  public function __construct(private readonly PDO $db, private readonly string $fetchClass = stdClass::class, private readonly int $fetchMode = PDO::FETCH_ASSOC, private readonly array $fetchClassParams = [], private readonly array $passwordHashFields = ['password'], private string $passwordHashAlgorithm = '')
+  public function __construct(
+    private readonly PDO $db,
+    private readonly string $fetchClass = stdClass::class,
+    private readonly int $fetchMode = PDO::FETCH_ASSOC,
+    private readonly array $fetchClassParams = [],
+    private readonly array $passwordHashFields = ['password'],
+    private string $passwordHashAlgorithm = ''
+  )
   {
     if (empty($this->passwordHashAlgorithm)) {
       $this->passwordHashAlgorithm = Config::get('default_password_hash_algo') ?? '2y';
@@ -279,6 +290,8 @@ final class SQLQuery
           }
         }
 
+        $this->rowCount = $statement->rowCount();
+
         return new SQLQueryResult(data: $data, errors: [], raw: $this->queryString, affected: $statement->rowCount());
       }
 
@@ -325,6 +338,14 @@ final class SQLQuery
   public function rowCount(): ?int
   {
     return $this->rowCount;
+  }
+
+  /**
+   * @return int|null
+   */
+  public function columnCount(): ?int
+  {
+    return $this->columnCount;
   }
 
   /**

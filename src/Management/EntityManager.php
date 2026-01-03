@@ -1558,16 +1558,16 @@ class EntityManager implements IEntityStoreOwner
 
     if (is_object($entityOrEntities)) {
       if (!$entityOrEntities->{$primaryKeyField}) {
-        throw new ORMException("Entity must have an id to be soft removed.");
+        throw new ORMException("Entity must have an '$primaryKeyField' field to be soft removed.");
       }
 
       $primaryKeyFieldValue = $entityOrEntities->{$primaryKeyField};
       if (is_string($primaryKeyFieldValue)) {
-        $primaryKeyFieldValue = addslashes($primaryKeyFieldValue);
+        $primaryKeyFieldValue = '"' . $primaryKeyFieldValue . '"';
       }
-      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("{$primaryColumn}=$primaryKeyFieldValue}");
+      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("{$primaryColumn}={$primaryKeyFieldValue}");
 
-      if ($this->isDebug) {
+      if ($this->isDebug || $removeOptions?->isDebug) {
         $statement->debug();
       }
 
