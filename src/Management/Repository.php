@@ -167,13 +167,17 @@ readonly class Repository implements RepositoryInterface
    * @throws ORMException
    * @throws ReflectionException
    */
-  public function softRemove(array|object|null $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
+  public function softRemove(
+    array|object|null $entityOrEntities,
+    RemoveOptions|array|null $removeOptions = null,
+    string $primaryKeyField = 'id'
+  ): UpdateResult
   {
     if (empty($entityOrEntities)) {
       throw new NotFoundException($this->entityId);
     }
     $entity = $this->getEntityFromObject(entityClassName: $this->entityId, object: $entityOrEntities);
-    return $this->manager->softRemove(entityOrEntities: $entity, removeOptions: $removeOptions);
+    return $this->manager->softRemove(entityOrEntities: $entity, removeOptions: $removeOptions, primaryKeyField: $primaryKeyField);
   }
 
   /**
