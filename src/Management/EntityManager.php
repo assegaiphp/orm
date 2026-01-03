@@ -58,6 +58,7 @@ use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
 use DateTime;
 use DateTimeZone;
+use DateTimeImmutable;
 use Exception;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
@@ -1535,25 +1536,36 @@ class EntityManager implements IEntityStoreOwner
    *
    * @param object|object[] $entityOrEntities
    * @param RemoveOptions|array|null $removeOptions
+   * @param string $primaryKeyField
    * @return UpdateResult Returns the removed entities.
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
+   * @throws \DateInvalidTimeZoneException
    */
-  public function softRemove(object|array $entityOrEntities, RemoveOptions|array|null $removeOptions = null): UpdateResult
+  public function softRemove(
+    object|array $entityOrEntities,
+    RemoveOptions|array|null $removeOptions = null,
+    string $primaryKeyField = 'id'
+  ): UpdateResult
   {
     $result = null;
     $timezone = getenv('TIMEZONE') ?: self::DEFAULT_TIMEZONE;
     $deletedAtFormat = getenv('DELETED_AT_FORMAT') ?: self::DEFAULT_DELETED_AT_FORMAT;
-    $deletedAt = new \DateTimeImmutable('now', new DateTimeZone($timezone));
+    $deletedAt = new DateTimeImmutable('now', new DateTimeZone($timezone));
     $deletedAt = $deletedAt->format($deletedAtFormat);
+    $primaryColumn = $this->getPrimaryKeyColumnName($entityOrEntities, $primaryKeyField);
 
     if (is_object($entityOrEntities)) {
-      if (!$entityOrEntities->id) {
+      if (!$entityOrEntities->{$primaryKeyField}) {
         throw new ORMException("Entity must have an id to be soft removed.");
       }
 
-      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("id=$entityOrEntities->id");
+      $primaryKeyFieldValue = $entityOrEntities->{$primaryKeyField};
+      if (is_string($primaryKeyFieldValue)) {
+        $primaryKeyFieldValue = addslashes($primaryKeyFieldValue);
+      }
+      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("{$primaryColumn}=$primaryKeyFieldValue}");
 
       if ($this->isDebug) {
         $statement->debug();
