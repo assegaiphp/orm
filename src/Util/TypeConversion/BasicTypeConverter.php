@@ -41,4 +41,16 @@ class BasicTypeConverter
   {
     return boolval($source);
   }
+
+  #[TypeConverter]
+  public function fromIntToBool(int $source): bool
+  {
+    return boolval($source);
+  }
+
+  #[TypeConverter]
+  public function fromBoolToInt(bool $source): int
+  {
+    return intval($source);
+  }
 }
