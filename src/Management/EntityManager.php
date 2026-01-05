@@ -1788,10 +1788,11 @@ class EntityManager implements IEntityStoreOwner
         } else {
           $sourceType = $sourceReflectionType?->getName() ?? match (gettype($object->$prop)) {
             'integer' => 'int',
-            'double' => 'float',
-            'NULL' => null,
-            'object' => get_class($object->$prop),
-            default => gettype($object->$prop)
+            'double'  => 'float',
+            'boolean' => 'bool',
+            'NULL'    => null,
+            'object'  => get_class($object->$prop),
+            default   => gettype($object->$prop)
           };
         }
 
@@ -1804,10 +1805,11 @@ class EntityManager implements IEntityStoreOwner
         } else {
           $targetType = $targetReflectionType?->getName() ?? match (gettype($entity->$prop)) {
             'integer' => 'int',
-            'double' => 'float',
-            'NULL' => null,
-            'object' => get_class($object->$prop),
-            default => gettype($entity->$prop)
+            'double'  => 'float',
+            'boolean' => 'bool',
+            'NULL'    => null,
+            'object'  => get_class($object->$prop),
+            default   => gettype($entity->$prop)
           };
         }
 
