@@ -51,6 +51,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Queries\Sql\SQLTableReference;
+use Assegai\Orm\Relations\RelationBuildPlan;
 use Assegai\Orm\Relations\RelationOptions;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
@@ -935,6 +936,8 @@ class EntityManager implements IEntityStoreOwner
     $results = [];
     $previousDatum = null;
     $datumCollection = [];
+    $primaryKeyField = 'id';
+    $buildPlans = [];
 
     foreach ($data as $datum) {
       $isManyToMany = false;
@@ -946,6 +949,7 @@ class EntityManager implements IEntityStoreOwner
 
         $isManyToMany = $relationInfo[$relation]->getRelationType() === RelationType::MANY_TO_MANY;
         $datum = $this->bindEntityRelations($entityClass, $datum, $relation, $relationInfo[$relation], $loadedRelations);
+        $buildPlans[$relation] = new RelationBuildPlan($relation, $relationInfo[$relation]->getRelationType(), new RelationOptions());
       }
 
       if ($isManyToMany) {
@@ -971,7 +975,15 @@ class EntityManager implements IEntityStoreOwner
           }
         }
 
-        if ($previousDatum->id !== $datum->id) {
+        if (!isset($previousDatum->$primaryKeyField)) {
+          continue;
+        }
+
+        if (
+          $previousDatum->$primaryKeyField &&
+          $datum->$primaryKeyField &&
+          $previousDatum->$primaryKeyField !== $datum->$primaryKeyField
+        ) {
           $results[] = $previousDatum;
           $previousDatum = $datum;
           $datumCollection = [];
