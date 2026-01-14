@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Relations\RelationOptions;
 use JsonSerializable;
 
 /**
@@ -24,6 +25,8 @@ class FindOptions implements JsonSerializable
    * @param int|null $limit The number of results to return.
    * @param array $exclude The fields to exclude.
    * @param bool $withRealTotal Whether to get the real total.
+   * @param bool $isDebug Whether to enable debug mode.
+   * @param RelationOptions[] $relationOptions Options for relations.
    */
   public function __construct(
     public readonly null|object|array $select = null,
@@ -34,7 +37,8 @@ class FindOptions implements JsonSerializable
     public readonly ?int $limit = null,
     public readonly array $exclude = ['password'],
     public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL,
-    public readonly bool $isDebug = false
+    public readonly bool $isDebug = false,
+    public array        $relationOptions = []
   )
   {
   }

@@ -63,6 +63,7 @@ readonly class RelationOptions
     public ?bool                          $isEager = null,
     public ?bool                          $isPersistent = null,
     public ?OrphanedRowAction             $orphanedRowAction = null,
-    public array                          $exclude = ['password']
+    public array                          $exclude = ['password'],
+    public string                         $primaryKeyField = 'id',
   ) { }
 }
