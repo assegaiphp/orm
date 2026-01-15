@@ -554,9 +554,6 @@ class EntityManager implements IEntityStoreOwner
       if ($findOptions->relations) {
         # $this->buildRelations($listOfRelations);
         foreach ($findOptions->relations as $key => $value) {
-          // Clean key and value from any spaces
-          $key = trim($key);
-          $value = trim($value);
           /** @var RelationPropertyMetadata $relationProperty */
           $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
           $relationOptions = $relationProperty?->relationAttribute->options ?? new RelationOptions();
