@@ -5,11 +5,22 @@ namespace Assegai\Orm\Management\Options;
 use Assegai\Orm\Enumerations\NullType;
 use Assegai\Orm\Enumerations\OrderType;
 
-class OrderByCondition
+/**
+ * Represents an ordering condition for query results.
+ *
+ * @package Assegai\Orm\Management\Options
+ */
+readonly class OrderByCondition
 {
+  /**
+   * Constructs an OrderByCondition instance.
+   *
+   * @param OrderType $order The order type (ASC or DESC).
+   * @param NullType|null $nulls Specifies how to handle NULL values.
+   */
   public function __construct(
-    public readonly OrderType $order,
-    public readonly ?NullType $nulls = null,
+    public OrderType $order,
+    public ?NullType $nulls = null,
   )
   {}
 }

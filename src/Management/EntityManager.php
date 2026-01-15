@@ -57,6 +57,8 @@ use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
+use DateInvalidTimeZoneException;
+use DateMalformedStringException;
 use DateTime;
 use DateTimeZone;
 use DateTimeImmutable;
@@ -81,9 +83,9 @@ use UnitEnum;
  */
 class EntityManager implements IEntityStoreOwner
 {
-  const LOG_TAG = '[Entity Manager]';
-  const DEFAULT_TIMEZONE = 'UTC';
-  const DEFAULT_DELETED_AT_FORMAT = 'Y-m-d H:i:s';
+  const string LOG_TAG = '[Entity Manager]';
+  const string DEFAULT_TIMEZONE = 'UTC';
+  const string DEFAULT_DELETED_AT_FORMAT = 'Y-m-d H:i:s';
 
   /**
    * Once created and then reused by repositories.
@@ -216,7 +218,7 @@ class EntityManager implements IEntityStoreOwner
    * If entities do not exist in the database then inserts, otherwise updates.
    *
    * @param object|object[] $targetOrEntity The entity or entities to save.
-   * @param InsertOptions|null $options The insert options.
+   * @param InsertOptions|UpdateOptions|null $options The insert options.
    * @return QueryResultInterface
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
@@ -225,6 +227,7 @@ class EntityManager implements IEntityStoreOwner
    * @throws ORMException
    * @throws ReflectionException
    * @throws SaveException
+   * @throws ValidationException
    */
   public function save(object|array $targetOrEntity, InsertOptions|UpdateOptions|null $options = null): QueryResultInterface
   {
@@ -551,6 +554,9 @@ class EntityManager implements IEntityStoreOwner
       if ($findOptions->relations) {
         # $this->buildRelations($listOfRelations);
         foreach ($findOptions->relations as $key => $value) {
+          // Clean key and value from any spaces
+          $key = trim($key);
+          $value = trim($value);
           /** @var RelationPropertyMetadata $relationProperty */
           $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
           $relationOptions = $relationProperty?->relationAttribute->options ?? new RelationOptions();
@@ -694,7 +700,6 @@ class EntityManager implements IEntityStoreOwner
                 $excludeColumns = $relationOptions->exclude;
               }
               $joinEntityColumns = $this->entityInspector->getColumns($joinEntity, $excludeColumns);
-              $cachedStatement = $statement;
               $joinQuery = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName");
 
@@ -702,8 +707,6 @@ class EntityManager implements IEntityStoreOwner
               if ($joinResult->isOK() && !empty($joinResult->getData())) {
                 $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData();
               }
-
-              $statement = $cachedStatement;
               break;
 
             case RelationType::MANY_TO_MANY:
@@ -732,10 +735,10 @@ class EntityManager implements IEntityStoreOwner
               $joinColumns = [];
               foreach ($unprocessedJoinColumns as $alias => $column) {
                 if (is_string($alias)) {
-                  $joinColumns["REL_{$t2Name}_{$alias}"] = $column;
+                  $joinColumns["REL_{$t2Name}_$alias"] = $column;
                 } else {
                   [$targetTableName, $targetColumnName] = explode('.', $column);
-                  $joinColumns["REL_{$t2Name}_{$targetColumnName}"] = $column;
+                  $joinColumns["REL_{$t2Name}_$targetColumnName"] = $column;
                 }
               }
               $columns = [...$columns, ...$joinColumns];
@@ -897,8 +900,7 @@ class EntityManager implements IEntityStoreOwner
 
         // Add the result to the loaded relations
         if ($result->isError()) {
-          $error = $result->getErrors()[0] ?? new ORMException("An error occurred while processing the pending statement");
-          throw $error;
+          throw $result->getErrors()[0] ?? new ORMException("An error occurred while processing the pending statement");
         }
 
         $pendingStatementRelation = $pendingStatement['relation'];
@@ -942,6 +944,11 @@ class EntityManager implements IEntityStoreOwner
     foreach ($data as $datum) {
       $isManyToMany = false;
       foreach ($findOptions->relations as $relation) {
+        $this->logger->error(json_encode([
+          'relation' => $relation,
+          'keys' => array_keys($relationInfo),
+          'in_array' => in_array($relation, array_keys($relationInfo))
+        ], JSON_PRETTY_PRINT));
         if (!in_array($relation, array_keys($relationInfo))) {
           $this->logger->warning("Relation $relation does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
           continue;
@@ -1314,7 +1321,6 @@ class EntityManager implements IEntityStoreOwner
    * @param object $entity The entity to get the column name for.
    * @param string $prop The property to get the column name for.
    * @return string Returns the column name for the given property.
-   * @throws ReflectionException If the property does not exist.
    */
   private function getColumnNameFromProperty(object $entity, string $prop): string
   {
@@ -1553,7 +1559,8 @@ class EntityManager implements IEntityStoreOwner
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
-   * @throws \DateInvalidTimeZoneException
+   * @throws DateInvalidTimeZoneException
+   * @throws DateMalformedStringException
    */
   public function softRemove(
     object|array $entityOrEntities,
@@ -1577,7 +1584,7 @@ class EntityManager implements IEntityStoreOwner
       if (is_string($primaryKeyFieldValue)) {
         $primaryKeyFieldValue = '"' . $primaryKeyFieldValue . '"';
       }
-      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("{$primaryColumn}={$primaryKeyFieldValue}");
+      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("$primaryColumn=$primaryKeyFieldValue");
 
       if ($this->isDebug || $removeOptions?->isDebug) {
         $statement->debug();
@@ -1890,9 +1897,10 @@ class EntityManager implements IEntityStoreOwner
   /**
    * Gets the primary key column name for a given entity class.
    *
-   * @param string $entityClass
+   * @param object $entity
    * @param string $primaryKeyField
    * @return string
+   * @throws ClassNotFoundException
    * @throws ORMException
    */
   private function getPrimaryKeyColumnName(object $entity, string $primaryKeyField = 'id'): string

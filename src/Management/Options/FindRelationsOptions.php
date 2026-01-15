@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Util\KeyBoolPair;
+use InvalidArgumentException;
 use stdClass;
 
 /**
@@ -10,17 +11,17 @@ use stdClass;
  *
  * @package Assegai\Orm\Management\Options
  */
-final class FindRelationsOptions
+final readonly class FindRelationsOptions
 {
+  public object|array $relations;
+
   /**
    * @param stdClass | array<KeyBoolPair> $relations
    * @param string[] $exclude
    */
-  public function __construct(
-    public readonly object|array $relations,
-    public readonly array $exclude = ['password'],
-  )
+  public function __construct(object|array $relations, public array $exclude = ['password'])
   {
+    $this->relations = array_map(fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")), $relations);
   }
 
   /**

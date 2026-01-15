@@ -5,7 +5,7 @@ namespace Assegai\Orm\Management\Options;
 /**
  *
  */
-class RemoveOptions
+readonly class RemoveOptions
 {
   /**
    * Constructs the RemoveOptions.
@@ -27,11 +27,11 @@ class RemoveOptions
    * @param bool $isDebug Whether to output debug information.
    */
   public function __construct(
-    public readonly mixed $data = null,
-    public readonly ?bool $listeners = true,
-    public readonly ?bool $transaction = false,
-    public readonly ?int $chunk = null,
-    public readonly bool $isDebug = false
+    public mixed $data = null,
+    public ?bool $listeners = true,
+    public ?bool $transaction = false,
+    public ?int  $chunk = null,
+    public bool  $isDebug = false
   ) { }
 
   /**
