@@ -29,6 +29,7 @@ use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use DateInvalidTimeZoneException;
+use DateMalformedStringException;
 use ReflectionException;
 use stdClass;
 
@@ -170,6 +171,7 @@ readonly class Repository implements RepositoryInterface
    * @throws NotFoundException
    * @throws ORMException
    * @throws ReflectionException
+   * @throws DateMalformedStringException
    */
   public function softRemove(
     array|object|null $entityOrEntities,

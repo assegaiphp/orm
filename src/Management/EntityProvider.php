@@ -10,7 +10,7 @@ use ReflectionClass;
 use ReflectionException;
 
 /**
- *
+ * Class EntityProvider.
  */
 class EntityProvider implements IProvider
 {
