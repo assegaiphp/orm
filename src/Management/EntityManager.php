@@ -1530,6 +1530,7 @@ class EntityManager implements IEntityStoreOwner
     UpsertOptions $options
   ): InsertResult
   {
+    $originalId = $entity->id ?? null;
     $columns = array_map([$this, 'stripTableName'], array_values($columns));
     $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
     $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: ['id']);
@@ -1559,18 +1560,19 @@ class EntityManager implements IEntityStoreOwner
 
     if ($result->isOk()) {
       $lastInsertId = $this->lastInsertId();
-      if ($lastInsertId) {
+      if (empty($originalId) && $lastInsertId) {
         $entity->id = $lastInsertId;
       }
     }
 
-    $identifier = $entity->id ?? $this->lastInsertId();
+    $identifier = $entity->id ?? $originalId ?? $this->lastInsertId();
 
     return new InsertResult(
       identifiers: (object)['id' => $identifier],
       raw: $this->query->queryString(),
       generatedMaps: $entity,
-      errors: $errors
+      errors: $errors,
+      affected: $this->query->rowCount() ?? 0,
     );
   }
 

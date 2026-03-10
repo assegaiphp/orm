@@ -69,8 +69,19 @@ class SQLiteFlowCest
     $entity->id = (int)$entityId;
     $entity->description = 'Updated through SQLite upsert';
 
+    $otherEntity = new MockEntity();
+    $otherEntity->name = 'sqlite test other';
+    $otherEntity->description = 'Inserted to change SQLite last insert id';
+    $otherEntity->colorType = MockColorType::RED;
+
+    $otherInsertResult = $this->manager->insert(MockEntity::class, $otherEntity);
+    $I->assertTrue($otherInsertResult->isOk());
+
     $upsertResult = $this->manager->upsert(MockEntity::class, $entity, ['id']);
     $I->assertTrue($upsertResult->isOk());
+    $I->assertSame((int)$entityId, $entity->id);
+    $I->assertSame((int)$entityId, $upsertResult->identifiers?->id);
+    $I->assertSame((int)$entityId, $upsertResult->generatedMaps?->id);
 
     $updatedRow = $this->dataSource->getClient()
       ->query("SELECT `description` FROM `mocks` WHERE `id` = $entityId")
