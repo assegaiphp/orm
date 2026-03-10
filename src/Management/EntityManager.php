@@ -19,6 +19,7 @@ use Assegai\Orm\Attributes\Relations\ManyToOne;
 use Assegai\Orm\Attributes\Relations\OneToMany;
 use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\RelationType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ContainerException;
@@ -57,6 +58,8 @@ use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
+use DateInvalidTimeZoneException;
+use DateMalformedStringException;
 use DateTime;
 use DateTimeZone;
 use DateTimeImmutable;
@@ -81,9 +84,9 @@ use UnitEnum;
  */
 class EntityManager implements IEntityStoreOwner
 {
-  const LOG_TAG = '[Entity Manager]';
-  const DEFAULT_TIMEZONE = 'UTC';
-  const DEFAULT_DELETED_AT_FORMAT = 'Y-m-d H:i:s';
+  const string LOG_TAG = '[Entity Manager]';
+  const string DEFAULT_TIMEZONE = 'UTC';
+  const string DEFAULT_DELETED_AT_FORMAT = 'Y-m-d H:i:s';
 
   /**
    * Once created and then reused by repositories.
@@ -216,7 +219,7 @@ class EntityManager implements IEntityStoreOwner
    * If entities do not exist in the database then inserts, otherwise updates.
    *
    * @param object|object[] $targetOrEntity The entity or entities to save.
-   * @param InsertOptions|null $options The insert options.
+   * @param InsertOptions|UpdateOptions|null $options The insert options.
    * @return QueryResultInterface
    * @throws ClassNotFoundException
    * @throws EmptyCriteriaException
@@ -225,6 +228,7 @@ class EntityManager implements IEntityStoreOwner
    * @throws ORMException
    * @throws ReflectionException
    * @throws SaveException
+   * @throws ValidationException
    */
   public function save(object|array $targetOrEntity, InsertOptions|UpdateOptions|null $options = null): QueryResultInterface
   {
@@ -694,7 +698,6 @@ class EntityManager implements IEntityStoreOwner
                 $excludeColumns = $relationOptions->exclude;
               }
               $joinEntityColumns = $this->entityInspector->getColumns($joinEntity, $excludeColumns);
-              $cachedStatement = $statement;
               $joinQuery = new SQLQuery($this->query->getConnection());
               $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName");
 
@@ -702,8 +705,6 @@ class EntityManager implements IEntityStoreOwner
               if ($joinResult->isOK() && !empty($joinResult->getData())) {
                 $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData();
               }
-
-              $statement = $cachedStatement;
               break;
 
             case RelationType::MANY_TO_MANY:
@@ -732,10 +733,10 @@ class EntityManager implements IEntityStoreOwner
               $joinColumns = [];
               foreach ($unprocessedJoinColumns as $alias => $column) {
                 if (is_string($alias)) {
-                  $joinColumns["REL_{$t2Name}_{$alias}"] = $column;
+                  $joinColumns["REL_{$t2Name}_$alias"] = $column;
                 } else {
                   [$targetTableName, $targetColumnName] = explode('.', $column);
-                  $joinColumns["REL_{$t2Name}_{$targetColumnName}"] = $column;
+                  $joinColumns["REL_{$t2Name}_$targetColumnName"] = $column;
                 }
               }
               $columns = [...$columns, ...$joinColumns];
@@ -897,8 +898,7 @@ class EntityManager implements IEntityStoreOwner
 
         // Add the result to the loaded relations
         if ($result->isError()) {
-          $error = $result->getErrors()[0] ?? new ORMException("An error occurred while processing the pending statement");
-          throw $error;
+          throw $result->getErrors()[0] ?? new ORMException("An error occurred while processing the pending statement");
         }
 
         $pendingStatementRelation = $pendingStatement['relation'];
@@ -942,6 +942,11 @@ class EntityManager implements IEntityStoreOwner
     foreach ($data as $datum) {
       $isManyToMany = false;
       foreach ($findOptions->relations as $relation) {
+        $this->logger->error(json_encode([
+          'relation' => $relation,
+          'keys' => array_keys($relationInfo),
+          'in_array' => in_array($relation, array_keys($relationInfo))
+        ], JSON_PRETTY_PRINT));
         if (!in_array($relation, array_keys($relationInfo))) {
           $this->logger->warning("Relation $relation does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
           continue;
@@ -1314,7 +1319,6 @@ class EntityManager implements IEntityStoreOwner
    * @param object $entity The entity to get the column name for.
    * @param string $prop The property to get the column name for.
    * @return string Returns the column name for the given property.
-   * @throws ReflectionException If the property does not exist.
    */
   private function getColumnNameFromProperty(object $entity, string $prop): string
   {
@@ -1451,6 +1455,12 @@ class EntityManager implements IEntityStoreOwner
   public function upsert(string $entityClass, object|array $entityOrEntities, array|UpsertOptions $options): InsertResult|UpdateResult
   {
     // TODO: #83 Implement EntityManager::upsert @amasiye
+    if (is_array($options)) {
+      $options = array_is_list($options)
+        ? new UpsertOptions(conflictPaths: $options)
+        : UpsertOptions::fromArray($options);
+    }
+
     if (is_array($entityOrEntities)) {
       $results = [];
       $errors = [];
@@ -1477,10 +1487,18 @@ class EntityManager implements IEntityStoreOwner
     $columns = $this->entityInspector->getColumns(entity: $entityOrEntities);
     $updateColumns = $this->entityInspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
     $values = $this->entityInspector->getValues(entity: $entityOrEntities);
+    $tableName = $this->entityInspector->getTableName(entity: $entityOrEntities);
 
-    $assignmentList = array_map(fn($column) => "$column=VALUES($column)", $updateColumns);
+    if ($this->connection->type === DataSourceType::SQLITE) {
+      return $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options);
+    }
 
-    $this->query->insertInto(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
+    $assignmentList = array_map(function($column): string {
+      $column = $this->stripTableName($column);
+      return "$column=VALUES($column)";
+    }, array_values($updateColumns));
+
+    $this->query->insertInto(tableName: $tableName)->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
 
     if ($this->isDebug) {
       $this->query->debug();
@@ -1501,6 +1519,84 @@ class EntityManager implements IEntityStoreOwner
     }
 
     return new InsertResult(identifiers: (object)['id' => $this->lastInsertId()], raw: $this->query->queryString(), generatedMaps: $entityOrEntities, errors: $errors);
+  }
+
+  private function executeSqliteUpsert(
+    string $tableName,
+    object $entity,
+    array $columns,
+    array $updateColumns,
+    array $values,
+    UpsertOptions $options
+  ): InsertResult
+  {
+    $columns = array_map([$this, 'stripTableName'], array_values($columns));
+    $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
+    $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: ['id']);
+
+    $quotedColumns = implode(', ', array_map(fn(string $column): string => "`$column`", $columns));
+    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => "`$column`", $conflictPaths));
+    $valueList = implode(', ', array_map([$this, 'toSqlLiteral'], $values));
+    $assignmentList = implode(', ', array_map(fn(string $column): string => "`$column`=excluded.`$column`", $updateColumns));
+    $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
+
+    $queryString = "INSERT INTO `$tableName` ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction";
+    $this->query->init();
+    $this->query->insertInto(tableName: $tableName);
+    $this->query->setQueryString($queryString);
+
+    if ($this->isDebug) {
+      $this->query->debug();
+    }
+
+    $result = $this->query->execute();
+    $errors = [];
+
+    if ($result->isError()) {
+      $errors[] = $this->query->getConnection()->errorInfo();
+      $errors[] = new GeneralSQLQueryException($this->query);
+    }
+
+    if ($result->isOk()) {
+      $lastInsertId = $this->lastInsertId();
+      if ($lastInsertId) {
+        $entity->id = $lastInsertId;
+      }
+    }
+
+    $identifier = $entity->id ?? $this->lastInsertId();
+
+    return new InsertResult(
+      identifiers: (object)['id' => $identifier],
+      raw: $this->query->queryString(),
+      generatedMaps: $entity,
+      errors: $errors
+    );
+  }
+
+  private function stripTableName(string $column): string
+  {
+    $parts = explode('.', $column);
+    return end($parts);
+  }
+
+  private function toSqlLiteral(mixed $value): string
+  {
+    if ($value instanceof UnitEnum && property_exists($value, 'value')) {
+      $value = $value->value;
+    }
+
+    if ($value instanceof DateTime || $value instanceof DateTimeImmutable) {
+      $value = $value->format('Y-m-d H:i:s');
+    }
+
+    return match (true) {
+      is_null($value) => 'NULL',
+      is_bool($value) => (string)intval($value),
+      is_numeric($value) => (string)$value,
+      is_array($value) => "'" . addslashes(json_encode($value)) . "'",
+      default => "'" . addslashes((string)$value) . "'",
+    };
   }
 
   /**
@@ -1553,7 +1649,8 @@ class EntityManager implements IEntityStoreOwner
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException
-   * @throws \DateInvalidTimeZoneException
+   * @throws DateInvalidTimeZoneException
+   * @throws DateMalformedStringException
    */
   public function softRemove(
     object|array $entityOrEntities,
@@ -1577,7 +1674,7 @@ class EntityManager implements IEntityStoreOwner
       if (is_string($primaryKeyFieldValue)) {
         $primaryKeyFieldValue = '"' . $primaryKeyFieldValue . '"';
       }
-      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("{$primaryColumn}={$primaryKeyFieldValue}");
+      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("$primaryColumn=$primaryKeyFieldValue");
 
       if ($this->isDebug || $removeOptions?->isDebug) {
         $statement->debug();
@@ -1890,9 +1987,10 @@ class EntityManager implements IEntityStoreOwner
   /**
    * Gets the primary key column name for a given entity class.
    *
-   * @param string $entityClass
+   * @param object $entity
    * @param string $primaryKeyField
    * @return string
+   * @throws ClassNotFoundException
    * @throws ORMException
    */
   private function getPrimaryKeyColumnName(object $entity, string $primaryKeyField = 'id'): string

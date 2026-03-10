@@ -4,6 +4,7 @@ namespace Assegai\Orm\Migrations;
 
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\Schema;
+use Assegai\Orm\DataSource\SchemaOptions;
 use Assegai\Orm\Exceptions\MigrationException;
 use Assegai\Orm\Exceptions\ORMException;
 
@@ -20,7 +21,11 @@ class SetupMigration extends Migration
    */
   public function up(DataSource $dataSource): void
   {
-    $createTableResult = Schema::createIfNotExists(SchemaMigrationsEntity::class);
+    $options = new SchemaOptions(
+      dbName: $dataSource->getName(),
+      dialect: $dataSource->getDialect(),
+    );
+    $createTableResult = Schema::createIfNotExists(SchemaMigrationsEntity::class, $options);
 
     if(false === $createTableResult)
     {
@@ -36,7 +41,11 @@ class SetupMigration extends Migration
    */
   public function down(DataSource $dataSource): void
   {
-    $dropTableResult = Schema::dropIfExists(SchemaMigrationsEntity::class);
+    $options = new SchemaOptions(
+      dbName: $dataSource->getName(),
+      dialect: $dataSource->getDialect(),
+    );
+    $dropTableResult = Schema::dropIfExists(SchemaMigrationsEntity::class, $options);
 
     if (false === $dropTableResult)
     {

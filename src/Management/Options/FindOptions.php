@@ -4,6 +4,7 @@ namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Relations\RelationOptions;
+use InvalidArgumentException;
 use JsonSerializable;
 
 /**
@@ -14,7 +15,9 @@ class FindOptions implements JsonSerializable
   /**
    * The default value for withRealTotal.
    */
-  const DEFAULT_WITH_REAL_TOTAL = true;
+  const bool DEFAULT_WITH_REAL_TOTAL = true;
+
+  public null|object|array $relations;
 
   /**
    * @param object|array|null $select The fields to select.
@@ -28,19 +31,9 @@ class FindOptions implements JsonSerializable
    * @param bool $isDebug Whether to enable debug mode.
    * @param RelationOptions[] $relationOptions Options for relations.
    */
-  public function __construct(
-    public readonly null|object|array $select = null,
-    public readonly null|object|array $relations = null,
-    public readonly null|FindWhereOptions|array $where = null,
-    public readonly null|object|array $order = null,
-    public readonly ?int $skip = null,
-    public readonly ?int $limit = null,
-    public readonly array $exclude = ['password'],
-    public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL,
-    public readonly bool $isDebug = false,
-    public array        $relationOptions = []
-  )
+  public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
   {
+    $this->relations = array_map(fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")), $relations ?? []);
   }
 
   /**
@@ -80,8 +73,7 @@ class FindOptions implements JsonSerializable
           $v = match (true) {
             is_string($value) => "'$value'",
             is_bool($value) => $value ? 'TRUE' : 'FALSE',
-            is_null($value),
-              $value === 'NULL' => 'NULL',
+            is_null($value), $value === 'NULL' => 'NULL',
             default => $value
           };
           $where .= (($v === 'NULL') ? "$key IS $v" : "$key = $v") . " AND ";

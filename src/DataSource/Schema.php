@@ -20,6 +20,7 @@ use Assegai\Orm\Migrations\SchemaChangeManifest;
 use Assegai\Orm\Queries\DDL\DDLAddStatement;
 use Assegai\Orm\Queries\DDL\DDLChangeStatement;
 use Assegai\Orm\Queries\DDL\DDLDropStatement;
+use Assegai\Orm\Util\SqlDialectHelper;
 use PDO;
 use PDOException;
 use ReflectionAttribute;
@@ -49,6 +50,7 @@ class Schema implements ISchema
 
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
+      $options = self::resolveSchemaOptions($entityInstance, $options);
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
 
       if ($options->dropSchema)
@@ -84,6 +86,7 @@ class Schema implements ISchema
     {
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
+      $options = self::resolveSchemaOptions($entityInstance, $options);
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
 
       $query = self::getDDLStatementFromEntity($entityInstance, $options);
@@ -107,8 +110,19 @@ class Schema implements ISchema
    */
   public static function rename(string $from, string $to, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
-    $dbName = $options ? ("`$options->dbName`." ?? '') : '';
-    $query = "RENAME TABLE $dbName`$from` TO $dbName`$to`";
+    $options ??= new SchemaOptions();
+    $fromTable = self::getQualifiedTableName($from, $options);
+    $toTable = match ($options->dialect) {
+      SQLDialect::SQLITE,
+      SQLDialect::POSTGRESQL => SqlDialectHelper::quoteIdentifier($to, $options->dialect),
+      default => self::getQualifiedTableName($to, $options),
+    };
+
+    $query = match ($options->dialect) {
+      SQLDialect::SQLITE,
+      SQLDialect::POSTGRESQL => "ALTER TABLE $fromTable RENAME TO $toTable",
+      default => "RENAME TABLE $fromTable TO $toTable",
+    };
 
     $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
     $statement = $db->prepare(query: $query);
@@ -147,6 +161,11 @@ class Schema implements ISchema
 
     $entityReflection = new ReflectionClass($entityClass);
     $entityInstance = $entityReflection->newInstance();
+    $options = self::resolveSchemaOptions($entityInstance, $options);
+
+    if ($options->dialect === SQLDialect::SQLITE) {
+      throw new ORMException('Schema alterations are not supported for SQLite yet.');
+    }
 
     $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
     $tableFields = self::getTableDescriptions($entityInstance, $db);
@@ -156,7 +175,7 @@ class Schema implements ISchema
       return null;
     }
 
-    $changes = self::compileChanges($entityReflection, $tableFields);
+    $changes = self::compileChanges($entityReflection, $tableFields, $options->dialect);
 
     if (empty($changes))
     {
@@ -175,6 +194,7 @@ class Schema implements ISchema
   public static function info(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?SchemaMetadata
   {
     $entityInstance = self::getEntityInstance($entityClass);
+    $options = self::resolveSchemaOptions($entityInstance, $options);
     $entityInspector = EntityInspector::getInstance();
 
     $tableName = $entityInspector->getTableName($entityInstance);
@@ -188,27 +208,11 @@ class Schema implements ISchema
       return null;
     }
 
-    $statement = $db->query("SHOW CREATE TABLE `$tableName`");
-
-    if (false === $statement->execute())
-    {
-      throw new ORMException("Failed to execute 'SHOW CREATE TABLE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
-    }
-
-    $result = $statement->fetchColumn(1);
+    $result = self::getTableDefinitionSql($db, $tableName, $options->dialect);
 
     if (!is_string($result))
     {
-      if (!empty($statement->errorInfo()))
-      {
-        $message = print_r($statement->errorInfo(), true);
-      }
-      else
-      {
-        $message = "Invalid DDL statement for table `$tableName`";
-      }
-
-      throw new ORMException($message);
+      throw new ORMException("Invalid DDL statement for table `$tableName`");
     }
 
     return new SchemaMetadata(tableFields: $tableFields, ddlStatement: $result);
@@ -230,9 +234,12 @@ class Schema implements ISchema
     $entityInspector->validateEntityName($entityClass);
     $reflection = new ReflectionClass($entityClass);
     $entityInstance = $reflection->newInstance();
-    $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+    $options = self::resolveSchemaOptions($entityInstance, $options);
     $tableName = $entityInspector->getTableName($entityInstance);
-    $query = "TRUNCATE TABLE $dbName`$tableName`";
+    $qualifiedTableName = self::getQualifiedTableName($tableName, $options);
+    $query = $options->dialect === SQLDialect::SQLITE
+      ? "DELETE FROM $qualifiedTableName"
+      : "TRUNCATE TABLE $qualifiedTableName";
 
     $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
     $statement = $db->prepare(query: $query);
@@ -244,6 +251,16 @@ class Schema implements ISchema
     catch (PDOException $e)
     {
       throw new ORMException(message: $e->getMessage());
+    }
+
+    if ($result && $options->dialect === SQLDialect::SQLITE) {
+      $sequenceTable = SqlDialectHelper::quoteIdentifier('sqlite_sequence', SQLDialect::SQLITE);
+      $quotedTableName = $db->quote($tableName);
+      try {
+        $db->exec("DELETE FROM $sequenceTable WHERE name = $quotedTableName");
+      } catch (PDOException) {
+        // sqlite_sequence only exists for AUTOINCREMENT tables.
+      }
     }
 
     return $result;
@@ -267,9 +284,9 @@ class Schema implements ISchema
       $entityInspector = EntityInspector::getInstance();
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
-      $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+      $options = self::resolveSchemaOptions($entityInstance, $options);
       $tableName = $entityInspector->getTableName($entityInstance);
-      $query = "DROP TABLE $dbName`$tableName`";
+      $query = 'DROP TABLE ' . self::getQualifiedTableName($tableName, $options);
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
       $statement = $db->prepare(query: $query);
@@ -300,16 +317,9 @@ class Schema implements ISchema
       $entityInspector = EntityInspector::getInstance();
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
-      $dbName = $options ? ("`$options->dbName`." ?? '') : '';
+      $options = self::resolveSchemaOptions($entityInstance, $options);
       $tableName = $entityInspector->getTableName($entityInstance);
-      $query = "DROP TABLE";
-
-      $query .= match ($options->dialect) {
-        SQLDialect::MYSQL,
-        SQLDialect::MARIADB => ' IF EXISTS',
-        default => '',
-      };
-      $query .= " $dbName`$tableName`";
+      $query = 'DROP TABLE IF EXISTS ' . self::getQualifiedTableName($tableName, $options);
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
       $statement = $db->prepare(query: $query);
@@ -330,7 +340,16 @@ class Schema implements ISchema
    */
   public static function exists(string $tableName, DataSource $dataSource): bool
   {
-    $query = "SHOW TABLES LIKE '$tableName'";
+    if (empty($tableName)) {
+      return false;
+    }
+
+    $dialect = $dataSource->getDialect();
+    $query = match ($dialect) {
+      SQLDialect::SQLITE => "SELECT name FROM sqlite_master WHERE type = 'table' AND name = " . $dataSource->getClient()->quote($tableName),
+      SQLDialect::POSTGRESQL => "SELECT table_name FROM information_schema.tables WHERE table_name = " . $dataSource->getClient()->quote($tableName),
+      default => "SHOW TABLES LIKE " . $dataSource->getClient()->quote($tableName),
+    };
 
     $executionResult = $dataSource->manager->query(query: $query);
 
@@ -357,55 +376,14 @@ class Schema implements ISchema
    */
   public static function hasColumns(string $tableName, array $columnNames, DataSource $dataSource): bool
   {
-    $columnNamesString = implode( ', ', array_map(fn($name) => "'$name'", $columnNames) );
-    $totalColumNames = count($columnNames);
+    $columnNames = array_values(array_filter($columnNames, fn($name) => is_string($name) && $name !== ''));
 
-    if (empty($tableName) || empty($totalColumNames))
+    if (empty($tableName) || empty($columnNames))
     {
       return false;
     }
 
-    $databaseName = $dataSource->getDatabaseName();
-
-    $sql = match ($dataSource->type) {
-      DataSourceType::SQLITE => <<<EOF
-SELECT COUNT(*) AS column_count
-FROM pragma_table_info('$databaseName')
-WHERE name IN ($columnNamesString)
-HAVING COUNT(*) = $totalColumNames
-EOF,
-
-      DataSourceType::POSTGRESQL => <<<EOF
-SELECT COUNT(*) AS column_count
-FROM information_schema.columns
-WHERE table_name = '$databaseName'
-  AND column_name IN ($columnNamesString)
-HAVING COUNT(*) = $totalColumNames;
-EOF,
-
-      default => <<<EOF
-SELECT COUNT(*) as total_fields
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_SCHEMA = '$databaseName'
-    AND TABLE_NAME = '$tableName'
-    AND COLUMN_NAME IN ($columnNamesString)
-HAVING COUNT(*) = $totalColumNames
-EOF
-    };
-
-    $statement = $dataSource->getClient()->query($sql);
-
-    if (false === $statement)
-    {
-      throw new ORMException(print_r($dataSource->getClient()->errorInfo(), true));
-    }
-
-    $columns = self::getColumnNames($tableName, $dataSource, $databaseName);
-
-    if (!$columnNames)
-    {
-      return false;
-    }
+    $columns = self::getColumnNames($tableName, $dataSource);
 
     foreach($columnNames as $columnName)
     {
@@ -430,6 +408,7 @@ EOF
   {
     $reflection = new ReflectionClass($entityInstanceOrClassname);
     $entityInstance = $reflection->newInstance();
+    $options = self::resolveSchemaOptions($entityInstance, $options);
     $entityInspector = EntityInspector::getInstance();
     $tableName = $entityInspector->getTableName($entityInstance);
 
@@ -457,16 +436,21 @@ EOF
       $columnAttributeInstance = $columnAttribute->newInstance();
       if (!$columnAttributeInstance->name)
       {
-        $createDefinitions .= "`" . $reflectionProperty->getName() . "` ";
+        $createDefinitions .= SqlDialectHelper::quoteIdentifier($reflectionProperty->getName(), $options->dialect) . ' ';
       }
-      $createDefinitions .= $columnAttributeInstance->sqlDefinition . ',' . PHP_EOL;
+      $createDefinitions .= $columnAttributeInstance->getSqlDefinition($options->dialect) . ',' . PHP_EOL;
     }
 
     $createDefinitions = trim($createDefinitions, ",\t\n\r\0\x0B");
+    $qualifiedTableName = self::getQualifiedTableName($tableName, $options);
 
-    return "CREATE{$temporary}TABLE$ifExists`$options->dbName`.`$tableName` " .
-      "($createDefinitions) ENGINE=InnoDB " .
-      "DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
+    $query = "CREATE{$temporary}TABLE{$ifExists}{$qualifiedTableName} ($createDefinitions)";
+
+    return match ($options->dialect) {
+      SQLDialect::MYSQL,
+      SQLDialect::MARIADB => $query . ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+      default => $query,
+    };
   }
 
   /**
@@ -477,7 +461,7 @@ EOF
    * @throws ORMException
    * @throws ReflectionException
    */
-  private static function compileChanges(ReflectionClass $entityReflection, array $currentTableFields): SchemaChangeManifest
+  private static function compileChanges(ReflectionClass $entityReflection, array $currentTableFields, SQLDialect $dialect = SQLDialect::MYSQL): SchemaChangeManifest
   {
     # For each entity property, if it has a column attribute, compare column definitions with current table schema
     $columnInspector = ColumnInspector::getInstance();
@@ -514,7 +498,7 @@ EOF
     foreach ($columnsToAdd as $columnName)
     {
       $column = $entityColumnAttributes[$columnName];
-      $changes->add(new DDLAddStatement($columnName, $column->sqlDefinition));
+      $changes->add(new DDLAddStatement($columnName, $column->getSqlDefinition($dialect)));
     }
 
     // Compile list of columns to be dropped
@@ -537,7 +521,7 @@ EOF
       $tableField = $tableFieldMap[$columnName];
       if (self::shouldModifyField($tableField, $columnAttribute))
       {
-        $changes->change(new DDLChangeStatement($tableField->Field, $columnAttribute->sqlDefinition));
+        $changes->change(new DDLChangeStatement($tableField->Field, $columnAttribute->getSqlDefinition($dialect)));
       }
     }
 
@@ -632,19 +616,10 @@ EOF
   private static function getColumnNames(string $tableName, DataSource $dataSource, ?string $databaseName = null): array
   {
     $columnNames = [];
-    $dbName = $databaseName ?? $dataSource->getDatabaseName();
-
-    $query = "DESCRIBE `$dbName`.`$tableName`";
-
-    $statement = $dataSource->getClient()->query($query);
-
-    if (false === $statement)
-    {
-      throw new ORMException("Failed to describe `$dbName`.`$tableName`: " . print_r($dataSource->getClient()->errorInfo(), true));
-    }
-
-    /** @var SQLTableDescription[] $tableFields */
-    $tableFields = $statement->fetchAll(PDO::FETCH_CLASS,SQLTableDescription::class);
+    $tableFields = self::getTableDescriptions(
+      (object)['__tableName' => $tableName],
+      $dataSource->getClient()
+    );
 
     foreach ($tableFields as $tableField)
     {
@@ -665,17 +640,160 @@ EOF
   private static function getTableDescriptions(object $entityInstance, PDO|IDataObject $connection): array
   {
     $entityInspector = EntityInspector::getInstance();
+    $tableName = property_exists($entityInstance, '__tableName')
+      ? $entityInstance->__tableName
+      : $entityInspector->getTableName($entityInstance);
+    $dialect = SqlDialectHelper::fromPdo($connection);
 
-    $tableName = $entityInspector->getTableName($entityInstance);
+    return match ($dialect) {
+      SQLDialect::SQLITE => self::getSQLiteTableDescriptions($connection, $tableName),
+      SQLDialect::POSTGRESQL => self::getPostgreSqlTableDescriptions($connection, $tableName),
+      default => self::getMySqlTableDescriptions($connection, $tableName),
+    };
+  }
 
-    # Describe the current table schema
-    $statement = $connection->query("DESCRIBE `$tableName`");
+  private static function getQualifiedTableName(string $tableName, SchemaOptions $options): string
+  {
+    return SqlDialectHelper::qualifyTable($tableName, $options->dbName, $options->dialect);
+  }
 
-    if (false === $statement->execute())
-    {
-      throw new ORMException("Failed to execute 'DESCRIBE `$tableName`'" . PHP_EOL . print_r($statement->errorInfo(), true));
+  private static function resolveSchemaOptions(object $entityInstance, ?SchemaOptions $options): SchemaOptions
+  {
+    $options ??= new SchemaOptions();
+
+    $entityMetadata = EntityInspector::getInstance()->getMetaData($entityInstance);
+    $dbName = $options->dbName ?: ($entityMetadata->database ?? '');
+    $dialect = $options->dialect;
+
+    if (
+      $options->dialect === SQLDialect::MYSQL &&
+      $entityMetadata->driver &&
+      $entityMetadata->driver !== DataSourceType::MYSQL
+    ) {
+      $dialect = SqlDialectHelper::fromDataSourceType($entityMetadata->driver);
+    }
+
+    return new SchemaOptions(
+      dbName: $dbName,
+      dialect: $dialect,
+      entityPrefix: $options->entityPrefix,
+      logging: $options->logging,
+      dropSchema: $options->dropSchema,
+      synchronize: $options->synchronize,
+      checkIfExists: $options->checkIfExists,
+      isTemporary: $options->isTemporary,
+      characterSet: $options->characterSet,
+      engine: $options->engine,
+    );
+  }
+
+  private static function getTableDefinitionSql(PDO $connection, string $tableName, SQLDialect $dialect): ?string
+  {
+    return match ($dialect) {
+      SQLDialect::SQLITE => self::getSQLiteTableDefinitionSql($connection, $tableName),
+      default => self::getMySqlTableDefinitionSql($connection, $tableName),
+    };
+  }
+
+  private static function getMySqlTableDefinitionSql(PDO $connection, string $tableName): ?string
+  {
+    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::MYSQL);
+    $statement = $connection->query("SHOW CREATE TABLE $quotedTableName");
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to execute 'SHOW CREATE TABLE $quotedTableName'" . PHP_EOL . print_r($statement?->errorInfo(), true));
+    }
+
+    $result = $statement->fetchColumn(1);
+    return is_string($result) ? $result : null;
+  }
+
+  private static function getSQLiteTableDefinitionSql(PDO $connection, string $tableName): ?string
+  {
+    $quotedTableName = $connection->quote($tableName);
+    $statement = $connection->query("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = $quotedTableName");
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to load SQLite table definition for '$tableName'.");
+    }
+
+    $result = $statement->fetchColumn();
+    return is_string($result) ? $result : null;
+  }
+
+  private static function getMySqlTableDescriptions(PDO $connection, string $tableName): array
+  {
+    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::MYSQL);
+    $statement = $connection->query("DESCRIBE $quotedTableName");
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to execute 'DESCRIBE $quotedTableName'" . PHP_EOL . print_r($statement?->errorInfo(), true));
     }
 
     return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
+  }
+
+  private static function getPostgreSqlTableDescriptions(PDO $connection, string $tableName): array
+  {
+    $quotedTableName = $connection->quote($tableName);
+    $sql = <<<SQL
+SELECT
+  column_name AS "Field",
+  data_type AS "Type",
+  CASE WHEN is_nullable = 'YES' THEN 'YES' ELSE 'NO' END AS "Null",
+  CASE WHEN column_default LIKE 'nextval(%' THEN 'PRI' ELSE '' END AS "Key",
+  column_default AS "Default",
+  CASE WHEN column_default LIKE 'nextval(%' THEN 'auto_increment' ELSE '' END AS "Extra"
+FROM information_schema.columns
+WHERE table_name = $quotedTableName
+ORDER BY ordinal_position
+SQL;
+
+    $statement = $connection->query($sql);
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to load PostgreSQL table metadata for '$tableName'.");
+    }
+
+    return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
+  }
+
+  private static function getSQLiteTableDescriptions(PDO $connection, string $tableName): array
+  {
+    $quotedTableName = $connection->quote($tableName);
+    $statement = $connection->query("PRAGMA table_info($quotedTableName)");
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to load SQLite table metadata for '$tableName'.");
+    }
+
+    $tableDefinition = self::getSQLiteTableDefinitionSql($connection, $tableName) ?? '';
+    $autoIncrementColumns = [];
+    if (preg_match_all('/[`"]?([A-Za-z0-9_]+)[`"]?\s+INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/i', $tableDefinition, $matches)) {
+      $autoIncrementColumns = $matches[1];
+    }
+
+    $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+    return array_map(
+      fn(array $row) => self::mapSqliteTableRow($row, $autoIncrementColumns),
+      $rows
+    );
+  }
+
+  private static function mapSqliteTableRow(array $row, array $autoIncrementColumns = []): SQLTableDescription
+  {
+    $description = new SQLTableDescription();
+    $description->Field = $row['name'] ?? '';
+    $description->Type = strtolower((string)($row['type'] ?? ''));
+    $description->Null = (isset($row['notnull']) && intval($row['notnull']) === 1) ? 'NO' : 'YES';
+    $description->Key = (isset($row['pk']) && intval($row['pk']) === 1) ? 'PRI' : '';
+    $defaultValue = $row['dflt_value'] ?? null;
+    $description->Default = is_string($defaultValue)
+      ? trim($defaultValue, "'\"")
+      : ($defaultValue === null ? null : (string)$defaultValue);
+    $description->Extra = in_array($description->Field, $autoIncrementColumns, true) ? 'auto_increment' : '';
+
+    return $description;
   }
 }

@@ -22,9 +22,14 @@ final class SQLInsertIntoStatement
   public function __construct(private readonly SQLQuery $query, private readonly array $columns = [])
   {
     $queryString = "";
+    $columns = array_map(function(string $column): string {
+      $parts = explode('.', $column);
+      return end($parts);
+    }, array_values($columns));
 
     if (!empty($columns)) {
-      $queryString = "(" . implode(', ', $columns) . ") ";
+      $quotedColumns = array_map(fn(string $column): string => "`$column`", $columns);
+      $queryString = "(" . implode(', ', $quotedColumns) . ") ";
 
       $columnIndex = 0;
       foreach ($columns as $index => $column) {

@@ -28,6 +28,8 @@ use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
+use DateInvalidTimeZoneException;
+use DateMalformedStringException;
 use ReflectionException;
 use stdClass;
 
@@ -160,12 +162,16 @@ readonly class Repository implements RepositoryInterface
    * @inheritDoc
    * @param object[]|object $entityOrEntities The entity or entities to remove. If an array is passed, a list of entities will be removed.
    * @param RemoveOptions|array|null $removeOptions
+   * @param string $primaryKeyField
    * @return UpdateResult
    * @throws ClassNotFoundException
    * @throws ContainerException
+   * @throws DateInvalidTimeZoneException
    * @throws GeneralSQLQueryException
+   * @throws NotFoundException
    * @throws ORMException
    * @throws ReflectionException
+   * @throws DateMalformedStringException
    */
   public function softRemove(
     array|object|null $entityOrEntities,

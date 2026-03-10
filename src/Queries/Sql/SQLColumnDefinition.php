@@ -42,111 +42,11 @@ class SQLColumnDefinition implements Stringable
     private readonly SQLDialect     $dialect = SQLDialect::MYSQL,
   )
   {
-    $queryString = !empty($this->name) ? "`$this->name` " : '';
-    if (is_null($this->lengthOrValues)) {
-      $this->lengthOrValues = match($this->type) {
-        ColumnType::VARCHAR => '10',
-        ColumnType::DECIMAL => '16,2',
-        default => null
-      };
-    }
-
-    if (!is_null($this->lengthOrValues)) {
-      switch($this->type) {
-        case ColumnType::TINYINT:
-        case ColumnType::SMALLINT:
-        case ColumnType::INT:
-        case ColumnType::BIGINT:
-          $queryString .= $this->type->value;
-          if (!empty($this->lengthOrValues)) {
-            $queryString .= "(" . $this->lengthOrValues . ") ";
-          } else {
-            $queryString .= " ";
-          }
-          break;
-        case ColumnType::TINYINT_UNSIGNED:
-        case ColumnType::SMALLINT_UNSIGNED:
-        case ColumnType::INT_UNSIGNED:
-        case ColumnType::BIGINT_UNSIGNED:
-          $queryString .= $this->type->value;
-          if (!empty($this->lengthOrValues)) {
-            $length = $this->lengthOrValues;
-            $queryString = str_replace(' UNSIGNED', "($length) UNSIGNED ", $queryString);
-          } else {
-            $queryString .= " ";
-          }
-          break;
-        case ColumnType::VARCHAR:
-          $queryString .= $this->type->value . "(" . $this->lengthOrValues . ") ";
-
-          break;
-
-        case ColumnType::ENUM:
-          if (!is_array($this->lengthOrValues)) {
-            $this->lengthOrValues = [];
-          }
-          $queryString .= $this->type->value . "(";
-          foreach ($this->lengthOrValues as $value) {
-            $queryString .= "'$value', ";
-          }
-          $queryString = trim($queryString, ', ');
-          $queryString .= ") ";
-          break;
-  
-        default: $queryString .= "{$this->type->value} ";
-      }
-    } else {
-      $queryString .= "{$this->type->value} ";
-    }
-
-    if ($this->type->isNumeric() && is_string($this->defaultValue)) {
-      $this->defaultValue = $this->nullable || $this->autoIncrement ? null : 0;
-    }
-
-    if (!is_null($this->defaultValue)) {
-      $temporalDatatypes = [
-        // SQLDataTypes::DATE,
-        ColumnType::DATETIME
-      ];
-      $stringExemptions = ['CURRENT_TIMESTAMP', 'CURRENT_DATE()', 'CURRENT_TIME()', 'JSON_ARRAY()'];
-      $queryString .= "DEFAULT " . match(gettype($this->defaultValue)) {
-        'object'  => method_exists($this->defaultValue, '__toString') ? strval($this->defaultValue) : json_encode($this->defaultValue),
-        'boolean' => intval($this->defaultValue),
-        // 'string'  => ( !in_array($this->dataType, $temporalDatatypes) ) ? "'" . $this->defaultValue . "'" : $this->defaultValue,
-        'string'  => !in_array($this->defaultValue, $stringExemptions) ? "'" . $this->defaultValue . "'" : (
-          match($this->defaultValue) {
-            Column::CURRENT_DATE => "'" . date('Y-m-d') . "'",
-            Column::CURRENT_TIME => "'" . date('H:i:s') . "'",
-            default => $this->defaultValue
-          }),
-        default   => $this->defaultValue
-      } . " ";
-    }
-
-    if ($this->autoIncrement && $this->type->isNumeric()) {
-      $queryString .= "AUTO_INCREMENT ";
-    }
-
-    $queryString .= $this->nullable && !$this->isPrimaryKey ? "NULL " : "NOT NULL ";
-
-    if ($this->isPrimaryKey) {
-      $queryString .= "PRIMARY KEY ";
-    } else if ($this->isUnique) {
-      $queryString .= trim("UNIQUE " . $this->uniqueKey) . ' ';
-    }
-
-    if (!empty($this->onUpdate)) {
-      $queryString .= "ON UPDATE CURRENT_TIMESTAMP ";
-    }
-
-    if (!empty($this->comment)) {
-      $queryString .= "COMMENT $this->comment ";
-    }
-
-    $queryString = str_replace('((', '(', $queryString);
-    $queryString = str_replace('))', ')', $queryString);
-    
-    $this->queryString = trim($queryString);
+    $this->queryString = trim(match ($this->dialect) {
+      SQLDialect::POSTGRESQL => $this->buildPostgreSqlDefinition(),
+      SQLDialect::SQLITE => $this->buildSqliteDefinition(),
+      default => $this->buildMySqlDefinition(),
+    });
   }
 
   /**
@@ -163,5 +63,254 @@ class SQLColumnDefinition implements Stringable
   public function __toString(): string
   {
     return $this->queryString();
+  }
+
+  private function buildMySqlDefinition(): string
+  {
+    $queryString = $this->getQuotedColumnName() . ' ';
+    $lengthOrValues = $this->getNormalizedLengthOrValues();
+
+    if (!is_null($lengthOrValues)) {
+      switch ($this->type) {
+        case ColumnType::TINYINT:
+        case ColumnType::SMALLINT:
+        case ColumnType::INT:
+        case ColumnType::BIGINT:
+          $queryString .= $this->type->value . (!empty($lengthOrValues) ? "($lengthOrValues) " : ' ');
+          break;
+        case ColumnType::TINYINT_UNSIGNED:
+        case ColumnType::SMALLINT_UNSIGNED:
+        case ColumnType::INT_UNSIGNED:
+        case ColumnType::BIGINT_UNSIGNED:
+          $queryString .= $this->type->value;
+          $queryString = !empty($lengthOrValues)
+            ? str_replace(' UNSIGNED', "($lengthOrValues) UNSIGNED ", $queryString)
+            : $queryString . ' ';
+          break;
+        case ColumnType::VARCHAR:
+          $queryString .= $this->type->value . "($lengthOrValues) ";
+          break;
+        case ColumnType::ENUM:
+          $queryString .= $this->buildEnumTypeDefinition();
+          break;
+        default:
+          $queryString .= "{$this->type->value} ";
+      }
+    } else {
+      $queryString .= "{$this->type->value} ";
+    }
+
+    $queryString .= $this->buildDefaultClause();
+
+    if ($this->autoIncrement && $this->type->isNumeric()) {
+      $queryString .= 'AUTO_INCREMENT ';
+    }
+
+    $queryString .= $this->nullable && !$this->isPrimaryKey ? 'NULL ' : 'NOT NULL ';
+
+    if ($this->isPrimaryKey) {
+      $queryString .= 'PRIMARY KEY ';
+    } elseif ($this->isUnique) {
+      $queryString .= trim("UNIQUE {$this->uniqueKey}") . ' ';
+    }
+
+    if (!empty($this->onUpdate)) {
+      $queryString .= 'ON UPDATE CURRENT_TIMESTAMP ';
+    }
+
+    if (!empty($this->comment)) {
+      $queryString .= "COMMENT {$this->comment} ";
+    }
+
+    return $this->normalizeQueryString($queryString);
+  }
+
+  private function buildSqliteDefinition(): string
+  {
+    $queryString = $this->getQuotedColumnName() . ' ';
+
+    if ($this->autoIncrement && $this->isPrimaryKey && $this->type->isNumeric()) {
+      return $queryString . 'INTEGER PRIMARY KEY AUTOINCREMENT';
+    }
+
+    $queryString .= $this->getSqliteType() . ' ';
+    $queryString .= $this->buildDefaultClause();
+
+    if (!$this->nullable && !$this->isPrimaryKey) {
+      $queryString .= 'NOT NULL ';
+    }
+
+    if ($this->isPrimaryKey) {
+      $queryString .= 'PRIMARY KEY ';
+    } elseif ($this->isUnique) {
+      $queryString .= 'UNIQUE ';
+    }
+
+    return $this->normalizeQueryString($queryString);
+  }
+
+  private function buildPostgreSqlDefinition(): string
+  {
+    $queryString = $this->getQuotedColumnName() . ' ';
+
+    if ($this->autoIncrement && $this->isPrimaryKey && $this->type->isNumeric()) {
+      $type = in_array($this->type, [ColumnType::BIGINT, ColumnType::BIGINT_UNSIGNED], true) ? 'BIGSERIAL' : 'SERIAL';
+      return $queryString . "$type PRIMARY KEY";
+    }
+
+    $queryString .= $this->getPostgreSqlType() . ' ';
+    $queryString .= $this->buildDefaultClause();
+
+    if (!$this->nullable && !$this->isPrimaryKey) {
+      $queryString .= 'NOT NULL ';
+    }
+
+    if ($this->isPrimaryKey) {
+      $queryString .= 'PRIMARY KEY ';
+    } elseif ($this->isUnique) {
+      $queryString .= 'UNIQUE ';
+    }
+
+    return $this->normalizeQueryString($queryString);
+  }
+
+  private function getQuotedColumnName(): string
+  {
+    if (empty($this->name)) {
+      return '';
+    }
+
+    return match ($this->dialect) {
+      SQLDialect::POSTGRESQL => "\"{$this->name}\"",
+      default => "`{$this->name}`",
+    };
+  }
+
+  private function getNormalizedLengthOrValues(): null|string|int|array
+  {
+    if (!is_null($this->lengthOrValues)) {
+      return $this->lengthOrValues;
+    }
+
+    return match ($this->type) {
+      ColumnType::VARCHAR => '10',
+      ColumnType::DECIMAL => '16,2',
+      default => null,
+    };
+  }
+
+  private function buildEnumTypeDefinition(): string
+  {
+    $values = is_array($this->lengthOrValues) ? $this->lengthOrValues : [];
+    $queryString = $this->type->value . '(';
+
+    foreach ($values as $value) {
+      $queryString .= "'$value', ";
+    }
+
+    return trim($queryString, ', ') . ') ';
+  }
+
+  private function buildDefaultClause(): string
+  {
+    $defaultValue = $this->defaultValue;
+
+    if ($this->type->isNumeric() && is_string($defaultValue)) {
+      $defaultValue = $this->nullable || $this->autoIncrement ? null : 0;
+    }
+
+    if (is_null($defaultValue)) {
+      return '';
+    }
+
+    return 'DEFAULT ' . $this->normalizeDefaultValue($defaultValue) . ' ';
+  }
+
+  private function normalizeDefaultValue(mixed $defaultValue): string
+  {
+    $stringExemptions = ['CURRENT_TIMESTAMP', 'CURRENT_DATE()', 'CURRENT_TIME()', 'JSON_ARRAY()'];
+
+    return match (gettype($defaultValue)) {
+      'object' => method_exists($defaultValue, '__toString') ? strval($defaultValue) : json_encode($defaultValue),
+      'boolean' => (string)intval($defaultValue),
+      'string' => !in_array($defaultValue, $stringExemptions, true)
+        ? "'" . $defaultValue . "'"
+        : match ($defaultValue) {
+          Column::CURRENT_DATE => $this->dialect === SQLDialect::POSTGRESQL ? 'CURRENT_DATE' : 'CURRENT_DATE',
+          Column::CURRENT_TIME => $this->dialect === SQLDialect::POSTGRESQL ? 'CURRENT_TIME' : 'CURRENT_TIME',
+          default => $defaultValue,
+        },
+      default => (string)$defaultValue,
+    };
+  }
+
+  private function getSqliteType(): string
+  {
+    return match (true) {
+      in_array($this->type, [
+        ColumnType::BOOLEAN,
+        ColumnType::TINYINT,
+        ColumnType::TINYINT_UNSIGNED,
+        ColumnType::SMALLINT,
+        ColumnType::SMALLINT_UNSIGNED,
+        ColumnType::MEDIUMINT,
+        ColumnType::MEDIUMINT_UNSIGNED,
+        ColumnType::INT,
+        ColumnType::INT_UNSIGNED,
+        ColumnType::BIGINT,
+        ColumnType::BIGINT_UNSIGNED,
+        ColumnType::BIT,
+      ], true) => 'INTEGER',
+      in_array($this->type, [ColumnType::FLOAT, ColumnType::DOUBLE, ColumnType::DECIMAL], true) => 'REAL',
+      in_array($this->type, [
+        ColumnType::BINARY,
+        ColumnType::BLOB,
+        ColumnType::MEDIUMBLOB,
+        ColumnType::LONGBLOB,
+        ColumnType::TINYBLOB,
+        ColumnType::VARBINARY,
+      ], true) => 'BLOB',
+      $this->type->isDateTime() => 'DATETIME',
+      default => 'TEXT',
+    };
+  }
+
+  private function getPostgreSqlType(): string
+  {
+    return match ($this->type) {
+      ColumnType::BOOLEAN => 'BOOLEAN',
+      ColumnType::TINYINT,
+      ColumnType::SMALLINT,
+      ColumnType::SMALLINT_UNSIGNED => 'SMALLINT',
+      ColumnType::INT,
+      ColumnType::INT_UNSIGNED,
+      ColumnType::MEDIUMINT,
+      ColumnType::MEDIUMINT_UNSIGNED => 'INTEGER',
+      ColumnType::BIGINT,
+      ColumnType::BIGINT_UNSIGNED => 'BIGINT',
+      ColumnType::FLOAT => 'REAL',
+      ColumnType::DOUBLE,
+      ColumnType::DECIMAL => 'DOUBLE PRECISION',
+      ColumnType::JSON => 'JSONB',
+      ColumnType::UUID => 'UUID',
+      ColumnType::DATE => 'DATE',
+      ColumnType::TIME => 'TIME',
+      ColumnType::DATETIME,
+      ColumnType::TIMESTAMP => 'TIMESTAMP',
+      ColumnType::BINARY,
+      ColumnType::BLOB,
+      ColumnType::MEDIUMBLOB,
+      ColumnType::LONGBLOB,
+      ColumnType::TINYBLOB,
+      ColumnType::VARBINARY => 'BYTEA',
+      ColumnType::VARCHAR => 'VARCHAR(' . ($this->getNormalizedLengthOrValues() ?: 255) . ')',
+      default => 'TEXT',
+    };
+  }
+
+  private function normalizeQueryString(string $queryString): string
+  {
+    $queryString = str_replace('((', '(', $queryString);
+    return str_replace('))', ')', $queryString);
   }
 }

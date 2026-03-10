@@ -5,6 +5,7 @@ namespace Assegai\Orm\Attributes\Columns;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
 use Assegai\Orm\Queries\Sql\ColumnType;
+use Assegai\Orm\Enumerations\SQLDialect;
 use Attribute;
 use UnitEnum;
 
@@ -118,6 +119,7 @@ class Column
       autoIncrement: $this->autoIncrement,
       onUpdate: $this->onUpdate,
       isUnique: $this->isUnique,
+      uniqueKey: $this->uniqueKey,
       isPrimaryKey: $this->isPrimaryKey,
       comment: $this->comment
     );
@@ -244,5 +246,29 @@ class Column
     }
 
     return implode(',', array_map(fn($case) => "'$case->value'" ?? "'$case'", $this->getValues()));
+  }
+
+  public function getSqlDefinition(SQLDialect $dialect = SQLDialect::MYSQL): SQLColumnDefinition
+  {
+    $sqlLengthOrValues = $this->lengthOrValues;
+
+    if (is_string($sqlLengthOrValues) && preg_match('/^\((.*)\)$/', $sqlLengthOrValues, $matches)) {
+      $sqlLengthOrValues = $matches[1];
+    }
+
+    return new SQLColumnDefinition(
+      name: $this->name,
+      type: $this->type,
+      lengthOrValues: $sqlLengthOrValues,
+      defaultValue: $this->default,
+      nullable: $this->nullable,
+      autoIncrement: $this->autoIncrement,
+      onUpdate: $this->onUpdate,
+      isUnique: $this->isUnique,
+      uniqueKey: $this->uniqueKey,
+      isPrimaryKey: $this->isPrimaryKey,
+      comment: $this->comment,
+      dialect: $dialect,
+    );
   }
 }

@@ -207,6 +207,11 @@ final class EntityInspector
     $properties = $reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC);
     $hasRelations = !empty($relations);
 
+    if ($hasRelations) {
+      // Clean up relations array
+      $relations = array_map(fn(string $relation) => trim($relation), $relations);
+    }
+
     $tableName = $this->getTableName($entity);
 
     foreach ($properties as $property) {

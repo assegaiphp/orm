@@ -55,7 +55,9 @@ readonly class Migrator
     {
       throw new MigrationException("Migration name cannot be empty.");
     }
-    $migrationInsertionSql = "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES('$migrationName', NOW())";
+    $quotedMigrationName = $this->dataSource->getClient()->quote($migrationName);
+    $quotedTimestamp = $this->dataSource->getClient()->quote(date('Y-m-d H:i:s'));
+    $migrationInsertionSql = "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES($quotedMigrationName, $quotedTimestamp)";
     $statement = $this->dataSource->getClient()->query($migrationInsertionSql);
 
     if (false === $statement)
@@ -76,7 +78,8 @@ readonly class Migrator
     $migration->down($this->dataSource);
     $migrationName = $migration->getName();
 
-    $migrationDeletionSql = "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration='$migrationName'";
+    $quotedMigrationName = $this->dataSource->getClient()->quote($migrationName);
+    $migrationDeletionSql = "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration=$quotedMigrationName";
     $statement = $this->dataSource->getClient()->query($migrationDeletionSql);
 
     if (false === $statement || false === $statement->execute())

@@ -6,7 +6,7 @@ use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
-use Assegai\Util\Path;
+use Assegai\Orm\Util\SqlDialectHelper;
 use PDO;
 use PDOException;
 
@@ -81,6 +81,7 @@ final class DBFactory
           username: $user,
           password: $password
         );
+        self::configureConnection(DBFactory::$connections[$type][$dbName], SQLDialect::MYSQL);
       } catch (PDOException) {
         throw new DataSourceConnectionException();
       }
@@ -128,6 +129,7 @@ final class DBFactory
           username: $user,
           password: $password
         );
+        self::configureConnection(DBFactory::$connections[$type][$dbName], SQLDialect::POSTGRESQL);
       } catch (PDOException) {
         throw new DataSourceConnectionException(DataSourceType::POSTGRESQL);
       }
@@ -150,14 +152,20 @@ final class DBFactory
     }
 
     if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
-      self::validateDatabaseDetails(type: $type, dbName: $dbName);
-      $config = Config::get('databases')[$type][$dbName];
+      $config = Config::get('databases')[$type][$dbName] ?? null;
 
       try {
-        $path = null;
-        extract($config);
-        $path = Path::join(getcwd() ?: '', $path);
-        DBFactory::$connections[$type][$dbName] = new PDO( dsn: "sqlite:$path" );
+        $path = self::isDirectSqlitePath($dbName)
+          ? $dbName
+          : ($config['path'] ?? null);
+
+        if (empty($path)) {
+          throw new DataSourceConnectionException(DataSourceType::SQLITE);
+        }
+
+        $path = SqlDialectHelper::normalizeSqlitePath((string)$path);
+        DBFactory::$connections[$type][$dbName] = new PDO(dsn: "sqlite:$path");
+        self::configureConnection(DBFactory::$connections[$type][$dbName], SQLDialect::SQLITE);
       } catch (PDOException) {
         throw new DataSourceConnectionException(DataSourceType::SQLITE);
       }
@@ -206,5 +214,24 @@ final class DBFactory
     if (!isset($databases[$type]) || !isset($databases[$type][$dbName])) {
       throw new DataSourceConnectionException();
     }
+  }
+
+  private static function configureConnection(PDO $connection, SQLDialect $dialect): void
+  {
+    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    if ($dialect === SQLDialect::SQLITE) {
+      $connection->exec('PRAGMA foreign_keys = ON');
+    }
+  }
+
+  private static function isDirectSqlitePath(string $path): bool
+  {
+    return $path === ':memory:'
+      || str_starts_with($path, 'file:')
+      || str_contains($path, DIRECTORY_SEPARATOR)
+      || str_contains($path, '/')
+      || preg_match('/\.(sqlite|sqlite3|db)$/i', $path) === 1;
   }
 }

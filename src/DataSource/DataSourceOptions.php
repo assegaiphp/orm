@@ -50,7 +50,8 @@ readonly class DataSourceOptions implements Stringable
       'port' => $this->port,
       'username' => $this->username,
       'password' => $this->password,
-      'synchronize' => $this->synchronize
+      'synchronize' => $this->synchronize,
+      'path' => $this->path,
     ];
   }
 
@@ -60,15 +61,21 @@ readonly class DataSourceOptions implements Stringable
    */
   public static function fromArray(array $props): self
   {
+    $type = $props['type'] ?? DataSourceType::MYSQL;
+    if (is_string($type)) {
+      $type = DataSourceType::tryFrom($type) ?? DataSourceType::MYSQL;
+    }
+
     return new self(
       entities: $props['entities'] ?? [],
-      name: $props['database'] ?? '',
-      type: $props['type'] ?? DataSourceType::MYSQL,
+      name: $props['database'] ?? $props['name'] ?? '',
+      type: $type,
       host: $props['host'] ?? 'localhost',
       port: $props['port'] ?? 3306,
-      username: $props['username'] ?? ['user'] ?? 'root',
-      password: $props['password'] ?? ['pass'] ?? '',
+      username: $props['username'] ?? $props['user'] ?? null,
+      password: $props['password'] ?? $props['pass'] ?? null,
       synchronize: $props['synchronize'] ?? false,
+      path: $props['path'] ?? null,
     );
   }
 

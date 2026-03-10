@@ -36,7 +36,7 @@ use stdClass;
  *     ]
  * };
  */
-class JoinOptions
+readonly class JoinOptions
 {
   /**
    * Constructs the `JoinOptions`
@@ -48,11 +48,11 @@ class JoinOptions
    * @param null|stdClass|array $innerJoin Array of columns to INNER JOIN.
    */
   public function __construct(
-    public readonly ?string $alias,
-    public readonly null|stdClass|array $leftJoinAndSelect,
-    public readonly null|stdClass|array $innerJoinAndSelect,
-    public readonly null|stdClass|array $leftJoin,
-    public readonly null|stdClass|array $innerJoin,
+    public ?string             $alias,
+    public null|stdClass|array $leftJoinAndSelect,
+    public null|stdClass|array $innerJoinAndSelect,
+    public null|stdClass|array $leftJoin,
+    public null|stdClass|array $innerJoin,
   ) { }
 
   /**
