@@ -4,6 +4,7 @@ namespace Assegai\Orm\DataSource;
 
 use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
 use Assegai\Orm\Exceptions\DataSourceException;
@@ -14,7 +15,9 @@ use Assegai\Orm\Interfaces\RepositoryInterface;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Repository;
 use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Util\SqlDialectHelper;
 use PDO;
+use PDOException;
 use ReflectionClass;
 use ReflectionException;
 
@@ -86,16 +89,23 @@ class DataSource implements DataSourceInterface
    */
   public function getDatabaseName(): ?string
   {
-    // Execute a SQL query to retrieve the current database name.
-    $databaseName = $this->connection->query('SELECT DATABASE()')->fetchColumn();
+    $query = match ($this->type) {
+      DataSourceType::POSTGRESQL => 'SELECT current_database()',
+      DataSourceType::SQLITE => null,
+      default => 'SELECT DATABASE()',
+    };
 
-    // If the query fails, return null to indicate that the database name cannot be determined.
-    if (false === $databaseName) {
+    if (is_null($query)) {
+      return $this->options->name ?? null;
+    }
+
+    $databaseName = $this->connection?->query($query)?->fetchColumn();
+
+    if ($databaseName === false) {
       return null;
     }
 
-    // Return the database name as a string.
-    return (string)$databaseName;
+    return $databaseName ? (string)$databaseName : null;
   }
 
   /**
@@ -124,65 +134,22 @@ class DataSource implements DataSourceInterface
     }
 
     if (is_array($options)) {
-      $options = (object)$options;
+      $options = DataSourceOptions::fromArray($options);
     }
 
+    if (!$options instanceof DataSourceOptions) {
+      throw new DataSourceException("Invalid data source options.");
+    }
+
+    $options = $this->resolveOptions($options);
+    $this->options = $options;
     $this->type = $options->type;
 
-    if ($options->name && $options->type) {
-      $type = $options->type->value;
-      $databaseConfigs = Config::get('databases') ?? throw new ORMException("Database configurations not found.");
-
-      $databases = $databaseConfigs[$type] ?? [];
-      $databaseConfig = $databases[$options->name];
-
-      if (isset($databaseConfig['user'])) {
-        $databaseConfig['username'] = $databaseConfig['user'];
-        unset($databaseConfig['user']);
-      }
-
-      if ($databaseConfig) {
-        $options = new DataSourceOptions(...[
-          ...$databaseConfig,
-          'entities' => $options->entities ?? [],
-          'type' => $options->type,
-          'name' => $options->name,
-          'synchronize' => $options->synchronize ?? false
-        ]);
-      }
-    }
-
-    if (
-      !empty($options->name) &&
-      !empty($options->username) &&
-      !empty($options->password) &&
-      !empty($options->port)
-    )
-    {
-      $host = $options->host;
-      $name = $options->name;
-      $port = $options->port;
-
-      $dsn = match ($this->type) {
-        DataSourceType::POSTGRESQL => "pgsql:host=$host;port=$port;dbname=$name",
-        DataSourceType::MSSQL => "sqlsrv:Server=$host,port;Database=$name",
-        DataSourceType::SQLITE => "sqlite:$name",
-        default => "mysql:host=$host;port=$port;dbname=$name"
-      };
-
-      $this->connection = new PDO(dsn: $dsn, username: $options->username, password: $options->password);
-    }
-    else
-    {
-      $this->connection = match ($this->type) {
-        DataSourceType::POSTGRESQL  => DBFactory::getPostgresSQLConnection(dbName: $options->name),
-        DataSourceType::SQLITE      => DBFactory::getSQLiteConnection(dbName: $options->name),
-        DataSourceType::MONGODB     => DBFactory::getMongoDbConnection(dbName: $options->name),
-        DataSourceType::MARIADB,
-        DataSourceType::MYSQL       => DBFactory::getMySQLConnection(dbName: $options->name),
-        DataSourceType::REDIS       => DataSourceFactory::create($this->type, $options->name),
-        default                     => DBFactory::getSQLConnection(dbName: $options->name)
-      };
+    try {
+      $this->connection = $this->createConnection($options);
+      $this->configureConnection($this->connection, SqlDialectHelper::fromDataSourceType($this->type));
+    } catch (PDOException) {
+      throw new DataSourceConnectionException($this->type);
     }
 
     $this->manager = isset($options->entities) && count($options->entities) === 1
@@ -215,5 +182,110 @@ class DataSource implements DataSourceInterface
   public function getClient(): PDO
   {
     return $this->connection;
+  }
+
+  public function getDialect(): SQLDialect
+  {
+    return SqlDialectHelper::fromDataSourceType($this->type);
+  }
+
+  /**
+   * @throws ORMException
+   */
+  private function resolveOptions(DataSourceOptions $options): DataSourceOptions
+  {
+    $databaseConfigs = Config::get('databases') ?? [];
+    $type = $options->type->value;
+    $databaseConfig = $databaseConfigs[$type][$options->name] ?? null;
+
+    if (empty($databaseConfig)) {
+      return $options;
+    }
+
+    return DataSourceOptions::fromArray([
+      ...$databaseConfig,
+      'entities' => $options->entities,
+      'name' => $options->name,
+      'database' => $options->name,
+      'type' => $options->type,
+      'synchronize' => $options->synchronize,
+      'path' => $options->path ?? $databaseConfig['path'] ?? null,
+    ]);
+  }
+
+  /**
+   * @throws DataSourceConnectionException
+   */
+  private function createConnection(DataSourceOptions $options): PDO
+  {
+    return match ($this->type) {
+      DataSourceType::POSTGRESQL => $this->createPostgreSqlConnection($options),
+      DataSourceType::SQLITE => $this->createSqliteConnection($options),
+      DataSourceType::MONGODB => DBFactory::getMongoDbConnection(dbName: $options->name),
+      DataSourceType::MARIADB,
+      DataSourceType::MYSQL => $this->createMySqlConnection($options),
+      DataSourceType::REDIS => DataSourceFactory::create($this->type, $options->name)->getClient(),
+      default => DBFactory::getSQLConnection(dbName: $options->name),
+    };
+  }
+
+  /**
+   * @throws DataSourceConnectionException
+   */
+  private function createMySqlConnection(DataSourceOptions $options): PDO
+  {
+    if (empty($options->username) && empty($options->password)) {
+      return DBFactory::getMySQLConnection(dbName: $options->name);
+    }
+
+    $dsn = "mysql:host={$options->host};port={$options->port};dbname={$options->name}";
+    return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
+  }
+
+  /**
+   * @throws DataSourceConnectionException
+   */
+  private function createPostgreSqlConnection(DataSourceOptions $options): PDO
+  {
+    if (empty($options->username) && empty($options->password)) {
+      return DBFactory::getPostgresSQLConnection(dbName: $options->name);
+    }
+
+    $dsn = "pgsql:host={$options->host};port={$options->port};dbname={$options->name}";
+    return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
+  }
+
+  /**
+   * @throws DataSourceConnectionException
+   */
+  private function createSqliteConnection(DataSourceOptions $options): PDO
+  {
+    $path = $options->path ?? $options->name;
+
+    if ($this->isDirectSqlitePath($path)) {
+      $dsn = "sqlite:" . SqlDialectHelper::normalizeSqlitePath($path);
+      return new PDO($dsn);
+    }
+
+    return DBFactory::getSQLiteConnection(dbName: $options->name);
+  }
+
+  private function configureConnection(PDO $connection, SQLDialect $dialect): void
+  {
+    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    if ($dialect === SQLDialect::SQLITE) {
+      $connection->exec('PRAGMA foreign_keys = ON');
+    }
+  }
+
+  private function isDirectSqlitePath(string $path): bool
+  {
+    return $path === ':memory:'
+      || str_starts_with($path, 'file:')
+      || str_contains($path, DIRECTORY_SEPARATOR)
+      || str_contains($path, '/')
+      || preg_match('/\.(sqlite|sqlite3|db)$/i', $path) === 1;
   }
 }

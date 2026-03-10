@@ -19,6 +19,7 @@ use Assegai\Orm\Attributes\Relations\ManyToOne;
 use Assegai\Orm\Attributes\Relations\OneToMany;
 use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\RelationType;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ContainerException;
@@ -1454,6 +1455,12 @@ class EntityManager implements IEntityStoreOwner
   public function upsert(string $entityClass, object|array $entityOrEntities, array|UpsertOptions $options): InsertResult|UpdateResult
   {
     // TODO: #83 Implement EntityManager::upsert @amasiye
+    if (is_array($options)) {
+      $options = array_is_list($options)
+        ? new UpsertOptions(conflictPaths: $options)
+        : UpsertOptions::fromArray($options);
+    }
+
     if (is_array($entityOrEntities)) {
       $results = [];
       $errors = [];
@@ -1480,10 +1487,18 @@ class EntityManager implements IEntityStoreOwner
     $columns = $this->entityInspector->getColumns(entity: $entityOrEntities);
     $updateColumns = $this->entityInspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
     $values = $this->entityInspector->getValues(entity: $entityOrEntities);
+    $tableName = $this->entityInspector->getTableName(entity: $entityOrEntities);
 
-    $assignmentList = array_map(fn($column) => "$column=VALUES($column)", $updateColumns);
+    if ($this->connection->type === DataSourceType::SQLITE) {
+      return $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options);
+    }
 
-    $this->query->insertInto(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
+    $assignmentList = array_map(function($column): string {
+      $column = $this->stripTableName($column);
+      return "$column=VALUES($column)";
+    }, array_values($updateColumns));
+
+    $this->query->insertInto(tableName: $tableName)->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
 
     if ($this->isDebug) {
       $this->query->debug();
@@ -1504,6 +1519,84 @@ class EntityManager implements IEntityStoreOwner
     }
 
     return new InsertResult(identifiers: (object)['id' => $this->lastInsertId()], raw: $this->query->queryString(), generatedMaps: $entityOrEntities, errors: $errors);
+  }
+
+  private function executeSqliteUpsert(
+    string $tableName,
+    object $entity,
+    array $columns,
+    array $updateColumns,
+    array $values,
+    UpsertOptions $options
+  ): InsertResult
+  {
+    $columns = array_map([$this, 'stripTableName'], array_values($columns));
+    $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
+    $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: ['id']);
+
+    $quotedColumns = implode(', ', array_map(fn(string $column): string => "`$column`", $columns));
+    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => "`$column`", $conflictPaths));
+    $valueList = implode(', ', array_map([$this, 'toSqlLiteral'], $values));
+    $assignmentList = implode(', ', array_map(fn(string $column): string => "`$column`=excluded.`$column`", $updateColumns));
+    $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
+
+    $queryString = "INSERT INTO `$tableName` ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction";
+    $this->query->init();
+    $this->query->insertInto(tableName: $tableName);
+    $this->query->setQueryString($queryString);
+
+    if ($this->isDebug) {
+      $this->query->debug();
+    }
+
+    $result = $this->query->execute();
+    $errors = [];
+
+    if ($result->isError()) {
+      $errors[] = $this->query->getConnection()->errorInfo();
+      $errors[] = new GeneralSQLQueryException($this->query);
+    }
+
+    if ($result->isOk()) {
+      $lastInsertId = $this->lastInsertId();
+      if ($lastInsertId) {
+        $entity->id = $lastInsertId;
+      }
+    }
+
+    $identifier = $entity->id ?? $this->lastInsertId();
+
+    return new InsertResult(
+      identifiers: (object)['id' => $identifier],
+      raw: $this->query->queryString(),
+      generatedMaps: $entity,
+      errors: $errors
+    );
+  }
+
+  private function stripTableName(string $column): string
+  {
+    $parts = explode('.', $column);
+    return end($parts);
+  }
+
+  private function toSqlLiteral(mixed $value): string
+  {
+    if ($value instanceof UnitEnum && property_exists($value, 'value')) {
+      $value = $value->value;
+    }
+
+    if ($value instanceof DateTime || $value instanceof DateTimeImmutable) {
+      $value = $value->format('Y-m-d H:i:s');
+    }
+
+    return match (true) {
+      is_null($value) => 'NULL',
+      is_bool($value) => (string)intval($value),
+      is_numeric($value) => (string)$value,
+      is_array($value) => "'" . addslashes(json_encode($value)) . "'",
+      default => "'" . addslashes((string)$value) . "'",
+    };
   }
 
   /**

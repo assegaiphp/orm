@@ -22,10 +22,15 @@ final class SQLInsertIntoMultipleStatement
   )
   {
     $queryString = "";
+    $columns = array_map(function(string $column): string {
+      $parts = explode('.', $column);
+      return end($parts);
+    }, array_values($columns));
     
     if (!empty($columns))
     {
-      $queryString = "(" . implode(', ', $columns) . ") ";
+      $quotedColumns = array_map(fn(string $column): string => "`$column`", $columns);
+      $queryString = "(" . implode(', ', $quotedColumns) . ") ";
       $this->hashableIndexes = array_keys( array_intersect( $columns, $this->query->passwordHashFields() ) );
     }
 

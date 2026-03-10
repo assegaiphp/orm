@@ -4,6 +4,7 @@ namespace Assegai\Orm\Migrations;
 
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Exceptions\MigrationException;
+use Assegai\Orm\Util\SqlDialectHelper;
 use PDO;
 use Stringable;
 
@@ -34,14 +35,16 @@ class MigrationsList implements Stringable
    */
   public function loadList(): self
   {
-    $databaseName = $this->dataSource->getDatabaseName();
-    if ($databaseName)
-    {
-      $databaseName = "`$databaseName`.";
-    }
-
+    $dialect = $this->dataSource->getDialect();
     $migrationsTableName = '__assegai_schema_migrations';
-    $sql = "SELECT `$migrationsTableName`.`migration` as name, `$migrationsTableName`.`ran_on` as ranOn FROM $databaseName`$migrationsTableName` ORDER BY `ran_on` DESC";
+    $qualifiedTableName = SqlDialectHelper::qualifyTable(
+      $migrationsTableName,
+      $dialect->value === 'sqlite' || $dialect->value === 'pgsql' ? null : $this->dataSource->getDatabaseName(),
+      $dialect
+    );
+    $migrationColumn = SqlDialectHelper::quoteIdentifier('migration', $dialect);
+    $ranOnColumn = SqlDialectHelper::quoteIdentifier('ran_on', $dialect);
+    $sql = "SELECT m.$migrationColumn as name, m.$ranOnColumn as ranOn FROM $qualifiedTableName AS m ORDER BY m.$ranOnColumn DESC";
     $statement = $this->dataSource->getClient()->query($sql);
 
     if (false === $statement || false === $statement->execute())

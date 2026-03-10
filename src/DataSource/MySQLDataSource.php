@@ -34,6 +34,8 @@ class MySQLDataSource extends PDO implements DataSourceInterface
 
     $dsn = "mysql:host=$host;port=$port;dbname=$name";
     parent::__construct($dsn, $user, $password);
+    $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $this->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
   }
 
   /**

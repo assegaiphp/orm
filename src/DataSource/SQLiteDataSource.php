@@ -5,6 +5,7 @@ namespace Assegai\Orm\DataSource;
 use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Interfaces\DataSourceInterface;
+use Assegai\Orm\Util\SqlDialectHelper;
 use InvalidArgumentException;
 use PDO;
 
@@ -26,9 +27,12 @@ class SQLiteDataSource extends PDO implements DataSourceInterface
       throw new InvalidArgumentException("Database $name not found.");
     }
 
-    $path = $databases[$this->type->value][$name]['path'];
+    $path = SqlDialectHelper::normalizeSqlitePath($databases[$this->type->value][$name]['path']);
     $dsn = 'sqlite:' . $path;
     parent::__construct($dsn);
+    $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $this->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $this->exec('PRAGMA foreign_keys = ON');
   }
 
   /**
