@@ -25,7 +25,8 @@ class SQLiteFlowCest
     require_once dirname(__DIR__) . '/Unit/mocks/MockColorType.php';
     require_once dirname(__DIR__) . '/Unit/mocks/MockEntity.php';
 
-    $this->dbPath = dirname(__DIR__) . '/Support/Data/sqlite-flow.sqlite';
+    $this->dbPath = dirname(__DIR__) . '/_output/sqlite-flow.sqlite';
+    @unlink($this->dbPath);
     $this->schemaOptions = new SchemaOptions(
       dbName: $this->dbPath,
       dialect: SQLDialect::SQLITE,
@@ -42,6 +43,11 @@ class SQLiteFlowCest
     Schema::createIfNotExists(MockEntity::class, $this->schemaOptions);
 
     $this->manager = $this->dataSource->manager;
+  }
+
+  public function _after(UnitTester $I): void
+  {
+    @unlink($this->dbPath);
   }
 
   public function testTheSQLiteFlow(UnitTester $I): void
@@ -69,8 +75,19 @@ class SQLiteFlowCest
     $entity->id = (int)$entityId;
     $entity->description = 'Updated through SQLite upsert';
 
+    $otherEntity = new MockEntity();
+    $otherEntity->name = 'sqlite test other';
+    $otherEntity->description = 'Inserted to change SQLite last insert id';
+    $otherEntity->colorType = MockColorType::RED;
+
+    $otherInsertResult = $this->manager->insert(MockEntity::class, $otherEntity);
+    $I->assertTrue($otherInsertResult->isOk());
+
     $upsertResult = $this->manager->upsert(MockEntity::class, $entity, ['id']);
     $I->assertTrue($upsertResult->isOk());
+    $I->assertSame((int)$entityId, $entity->id);
+    $I->assertSame((int)$entityId, $upsertResult->identifiers?->id);
+    $I->assertSame((int)$entityId, $upsertResult->generatedMaps?->id);
 
     $updatedRow = $this->dataSource->getClient()
       ->query("SELECT `description` FROM `mocks` WHERE `id` = $entityId")

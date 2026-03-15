@@ -15,6 +15,7 @@ use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Attributes\Relations\JoinColumn;
+use Assegai\Orm\Attributes\Relations\JoinTable;
 use Assegai\Orm\Attributes\Relations\ManyToOne;
 use Assegai\Orm\Attributes\Relations\OneToMany;
 use Assegai\Orm\Attributes\Relations\OneToOne;
@@ -51,8 +52,6 @@ use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
-use Assegai\Orm\Queries\Sql\SQLTableReference;
-use Assegai\Orm\Relations\RelationBuildPlan;
 use Assegai\Orm\Relations\RelationOptions;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
@@ -158,8 +157,9 @@ class EntityManager implements IEntityStoreOwner
       }
     }
 
-    $isDebugMode = strtolower($_ENV['DEBUG_MODE']);
-    $this->isDebug = !in_array($_ENV['ENV'], ['PROD', 'PRODUCTION']) && boolval($isDebugMode) === true;
+    $isDebugMode = filter_var($_ENV['DEBUG_MODE'] ?? false, FILTER_VALIDATE_BOOL);
+    $environment = strtoupper($_ENV['ENV'] ?? 'development');
+    $this->isDebug = !in_array($environment, ['PROD', 'PRODUCTION']) && $isDebugMode === true;
   }
 
   /**
@@ -298,13 +298,14 @@ class EntityManager implements IEntityStoreOwner
     $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
     $columnsMeta = [];
     $relations = [];
+    $relationProperties = [];
 
     if ($options?->relations) {
       $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
     }
 
-    $columns = $this->entityInspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, meta: $columnsMeta);
-    $values = $this->entityInspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
+    $columns = $this->entityInspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnsMeta);
+    $values = $this->entityInspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'relation_properties' => $relationProperties, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
 
     $columnCount = count($columns);
     $valueCount = count($values);
@@ -340,7 +341,9 @@ class EntityManager implements IEntityStoreOwner
       return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: $result, errors: [$result->getErrors()]);
     }
 
-    $entity = is_array($result->getData()) ? $result->getData()[0] : $result->getData();
+    $entity = is_array($result->getData()) && array_is_list($result->getData())
+      ? ($result->getData()[0] ?? null)
+      : $result->getData();
 
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
     $generatedMaps->id = $this->lastInsertId();
@@ -351,7 +354,9 @@ class EntityManager implements IEntityStoreOwner
       }
     }
 
-    return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: $generatedMaps);
+    $identifiers = is_array($entity) ? (object)$entity : $entity;
+
+    return new InsertResult(identifiers: $identifiers, raw: $this->query->queryString(), generatedMaps: $generatedMaps);
   }
 
   /**
@@ -533,216 +538,30 @@ class EntityManager implements IEntityStoreOwner
     $entity = $this->create(entityClass: $entityClass);
     $conditions = [];
     $availableRelations = [];
-    $loadedRelations = [];
-    $pendingStatements = [];
-    $knownAliases = [];
+    $requestedRelations = $this->getRequestedRelationNames($findOptions);
 
     if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
       $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
     }
 
-    // Get list of relations
-    $listOfRelations = $this->getListOfRelations($findOptions);
-    $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $findOptions->exclude ?? [], relations: $listOfRelations, relationProperties: $availableRelations);
+    $columns = $this->entityInspector->getColumns(
+      entity: $entity,
+      exclude: $findOptions->exclude ?? [],
+      relations: $requestedRelations,
+      relationProperties: $availableRelations
+    );
 
     $tableName = $this->entityInspector->getTableName(entity: $entity);
-    $tableAlias = $this->generateAlias($tableName, $knownAliases);
-
     $statement = $this->query->select()->all(columns: $columns)->from(tableReferences: $tableName);
 
     if (!empty($findOptions)) {
-      # Resolve relations and joins
-      if ($findOptions->relations) {
-        # $this->buildRelations($listOfRelations);
-        foreach ($findOptions->relations as $key => $value) {
-          /** @var RelationPropertyMetadata $relationProperty */
-          $relationProperty = $availableRelations[$key] ?? $availableRelations[$value] ?? null;
-          $relationOptions = $relationProperty?->relationAttribute->options ?? new RelationOptions();
-
-          if (!$relationProperty) {
-            if ($this->isDebug) {
-              throw new ORMException("Relation $key does not exist in the entity $entityClass.");
-            }
-
-            $this->logger->warning("Relation $key does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
-            continue;
+      foreach ($requestedRelations as $relationName) {
+        if (!isset($availableRelations[$relationName])) {
+          if ($this->isDebug) {
+            throw new ORMException("Relation $relationName does not exist in the entity $entityClass.");
           }
 
-          if (property_exists($entity, $key)) {
-            # TODO: Resolve relations custom options
-          }
-
-          if (!$relationProperty->getEntity()) {
-            continue;
-          }
-
-          switch ($relationProperty->getRelationType()) {
-            case RelationType::ONE_TO_ONE:
-              $isJoinColumnSide = true;
-              $joinColumn = $relationProperty->joinColumn;
-
-              if (!$joinColumn) {
-                $isJoinColumnSide = false;
-                $reversEntityClassName = $relationProperty->relationAttribute->type;
-
-                $reverseEntityReflectionClass = new ReflectionClass($reversEntityClassName);
-
-                foreach ($reverseEntityReflectionClass->getProperties() as $reverseEntityPropertyReflection) {
-                  $attributes = $reverseEntityPropertyReflection->getAttributes();
-
-                  $oneToOneAttributeReflection = null;
-                  $joinColumnAttributeReflection = null;
-
-                  foreach ($attributes as $attribute) {
-                    if ($attribute->getName() === OneToOne::class) {
-                      $oneToOneAttributeReflection = $attribute;
-                    }
-
-                    if ($attribute->getName() === JoinColumn::class) {
-                      $joinColumnAttributeReflection = $attribute;
-                    }
-                  }
-
-                  if (!$oneToOneAttributeReflection) {
-                    continue;
-                  }
-
-                  if ($joinColumnAttributeReflection) {
-                    $joinColumn = $joinColumnAttributeReflection->newInstance();
-                  }
-
-                  if (!$joinColumn) {
-                    $this->logger->warning("Failed to find JoinColumn in reverse entity $reversEntityClassName.");
-                  }
-                }
-              }
-              $joinColumnName = $joinColumn->effectiveColumnName;
-              $referencedColumnName = $relationProperty->joinColumn->referencedColumnName ?? 'id';
-              $referencedTableName = $relationProperty->getEntity()->table;
-              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
-
-              $searchCondition = "$referencedTableName.$referencedColumnName=$tableName.$joinColumnName";
-
-              if (!$isJoinColumnSide) {
-                $searchCondition = "$tableName.$referencedColumnName=$referencedTableName.$joinColumnName";
-              }
-
-              $statement = $statement->leftJoin("$referencedTableName")->on($searchCondition);
-              break;
-
-            case RelationType::ONE_TO_MANY:
-              $propertyName = $relationProperty->reflectionProperty->getName();
-
-              $referencedTableName = $tableName;
-              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
-              $referencedPropertyName = $relationProperty->relationAttribute->referencedProperty;
-              $referencedColumnName = $propertyName . '_id';
-
-              $foreignClassName = $relationProperty->getEntityClass();
-              $foreignClassProperty = $relationProperty->relationAttribute->inverseSide;
-
-              if (!$referencedPropertyName) {
-                throw new ORMException("Referenced property name not found for $propertyName");
-              }
-
-              if (!$foreignClassName) {
-                throw new ORMException("Foreign class name not found for $propertyName");
-              }
-
-              if (!$foreignClassProperty) {
-                throw new ORMException("Missing inverse side for $foreignClassName");
-              }
-
-              $foreignClassTableName = $this->entityInspector->getTableName(new $foreignClassName());
-              $foreignClassTableAlias = $this->generateAlias($foreignClassTableName, $knownAliases);
-              # Get the JoinColumn attribute from the inverse side
-              $joinColumnAttribute = $this->entityInspector->getJoinColumnAttribute($foreignClassName, $foreignClassProperty);
-              $joinColumnName = $joinColumnAttribute->effectiveColumnName ?? 'id';
-
-              $joinEntity = $this->create($relationProperty->getEntityClass());
-              $excludeColumns = $findOptions->exclude ?? [];
-              if ($relationOptions) {
-                $excludeColumns = $relationOptions->exclude;
-              }
-              $joinEntityColumns = $this->entityInspector->getColumns($joinEntity, $excludeColumns);
-
-              $joinStatement = new SQLQuery($this->query->getConnection());
-              $joinStatement = $joinStatement->select()->all($joinEntityColumns)->from($foreignClassTableName);
-
-              $pendingStatements[] = ['relation' => $relationProperty->name, 'type' => $relationProperty->getRelationType(), 'statement' => $joinStatement, 'condition' => "$foreignClassTableName.$joinColumnName=:$referencedPropertyName", 'pattern' => ":$referencedPropertyName", 'replacement' => $referencedPropertyName,];
-              break;
-
-            case RelationType::MANY_TO_ONE:
-              $referencedTableName = $tableName;
-              $referencedTableAlias = $this->generateAlias($referencedTableName, $knownAliases);
-              $referencedColumnName = $relationProperty->reflectionProperty->getName() . '_id';
-
-              if ($relationProperty->joinColumn?->name) {
-                $referencedColumnName = $relationProperty->joinColumn->name;
-              }
-
-              $foreignClassName = $relationProperty->getEntityClass();
-
-              if (!$foreignClassName) {
-                $this->logger->warning("Foreign class name not found for $referencedColumnName");
-                break;
-              }
-
-              $foreignClassTableName = $this->entityInspector->getTableName(new $foreignClassName());
-              $foreignClassTableAlias = $this->generateAlias($foreignClassTableName, $knownAliases);
-              $joinColumnName = $relationProperty->joinColumn?->referencedColumnName ?? 'id';
-
-              $joinEntity = $this->create($relationProperty->getEntityClass());
-              $excludeColumns = $findOptions->exclude ?? [];
-              if ($relationOptions) {
-                $excludeColumns = $relationOptions->exclude;
-              }
-              $joinEntityColumns = $this->entityInspector->getColumns($joinEntity, $excludeColumns);
-              $joinQuery = new SQLQuery($this->query->getConnection());
-              $joinStatement = $joinQuery->select()->all($joinEntityColumns)->from([$foreignClassTableName, $referencedTableName])->where("$referencedTableName.$referencedColumnName=$foreignClassTableName.$joinColumnName");
-
-              $joinResult = $joinStatement->execute();
-              if ($joinResult->isOK() && !empty($joinResult->getData())) {
-                $loadedRelations[$relationProperty->reflectionProperty->getName()] = $joinResult->getData();
-              }
-              break;
-
-            case RelationType::MANY_TO_MANY:
-              $relationEntityReflection = new ReflectionClass($relationProperty->relationAttribute->type);
-              $joinEntity = $this->create($relationProperty->relationAttribute->type);
-
-              # table_1 t1
-              $t1Name = $tableName;
-              $t1Alias = $t1Name;
-              $t1Column = $relationProperty->joinColumn;
-              $t1ColumnName = $t1Column?->name ?? 'id';
-
-              # table_2 t2
-              $t2Name = $relationProperty->getEntity()->table;
-              $t2Alias = $t2Name;
-              $t2ColumnName = $t1Column?->referencedColumnName ?? 'id';
-
-              # join_table
-              $joinTable = $relationProperty->joinTable;
-              $joinTableName = $joinTable?->name;
-              $joinTableNameAlias = $joinTableName;
-              $joinTableT1ColumnName = $joinTable->joinColumn ?? strtosingular($t1Name) . '_id';
-              $joinTableT2ColumnName = $joinTable->inverseJoinColumn ?? strtosingular($t2Name) . '_id';
-
-              $unprocessedJoinColumns = $this->entityInspector->getColumns(entity: $joinEntity);
-              $joinColumns = [];
-              foreach ($unprocessedJoinColumns as $alias => $column) {
-                if (is_string($alias)) {
-                  $joinColumns["REL_{$t2Name}_$alias"] = $column;
-                } else {
-                  [$targetTableName, $targetColumnName] = explode('.', $column);
-                  $joinColumns["REL_{$t2Name}_$targetColumnName"] = $column;
-                }
-              }
-              $columns = [...$columns, ...$joinColumns];
-              $statement = $this->query->select()->all(columns: $columns)->from(tableReferences: $tableName)->leftJoin("`$joinTableName` `$joinTableNameAlias`")->on("$t1Name.$t1ColumnName = $joinTableNameAlias.$joinTableT1ColumnName")->leftJoin("`$t2Name` `$t2Alias`")->on("$joinTableName.$joinTableT2ColumnName = $t2Alias.$t2ColumnName");
-              break;
-          }
+          $this->logger->warning("Relation $relationName does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
         }
       }
 
@@ -773,7 +592,7 @@ class EntityManager implements IEntityStoreOwner
       return new FindResult(raw: $result->getRaw(), data: $result->value(), errors: [new GeneralSQLQueryException($this->query), ...$result->getErrors()], affected: $result->getTotalAffectedRows());
     }
 
-    $loadedRelations = [...$loadedRelations, ...$this->processPendingStatements($result, $pendingStatements)];
+    $loadedRelations = $this->loadRequestedRelations($entityClass, $result->getData(), $findOptions, $availableRelations);
     $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
 
     if ($findOptions->withRealTotal) {
@@ -821,15 +640,40 @@ class EntityManager implements IEntityStoreOwner
 
   /**
    * @param FindOptions|null $findOptions
-   * @return array|object|null
+   * @return string[]
    */
-  protected function getListOfRelations(?FindOptions $findOptions): array|null|object
+  protected function getRequestedRelationNames(?FindOptions $findOptions): array
   {
-    return match (gettype($findOptions->relations)) {
-      'object' => (array)$findOptions->relations,
-      'array' => $findOptions->relations,
-      default => []
-    };
+    $relations = $findOptions?->relations ?? [];
+
+    if (!is_array($relations)) {
+      $relations = (array)$relations;
+    }
+
+    if (array_is_list($relations)) {
+      return array_values(
+        array_filter(
+          array_map(
+            fn($relation) => is_string($relation) ? trim($relation) : null,
+            $relations
+          )
+        )
+      );
+    }
+
+    $requestedRelations = [];
+
+    foreach ($relations as $relation => $enabled) {
+      if (!is_string($relation)) {
+        continue;
+      }
+
+      if ($enabled) {
+        $requestedRelations[] = trim($relation);
+      }
+    }
+
+    return $requestedRelations;
   }
 
   /**
@@ -856,68 +700,6 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * Processes the pending statements.
-   *
-   * @param SQLQueryResult $result The result of the query.
-   * @param array<array{statement: SQLTableReference, condition: string, pattern: string, replacement: string}> $pendingStatements
-   * @return array<string, mixed> Returns the loaded relations.
-   * @throws ORMException
-   */
-  private function processPendingStatements(SQLQueryResult $result, array $pendingStatements): array
-  {
-    $loadedRelations = [];
-
-    if ($result->isError()) {
-      return $loadedRelations;
-    }
-
-    foreach ($result->getData() as $data) {
-      if (is_array($data)) {
-        $data = (object)$data;
-      }
-
-      foreach ($pendingStatements as $pendingStatement) {
-        // Execute the statement
-        if (!isset($pendingStatement['replacement'])) {
-          $this->logger->error("Cannot find replacement property name");
-          continue;
-        }
-
-        $referencedPropertyName = $pendingStatement['replacement'];
-
-        if (!isset($data->$referencedPropertyName)) {
-          $this->logger->error("Cannot find property $referencedPropertyName in the data");
-          continue;
-        }
-
-        $replacementValue = $data->$referencedPropertyName;
-        $condition = str_replace($pendingStatement['pattern'], $replacementValue, $pendingStatement['condition']);
-
-        // Process the result
-        $result = $pendingStatement['statement']->where($condition)->execute();
-
-        // Add the result to the loaded relations
-        if ($result->isError()) {
-          throw $result->getErrors()[0] ?? new ORMException("An error occurred while processing the pending statement");
-        }
-
-        $pendingStatementRelation = $pendingStatement['relation'];
-        $pendingStatementType = $pendingStatement['type'] ?? null;
-
-        if ($pendingStatementType) {
-          if ($pendingStatementType === RelationType::ONE_TO_MANY) {
-            $loadedRelations[$pendingStatementRelation][$data->$referencedPropertyName] = $result->getData();
-          }
-        } else {
-          $loadedRelations[$pendingStatementRelation] = $result->getData();
-        }
-      }
-    }
-
-    return $loadedRelations;
-  }
-
-  /**
    * Processes the relations of the given data.
    *
    * @param object[] $data The data to process.
@@ -934,72 +716,23 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $results = [];
-    $previousDatum = null;
-    $datumCollection = [];
-    $primaryKeyField = 'id';
-    $buildPlans = [];
+    $requestedRelations = $this->getRequestedRelationNames($findOptions);
 
     foreach ($data as $datum) {
-      $isManyToMany = false;
-      foreach ($findOptions->relations as $relation) {
-        $this->logger->error(json_encode([
-          'relation' => $relation,
-          'keys' => array_keys($relationInfo),
-          'in_array' => in_array($relation, array_keys($relationInfo))
-        ], JSON_PRETTY_PRINT));
-        if (!in_array($relation, array_keys($relationInfo))) {
+      if (is_array($datum)) {
+        $datum = (object)$datum;
+      }
+
+      foreach ($requestedRelations as $relation) {
+        if (!isset($relationInfo[$relation])) {
           $this->logger->warning("Relation $relation does not exist in the entity $entityClass. \n\tThrown in " . __FILE__ . ' on line ' . __LINE__);
           continue;
         }
 
-        $isManyToMany = $relationInfo[$relation]->getRelationType() === RelationType::MANY_TO_MANY;
         $datum = $this->bindEntityRelations($entityClass, $datum, $relation, $relationInfo[$relation], $loadedRelations);
-        $buildPlans[$relation] = new RelationBuildPlan($relation, $relationInfo[$relation]->getRelationType(), new RelationOptions());
       }
 
-      if ($isManyToMany) {
-        if (!$previousDatum) {
-          $previousDatum = $datum;
-        }
-
-        $relatedEntity = new stdClass();
-
-        foreach ($datum as $property => $value) {
-          if (str_starts_with($property, 'REL_')) {
-            unset($datum->$property);
-          }
-
-          if (in_array($property, array_keys($relationInfo))) {
-            $object = new stdClass();
-            foreach ($value as $key => $val) {
-              $prop = str_replace('rEL_', '', $key);
-              $object->$prop = $val;
-            }
-            $datumCollection[] = $object;
-            $datum->$property = $datumCollection;
-          }
-        }
-
-        if (!isset($previousDatum->$primaryKeyField)) {
-          continue;
-        }
-
-        if (
-          $previousDatum->$primaryKeyField &&
-          $datum->$primaryKeyField &&
-          $previousDatum->$primaryKeyField !== $datum->$primaryKeyField
-        ) {
-          $results[] = $previousDatum;
-          $previousDatum = $datum;
-          $datumCollection = [];
-        }
-      } else {
-        $results[] = $datum;
-      }
-    }
-
-    if ($previousDatum) {
-      $results[] = $previousDatum;
+      $results[] = $datum;
     }
 
     return $results;
@@ -1017,57 +750,524 @@ class EntityManager implements IEntityStoreOwner
    */
   private function bindEntityRelations(string $entityClass, object $entity, string $relationName, RelationPropertyMetadata $relationInfo, array $loadedRelations): object
   {
-    $restructuredEntity = new stdClass();
-    $relation = new stdClass();
-    $relationIsCollection = $relationInfo->type === 'array';
-    $relationIsOneToMany = $relationInfo->relationAttributeReflection->getName() === OneToMany::class;
-    $relationIsManyToOne = $relationInfo->relationAttributeReflection->getName() === ManyToOne::class;
-
     if ($this->isDebug) {
       $this->logger->debug("Restructuring entity $entityClass with relation $relationName");
     }
 
-    header('Content-Type: application/json');
-    # Foreach relation
-    foreach ($entity as $key => $value) {
-      $restructuredEntity->$key = $value;
+    $entity = is_array($entity) ? (object)$entity : $entity;
+    $relationValue = match ($relationInfo->getRelationType()) {
+      RelationType::ONE_TO_ONE => $this->resolveOneToOneRelationValue($entity, $relationInfo, $loadedRelations[$relationName] ?? []),
+      RelationType::ONE_TO_MANY => $this->resolveOneToManyRelationValue($entity, $relationInfo, $loadedRelations[$relationName] ?? []),
+      RelationType::MANY_TO_ONE => $this->resolveManyToOneRelationValue($entity, $relationInfo, $loadedRelations[$relationName] ?? []),
+      RelationType::MANY_TO_MANY => $this->resolveManyToManyRelationValue($entity, $loadedRelations[$relationName] ?? []),
+      default => null,
+    };
 
-      $tableName = $relationInfo->getEntity()->table;
-      $pattern = "/{$tableName}_|$relationName/";
+    $entity->$relationName = $relationValue;
+    return $entity;
+  }
 
-      if (preg_match($pattern, $key)) {
-        $relationPropertyName = lcfirst(preg_replace($pattern, '$2', $key));
+  /**
+   * @param array<int, object|array> $data
+   * @param array<string, RelationPropertyMetadata> $availableRelations
+   * @return array<string, array<mixed, mixed>>
+   * @throws ClassNotFoundException
+   * @throws GeneralSQLQueryException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function loadRequestedRelations(string $entityClass, array $data, ?FindOptions $findOptions, array $availableRelations): array
+  {
+    if (!$findOptions || !$findOptions->relations || empty($data)) {
+      return [];
+    }
 
-        if (!$relationPropertyName) {
-          $relationPropertyName = $relationInfo->joinColumn->name;
-        }
+    $loadedRelations = [];
+    $rows = array_map(
+      fn(object|array $row) => is_array($row) ? (object)$row : $row,
+      $data
+    );
 
-        $relation->$relationPropertyName = $value;
+    foreach ($this->getRequestedRelationNames($findOptions) as $relationName) {
+      $relationProperty = $availableRelations[$relationName] ?? null;
+
+      if (!$relationProperty instanceof RelationPropertyMetadata) {
+        continue;
+      }
+
+      $loadedRelations[$relationName] = match ($relationProperty->getRelationType()) {
+        RelationType::ONE_TO_ONE => $this->loadOneToOneRelation($entityClass, $rows, $relationProperty, $findOptions),
+        RelationType::ONE_TO_MANY => $this->loadOneToManyRelation($rows, $relationProperty, $findOptions),
+        RelationType::MANY_TO_ONE => $this->loadManyToOneRelation($rows, $relationProperty, $findOptions),
+        RelationType::MANY_TO_MANY => $this->loadManyToManyRelation($entityClass, $rows, $relationProperty, $findOptions),
+        default => [],
+      };
+    }
+
+    return $loadedRelations;
+  }
+
+  /**
+   * @param object[] $rows
+   * @return array<mixed, object>
+   * @throws ClassNotFoundException
+   * @throws GeneralSQLQueryException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function loadManyToOneRelation(array $rows, RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
+  {
+    $targetClass = $relationProperty->getEntityClass();
+
+    if (!$targetClass) {
+      return [];
+    }
+
+    $foreignKeys = $this->extractScalarValues($rows, $relationProperty->name);
+    if (empty($foreignKeys)) {
+      return [];
+    }
+
+    $joinColumn = $relationProperty->joinColumn ?? $this->entityInspector->getJoinColumnAttribute($relationProperty->reflectionProperty->getDeclaringClass()->getName(), $relationProperty->name);
+    $referenceColumn = $joinColumn->effectiveReferencedColumnName ?? 'id';
+    $relatedRows = $this->fetchEntityRows(
+      entityClass: $targetClass,
+      conditionColumn: $referenceColumn,
+      conditionValues: $foreignKeys,
+      excludeColumns: $this->resolveRelationExcludeColumns($relationProperty, $findOptions)
+    );
+
+    $groupedRows = [];
+    foreach ($relatedRows as $relatedRow) {
+      $key = $relatedRow->{$referenceColumn} ?? null;
+      if ($key !== null) {
+        $groupedRows[$key] = $relatedRow;
       }
     }
 
-    $relationValue = $loadedRelations[$relationName] ?? $relation;
+    return $groupedRows;
+  }
 
-    if ($relationIsCollection && $relationIsOneToMany) {
-      $id = $entity->{$relationInfo->relationAttribute->referencedProperty};
-      $relationValue = $relationValue[$id];
+  /**
+   * @param object[] $rows
+   * @return array<mixed, object>
+   * @throws ClassNotFoundException
+   * @throws GeneralSQLQueryException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function loadOneToOneRelation(string $entityClass, array $rows, RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
+  {
+    if ($relationProperty->joinColumn) {
+      return $this->loadManyToOneRelation($rows, $relationProperty, $findOptions);
     }
 
-    if ($relationIsManyToOne && is_array($relationValue)) {
-      $relationValue = array_find($relationValue, function(object|array $value) use ($entity, $relationInfo) {
-        if (is_array($value)) {
-          $value = (object)$value;
-        }
-        if (property_exists($value, 'id')) {
-          return $value->id === $entity->{$relationInfo->name};
-        }
-
-        return null;
-      });
+    $targetClass = $relationProperty->getEntityClass();
+    if (!$targetClass) {
+      return [];
     }
 
-    $restructuredEntity->$relationName = $relationValue;
-    return $restructuredEntity;
+    $inverseOwner = $this->resolveInverseOneToOneOwner($entityClass, $relationProperty);
+    if (!$inverseOwner) {
+      return [];
+    }
+
+    $localIds = $this->extractScalarValues($rows, 'id');
+    if (empty($localIds)) {
+      return [];
+    }
+
+    $inversePropertyName = $inverseOwner['property'];
+    $joinColumn = $inverseOwner['joinColumn'];
+    $relatedRows = $this->fetchEntityRows(
+      entityClass: $targetClass,
+      conditionColumn: $joinColumn->effectiveColumnName ?? $joinColumn->name ?? 'id',
+      conditionValues: $localIds,
+      excludeColumns: $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
+      relations: [$inversePropertyName]
+    );
+
+    $groupedRows = [];
+    foreach ($relatedRows as $relatedRow) {
+      $ownerKey = $relatedRow->{$inversePropertyName} ?? null;
+      unset($relatedRow->{$inversePropertyName});
+
+      if ($ownerKey !== null) {
+        $groupedRows[$ownerKey] = $relatedRow;
+      }
+    }
+
+    return $groupedRows;
+  }
+
+  /**
+   * @param object[] $rows
+   * @return array<mixed, object[]>
+   * @throws ClassNotFoundException
+   * @throws GeneralSQLQueryException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function loadOneToManyRelation(array $rows, RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
+  {
+    $targetClass = $relationProperty->getEntityClass();
+    $referenceProperty = $relationProperty->relationAttribute->referencedProperty ?? 'id';
+    $inverseProperty = $relationProperty->relationAttribute->inverseSide ?? null;
+
+    if (!$targetClass || !$inverseProperty) {
+      return [];
+    }
+
+    $localKeys = $this->extractScalarValues($rows, $referenceProperty);
+    if (empty($localKeys)) {
+      return [];
+    }
+
+    $joinColumn = $this->entityInspector->getJoinColumnAttribute($targetClass, $inverseProperty);
+    $relatedRows = $this->fetchEntityRows(
+      entityClass: $targetClass,
+      conditionColumn: $joinColumn->effectiveColumnName ?? $joinColumn->name ?? 'id',
+      conditionValues: $localKeys,
+      excludeColumns: $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
+      relations: [$inverseProperty]
+    );
+
+    $groupedRows = [];
+    foreach ($relatedRows as $relatedRow) {
+      $ownerKey = $relatedRow->{$inverseProperty} ?? null;
+      unset($relatedRow->{$inverseProperty});
+
+      if ($ownerKey === null) {
+        continue;
+      }
+
+      $groupedRows[$ownerKey] ??= [];
+      $groupedRows[$ownerKey][] = $relatedRow;
+    }
+
+    return $groupedRows;
+  }
+
+  /**
+   * @param object[] $rows
+   * @return array<mixed, object[]>
+   * @throws ClassNotFoundException
+   * @throws GeneralSQLQueryException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function loadManyToManyRelation(string $entityClass, array $rows, RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
+  {
+    $mapping = $this->resolveManyToManyMapping($entityClass, $relationProperty);
+    if (!$mapping) {
+      return [];
+    }
+
+    $localIds = $this->extractScalarValues($rows, 'id');
+    if (empty($localIds)) {
+      return [];
+    }
+
+    $targetClass = $relationProperty->getEntityClass();
+    if (!$targetClass) {
+      return [];
+    }
+
+    $targetEntity = $this->create($targetClass);
+    $targetTable = $this->entityInspector->getTableName($targetEntity);
+    $joinTable = $mapping['joinTable'];
+    $localJoinColumn = $mapping['localJoinColumn'];
+    $targetJoinColumn = $mapping['targetJoinColumn'];
+    $joinTableName = $joinTable->name ?? strtolower($mapping['ownerTable'] . '_' . $mapping['targetTable']);
+
+    $columns = $this->entityInspector->getColumns(
+      entity: $targetEntity,
+      exclude: $this->resolveRelationExcludeColumns($relationProperty, $findOptions)
+    );
+    $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
+
+    $condition = $this->buildInCondition("$joinTableName.$localJoinColumn", $localIds);
+    if (!$condition) {
+      return [];
+    }
+
+    $query = new SQLQuery($this->query->getConnection());
+    $result = $query
+      ->select()
+      ->all(columns: $columns)
+      ->from(tableReferences: $targetTable)
+      ->join("`$joinTableName`")
+      ->on("$joinTableName.$targetJoinColumn = $targetTable.id")
+      ->where($condition)
+      ->execute();
+
+    if ($result->isError()) {
+      throw new GeneralSQLQueryException($query);
+    }
+
+    $groupedRows = [];
+    foreach ($result->getData() as $row) {
+      $row = is_array($row) ? (object)$row : $row;
+      $ownerKey = $row->__relation_owner_key ?? null;
+      unset($row->__relation_owner_key);
+
+      if ($ownerKey === null) {
+        continue;
+      }
+
+      $groupedRows[$ownerKey] ??= [];
+      $groupedRows[$ownerKey][] = $row;
+    }
+
+    return $groupedRows;
+  }
+
+  /**
+   * @param string[] $excludeColumns
+   * @param string[] $relations
+   * @return object[]
+   * @throws ClassNotFoundException
+   * @throws GeneralSQLQueryException
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function fetchEntityRows(string $entityClass, string $conditionColumn, array $conditionValues, array $excludeColumns = ['password'], array $relations = []): array
+  {
+    if (empty($conditionValues)) {
+      return [];
+    }
+
+    $entity = $this->create($entityClass);
+    $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
+    $tableName = $this->entityInspector->getTableName($entity);
+    $condition = $this->buildInCondition("$tableName.$conditionColumn", $conditionValues);
+
+    if (!$condition) {
+      return [];
+    }
+
+    $query = new SQLQuery($this->query->getConnection());
+    $result = $query
+      ->select()
+      ->all(columns: $columns)
+      ->from(tableReferences: $tableName)
+      ->where($condition)
+      ->execute();
+
+    if ($result->isError()) {
+      throw new GeneralSQLQueryException($query);
+    }
+
+    return array_map(
+      fn(object|array $row) => is_array($row) ? (object)$row : $row,
+      $result->getData()
+    );
+  }
+
+  private function resolveOneToOneRelationValue(object $entity, RelationPropertyMetadata $relationInfo, array $loadedRelations): ?object
+  {
+    $relationKey = $relationInfo->joinColumn
+      ? ($entity->{$relationInfo->name} ?? null)
+      : ($entity->id ?? null);
+
+    if ($relationKey === null) {
+      return null;
+    }
+
+    return $loadedRelations[$relationKey] ?? null;
+  }
+
+  private function resolveOneToManyRelationValue(object $entity, RelationPropertyMetadata $relationInfo, array $loadedRelations): array
+  {
+    $referenceProperty = $relationInfo->relationAttribute->referencedProperty ?? 'id';
+    $referenceValue = $entity->{$referenceProperty} ?? null;
+
+    if ($referenceValue === null) {
+      return [];
+    }
+
+    return $loadedRelations[$referenceValue] ?? [];
+  }
+
+  private function resolveManyToOneRelationValue(object $entity, RelationPropertyMetadata $relationInfo, array $loadedRelations): ?object
+  {
+    $foreignKey = $entity->{$relationInfo->name} ?? null;
+
+    if ($foreignKey === null) {
+      return null;
+    }
+
+    return $loadedRelations[$foreignKey] ?? null;
+  }
+
+  private function resolveManyToManyRelationValue(object $entity, array $loadedRelations): array
+  {
+    $referenceValue = $entity->id ?? null;
+
+    if ($referenceValue === null) {
+      return [];
+    }
+
+    return $loadedRelations[$referenceValue] ?? [];
+  }
+
+  /**
+   * @return array{property: string, joinColumn: JoinColumn}|null
+   * @throws ReflectionException
+   */
+  private function resolveInverseOneToOneOwner(string $entityClass, RelationPropertyMetadata $relationProperty): ?array
+  {
+    $targetClass = $relationProperty->getEntityClass();
+    if (!$targetClass) {
+      return null;
+    }
+
+    $targetReflection = new ReflectionClass($targetClass);
+
+    foreach ($targetReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+      $oneToOneAttributes = $property->getAttributes(OneToOne::class);
+      if (empty($oneToOneAttributes)) {
+        continue;
+      }
+
+      /** @var OneToOne $attribute */
+      $attribute = $oneToOneAttributes[0]->newInstance();
+      if ($attribute->type !== $entityClass) {
+        continue;
+      }
+
+      return [
+        'property' => $property->getName(),
+        'joinColumn' => $this->entityInspector->getJoinColumnAttribute($targetClass, $property->getName()),
+      ];
+    }
+
+    return null;
+  }
+
+  /**
+   * @return array{joinTable: JoinTable, ownerTable: string, targetTable: string, localJoinColumn: string, targetJoinColumn: string}|null
+   * @throws ReflectionException
+   * @throws ORMException
+   * @throws ClassNotFoundException
+   */
+  private function resolveManyToManyMapping(string $entityClass, RelationPropertyMetadata $relationProperty): ?array
+  {
+    $targetClass = $relationProperty->getEntityClass();
+    if (!$targetClass) {
+      return null;
+    }
+
+    $ownerTable = $this->entityInspector->getTableName($this->create($entityClass));
+    $targetTable = $this->entityInspector->getTableName($this->create($targetClass));
+    $joinTable = $relationProperty->joinTable;
+
+    if ($joinTable instanceof JoinTable) {
+      return [
+        'joinTable' => $joinTable,
+        'ownerTable' => $ownerTable,
+        'targetTable' => $targetTable,
+        'localJoinColumn' => $joinTable->joinColumn ?? strtosingular($ownerTable) . '_id',
+        'targetJoinColumn' => $joinTable->inverseJoinColumn ?? strtosingular($targetTable) . '_id',
+      ];
+    }
+
+    $inverseProperty = $relationProperty->relationAttribute->inverseSide ?? null;
+    $ownerProperty = $inverseProperty && property_exists($targetClass, $inverseProperty)
+      ? new ReflectionProperty($targetClass, $inverseProperty)
+      : $this->findManyToManyOwnerProperty($targetClass, $entityClass);
+
+    if (!$ownerProperty) {
+      return null;
+    }
+
+    $joinTableAttributes = $ownerProperty->getAttributes(JoinTable::class);
+    if (empty($joinTableAttributes)) {
+      return null;
+    }
+
+    /** @var JoinTable $joinTable */
+    $joinTable = $joinTableAttributes[0]->newInstance();
+    $inverseOwnerTable = $this->entityInspector->getTableName($this->create($targetClass));
+
+    return [
+      'joinTable' => $joinTable,
+      'ownerTable' => $inverseOwnerTable,
+      'targetTable' => $ownerTable,
+      'localJoinColumn' => $joinTable->inverseJoinColumn ?? strtosingular($ownerTable) . '_id',
+      'targetJoinColumn' => $joinTable->joinColumn ?? strtosingular($inverseOwnerTable) . '_id',
+    ];
+  }
+
+  private function findManyToManyOwnerProperty(string $targetClass, string $entityClass): ?ReflectionProperty
+  {
+    $targetReflection = new ReflectionClass($targetClass);
+
+    foreach ($targetReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+      $relationAttributes = $property->getAttributes(\Assegai\Orm\Attributes\Relations\ManyToMany::class);
+      $joinTableAttributes = $property->getAttributes(JoinTable::class);
+
+      if (empty($relationAttributes) || empty($joinTableAttributes)) {
+        continue;
+      }
+
+      /** @var \Assegai\Orm\Attributes\Relations\ManyToMany $attribute */
+      $attribute = $relationAttributes[0]->newInstance();
+      if ($attribute->type === $entityClass) {
+        return $property;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * @param object[] $rows
+   * @return list<mixed>
+   */
+  private function extractScalarValues(array $rows, string $property): array
+  {
+    $values = [];
+
+    foreach ($rows as $row) {
+      $value = $row->{$property} ?? null;
+      if ($value !== null && $value !== '') {
+        $values[] = $value;
+      }
+    }
+
+    return array_values(array_unique($values, SORT_REGULAR));
+  }
+
+  /**
+   * @param list<mixed> $values
+   */
+  private function buildInCondition(string $qualifiedColumn, array $values): ?string
+  {
+    if (empty($values)) {
+      return null;
+    }
+
+    $quotedValues = array_map(function(mixed $value): string {
+      return match (true) {
+        is_int($value), is_float($value) => (string)$value,
+        is_numeric($value) && !str_starts_with((string)$value, '0') => (string)$value,
+        default => $this->query->getConnection()->quote((string)$value),
+      };
+    }, array_values($values));
+
+    return $qualifiedColumn . ' IN (' . implode(', ', $quotedValues) . ')';
+  }
+
+  private function resolveRelationExcludeColumns(RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
+  {
+    $relationOptions = $relationProperty->relationAttribute->options ?? null;
+
+    if ($relationOptions instanceof RelationOptions) {
+      return $relationOptions->exclude;
+    }
+
+    return $findOptions->exclude ?? ['password'];
   }
 
   /**
@@ -1530,9 +1730,27 @@ class EntityManager implements IEntityStoreOwner
     UpsertOptions $options
   ): InsertResult
   {
+    $originalId = $entity->id ?? null;
     $columns = array_map([$this, 'stripTableName'], array_values($columns));
     $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
     $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: ['id']);
+
+    $filteredColumns = [];
+    $filteredValues = [];
+
+    foreach ($columns as $index => $column) {
+      $value = $values[$index] ?? null;
+
+      if ($value === null && !in_array($column, $conflictPaths, true) && !in_array($column, $updateColumns, true)) {
+        continue;
+      }
+
+      $filteredColumns[] = $column;
+      $filteredValues[] = $value;
+    }
+
+    $columns = $filteredColumns;
+    $values = $filteredValues;
 
     $quotedColumns = implode(', ', array_map(fn(string $column): string => "`$column`", $columns));
     $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => "`$column`", $conflictPaths));
@@ -1559,18 +1777,19 @@ class EntityManager implements IEntityStoreOwner
 
     if ($result->isOk()) {
       $lastInsertId = $this->lastInsertId();
-      if ($lastInsertId) {
+      if (empty($originalId) && $lastInsertId) {
         $entity->id = $lastInsertId;
       }
     }
 
-    $identifier = $entity->id ?? $this->lastInsertId();
+    $identifier = $entity->id ?? $originalId ?? $this->lastInsertId();
 
     return new InsertResult(
       identifiers: (object)['id' => $identifier],
       raw: $this->query->queryString(),
       generatedMaps: $entity,
-      errors: $errors
+      errors: $errors,
+      affected: $this->query->rowCount() ?? 0,
     );
   }
 

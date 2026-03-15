@@ -182,4 +182,11 @@ class ColumnCest
     $I->assertEmpty($spatialFieldValues);
     $I->assertEquals($enumFieldValuesAsString, $enumFieldValues);
   }
+
+  public function testTheGetSqlDefinitionMethodPreservesEnumValues(UnitTester $I): void
+  {
+    $sqlDefinition = (string)$this->enumColumnAttribute->getSqlDefinition();
+
+    $I->assertStringContainsString("ENUM('RED', 'ORANGE', 'YELLOW', 'GREEN', 'BLUE', 'INDIGO', 'VIOLET')", $sqlDefinition);
+  }
 }

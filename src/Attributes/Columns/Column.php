@@ -252,8 +252,9 @@ class Column
   {
     $sqlLengthOrValues = $this->lengthOrValues;
 
-    if (is_string($sqlLengthOrValues) && preg_match('/^\((.*)\)$/', $sqlLengthOrValues, $matches)) {
-      $sqlLengthOrValues = $matches[1];
+    if ($this->type === ColumnType::ENUM && is_string($sqlLengthOrValues))
+    {
+      $sqlLengthOrValues = $this->normalizeEnumSqlValues($sqlLengthOrValues);
     }
 
     return new SQLColumnDefinition(
@@ -269,6 +270,34 @@ class Column
       isPrimaryKey: $this->isPrimaryKey,
       comment: $this->comment,
       dialect: $dialect,
+    );
+  }
+
+  /**
+   * @return array|string
+   */
+  private function normalizeEnumSqlValues(string $sqlLengthOrValues): array|string
+  {
+    $normalizedValues = trim($sqlLengthOrValues);
+
+    if (preg_match('/^\((.*)\)$/', $normalizedValues, $matches))
+    {
+      $normalizedValues = $matches[1];
+    }
+
+    if (!str_contains($normalizedValues, ','))
+    {
+      return $normalizedValues === '' ? [] : [trim($normalizedValues, " \t\n\r\0\x0B'\"")];
+    }
+
+    return array_values(
+      array_filter(
+        array_map(
+          static fn(string $value): string => trim($value, " \t\n\r\0\x0B'\""),
+          explode(',', $normalizedValues)
+        ),
+        static fn(string $value): bool => $value !== ''
+      )
     );
   }
 }

@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Relations;
 
+use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Relations\RelationOptions;
 use Attribute;
 
@@ -11,14 +12,15 @@ use Attribute;
  * entity1 and entity2 ids. This is owner side of the relationship.
  */
 #[Attribute(Attribute::TARGET_PROPERTY)]
-readonly class ManyToMany
+class ManyToMany
 {
   /**
    * ManyToMany constructor.
    *
    * @param class-string $type The class name of the entity
-   * @param class-string|null $inverseSide The class name of the inverse side of the relationship
+   * @param string|null $inverseSide The property name of the inverse side of the relationship
    * @param RelationOptions|null $options
+   * @throws ClassNotFoundException
    */
   public function __construct(
     public string           $type,
@@ -26,5 +28,10 @@ readonly class ManyToMany
     public ?RelationOptions $options = null,
   )
   {
+    $this->options ??= new RelationOptions();
+
+    if (!class_exists($type)) {
+      throw new ClassNotFoundException(className: $type);
+    }
   }
 }

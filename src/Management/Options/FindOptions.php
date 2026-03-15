@@ -33,7 +33,7 @@ class FindOptions implements JsonSerializable
    */
   public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
   {
-    $this->relations = array_map(fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")), $relations ?? []);
+    $this->relations = $this->normalizeRelations($relations);
   }
 
   /**
@@ -112,5 +112,47 @@ class FindOptions implements JsonSerializable
   public static function toArray(self $options): array
   {
     return ['select' => $options->select, 'relations' => $options->relations, 'where' => $options->where, 'order' => $options->order, 'skip' => $options->skip, 'limit' => $options->limit, 'exclude' => $options->exclude, 'with_real_total' => $options->withRealTotal,];
+  }
+
+  /**
+   * @return array<string|int, mixed>
+   */
+  private function normalizeRelations(null|object|array $relations): array
+  {
+    if (is_null($relations)) {
+      return [];
+    }
+
+    if (is_object($relations)) {
+      return $this->normalizeRelationMap((array)$relations);
+    }
+
+    if (!array_is_list($relations)) {
+      return $this->normalizeRelationMap($relations);
+    }
+
+    return array_map(
+      fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")),
+      $relations
+    );
+  }
+
+  /**
+   * @param array<string, mixed> $relations
+   * @return array<string, mixed>
+   */
+  private function normalizeRelationMap(array $relations): array
+  {
+    $normalizedRelations = [];
+
+    foreach ($relations as $relation => $value) {
+      if (!is_string($relation)) {
+        throw new InvalidArgumentException("Each relation key must be of type string");
+      }
+
+      $normalizedRelations[trim($relation)] = $value;
+    }
+
+    return $normalizedRelations;
   }
 }

@@ -49,7 +49,7 @@ class DataSource implements DataSourceInterface
    * Constructs a DataSource.
    *
    * @param DataSourceOptions|array{
-   *   entities: array<int|string, class-string>,
+   *   entities: array<int|string, class-string|object>,
    *   database: string,
    *   type: DataSourceType,
    *   host: string,
@@ -144,6 +144,10 @@ class DataSource implements DataSourceInterface
     $options = $this->resolveOptions($options);
     $this->options = $options;
     $this->type = $options->type;
+    $this->entities = array_map(
+      fn(string|object $entity): string => $this->normalizeEntityClass($entity),
+      $options->entities ?? []
+    );
 
     try {
       $this->connection = $this->createConnection($options);
@@ -155,7 +159,7 @@ class DataSource implements DataSourceInterface
     $this->manager = isset($options->entities) && count($options->entities) === 1
       ? new EntityManager(
         connection: $this,
-        query: new SQLQuery(db: $this->connection, fetchClass: $options->entities[0]::class, fetchMode: PDO::FETCH_CLASS)
+        query: new SQLQuery(db: $this->connection, fetchClass: $this->entities[0], fetchMode: PDO::FETCH_CLASS)
       )
       : new EntityManager(connection: $this);
   }
@@ -287,5 +291,23 @@ class DataSource implements DataSourceInterface
       || str_contains($path, DIRECTORY_SEPARATOR)
       || str_contains($path, '/')
       || preg_match('/\.(sqlite|sqlite3|db)$/i', $path) === 1;
+  }
+
+  /**
+   * @param class-string|object $entity
+   * @return class-string
+   * @throws DataSourceException
+   */
+  private function normalizeEntityClass(string|object $entity): string
+  {
+    if (is_object($entity)) {
+      return $entity::class;
+    }
+
+    if (class_exists($entity)) {
+      return $entity;
+    }
+
+    throw new DataSourceException("Invalid entity reference provided to the data source.");
   }
 }

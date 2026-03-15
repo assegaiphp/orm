@@ -22,5 +22,41 @@ readonly class UpdateOptions
     public string $primaryKeyField = 'id',
   )
   {
+    $this->relations = $this->normalizeRelations($this->relations);
+  }
+
+  /**
+   * @return string[]
+   */
+  private function normalizeRelations(object|array|null $relations): array
+  {
+    if (is_null($relations)) {
+      return [];
+    }
+
+    if (is_object($relations)) {
+      $relations = (array)$relations;
+    }
+
+    if (!array_is_list($relations)) {
+      $normalizedRelations = [];
+
+      foreach ($relations as $relation => $enabled) {
+        if (!is_string($relation)) {
+          throw new \InvalidArgumentException("Each relation key must be of type string");
+        }
+
+        if ($enabled) {
+          $normalizedRelations[] = trim($relation);
+        }
+      }
+
+      return $normalizedRelations;
+    }
+
+    return array_map(
+      fn($relation) => (is_string($relation) ? trim($relation) : throw new \InvalidArgumentException("Each relation must be of type string")),
+      $relations
+    );
   }
 }
