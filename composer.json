@@ -27,7 +27,7 @@
         "ext-pdo_mysql": "*",
         "ext-pdo_pgsql": "*",
         "ext-pdo_sqlite": "*",
-        "assegaiphp/core": "^0.7.0",
+        "assegaiphp/core": "^0.6.0 || ^0.7.0",
         "assegaiphp/util": "^0.4.4",
         "symfony/console": "^7.1",
         "predis/predis": "^2.3"
