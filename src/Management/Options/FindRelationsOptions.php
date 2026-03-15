@@ -21,7 +21,7 @@ final readonly class FindRelationsOptions
    */
   public function __construct(object|array $relations, public array $exclude = ['password'])
   {
-    $this->relations = array_map(fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")), $relations);
+    $this->relations = $this->normalizeRelations($relations);
   }
 
   /**
@@ -34,5 +34,36 @@ final readonly class FindRelationsOptions
     $exclude = $options['exclude'] ?? ['password'];
 
     return new FindRelationsOptions(relations: $relations, exclude: $exclude);
+  }
+
+  /**
+   * @return string[]
+   */
+  private function normalizeRelations(object|array $relations): array
+  {
+    if (is_object($relations)) {
+      $relations = (array)$relations;
+    }
+
+    if (!array_is_list($relations)) {
+      $normalizedRelations = [];
+
+      foreach ($relations as $relation => $enabled) {
+        if (!is_string($relation)) {
+          throw new InvalidArgumentException("Each relation key must be of type string");
+        }
+
+        if ($enabled) {
+          $normalizedRelations[] = trim($relation);
+        }
+      }
+
+      return $normalizedRelations;
+    }
+
+    return array_map(
+      fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")),
+      $relations
+    );
   }
 }

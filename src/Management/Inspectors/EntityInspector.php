@@ -131,6 +131,7 @@ final class EntityInspector
   {
     $filterValues = $options['filter'] ?? true;
     $relations = $options['relations'] ?? [];
+    $relationProperties = $options['relation_properties'] ?? [];
 
     $values = [];
     $entityClassname = get_class($entity);
@@ -170,7 +171,19 @@ final class EntityInspector
 
         // If join column property
         if (in_array($propName, $relations)) {
-          $propertyValue = $propertyValue->id;
+          $referencedField = 'id';
+
+          if (
+            isset($relationProperties[$propName]) &&
+            $relationProperties[$propName] instanceof RelationPropertyMetadata &&
+            $relationProperties[$propName]->joinColumn?->effectiveReferencedColumnName
+          ) {
+            $referencedField = $relationProperties[$propName]->joinColumn->effectiveReferencedColumnName;
+          }
+
+          if (property_exists($propertyValue, $referencedField)) {
+            $propertyValue = $propertyValue->{$referencedField};
+          }
         }
       }
 
@@ -246,21 +259,21 @@ final class EntityInspector
           if ($attributeInstance instanceof JoinColumn) {
 
             if ($attributeInstance->name) {
+              $attributeInstance->effectiveColumnName = $attributeInstance->name;
               $columns[$propertyName] = "$tableName." . $attributeInstance->name;
-              assert($attributeInstance instanceof JoinColumn);
             } else {
               $attributeInstance->effectiveColumnName = $this->getColumnName([$propertyName, 'Id']);
-              $columns[] = "$tableName." . $attributeInstance->effectiveColumnName;
+              $columns[$propertyName] = "$tableName." . $attributeInstance->effectiveColumnName;
             }
 
-            if (!$relationProperties[$propertyName]) {
+            if (!isset($relationProperties[$propertyName])) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
             $relationProperties[$propertyName]->joinColumn = $attributeInstance;
             $meta['column_types'][$propertyName] = $attributeInstance->type;
           } else if ($attributeInstance instanceof JoinTable) {
-            if (!$relationProperties[$propertyName]) {
+            if (!isset($relationProperties[$propertyName])) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
             }
 
@@ -273,15 +286,6 @@ final class EntityInspector
             $relationProperties[$propertyName]->relationAttribute = $attributeInstance;
             $relationProperties[$propertyName]->relationAttributeReflection = $attribute;
             $relationProperties[$propertyName]->inflate();
-
-            # Instantiate relative
-            $entityRelative = new $attributeInstance->type;
-
-            # Get relative columns
-            $entityRelativeColumns = $this->getRelationColumns(entity: $entityRelative, exclude: $exclude);
-
-            # Add relative columns to column list
-            $columns = array_merge($columns, $entityRelativeColumns);
           } else if ($attributeInstance instanceof OneToMany) {
             if (!isset($relationProperties[$propertyName])) {
               $relationProperties[$propertyName] = new RelationPropertyMetadata(reflectionProperty: $property);
@@ -308,6 +312,20 @@ final class EntityInspector
             $relationProperties[$propertyName]->inflate();
           }
         }
+      }
+
+      if (
+        $hasRelations &&
+        in_array($propertyName, $relations) &&
+        isset($relationProperties[$propertyName]) &&
+        $relationProperties[$propertyName] instanceof RelationPropertyMetadata &&
+        $relationProperties[$propertyName]->relationAttribute instanceof ManyToOne &&
+        !$relationProperties[$propertyName]->joinColumn
+      ) {
+        $joinColumn = $this->buildImplicitJoinColumn($propertyName);
+        $relationProperties[$propertyName]->joinColumn = $joinColumn;
+        $columns[$propertyName] = "$tableName." . $joinColumn->effectiveColumnName;
+        $meta['column_types'][$propertyName] = $joinColumn->type;
       }
     }
 
@@ -495,9 +513,24 @@ final class EntityInspector
     $attributes = $propertyReflection->getAttributes(JoinColumn::class);
 
     if (empty($attributes)) {
-      throw new ORMException(JoinColumn::class . " attribute not found on property $propertyName.");
+      return $this->buildImplicitJoinColumn($propertyName);
     }
 
-    return array_first($attributes)->newInstance();
+    /** @var JoinColumn $joinColumn */
+    $joinColumn = array_first($attributes)->newInstance();
+    $joinColumn->effectiveColumnName ??= $joinColumn->name ?? $this->getColumnName([$propertyName, 'Id']);
+    $joinColumn->effectiveReferencedColumnName ??= $joinColumn->referencedColumnName ?? 'id';
+
+    return $joinColumn;
+  }
+
+  private function buildImplicitJoinColumn(string $propertyName): JoinColumn
+  {
+    $columnName = $this->getColumnName([$propertyName, 'Id']);
+    $joinColumn = new JoinColumn(name: $columnName);
+    $joinColumn->effectiveColumnName = $columnName;
+    $joinColumn->effectiveReferencedColumnName = 'id';
+
+    return $joinColumn;
   }
 }

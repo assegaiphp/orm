@@ -279,7 +279,8 @@ final class SQLQuery
             }
 
             if ($statement->execute($this->params)) {
-                if ([$sqlCode, $driverCode, $message] = $statement->errorInfo()) {
+                [$sqlCode, $driverCode, $message] = $statement->errorInfo();
+                if ($sqlCode !== '00000') {
                     $errors[] = match ($sqlCode) {
                         '23000' => new ORMException(message: "$driverCode - $message"),
                         default => new ORMException(message: "General SQL error - $message")
@@ -293,7 +294,7 @@ final class SQLQuery
 
                 $data = match ($this->type()) {
                     SQLQueryType::SELECT => $statement->fetchAll(mode: $this->fetchMode),
-                    default => $statement->fetchAll()
+                    default => []
                 };
 
                 if ($this->type() === SQLQueryType::INSERT) {

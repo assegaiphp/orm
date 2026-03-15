@@ -25,7 +25,8 @@ class SQLiteFlowCest
     require_once dirname(__DIR__) . '/Unit/mocks/MockColorType.php';
     require_once dirname(__DIR__) . '/Unit/mocks/MockEntity.php';
 
-    $this->dbPath = dirname(__DIR__) . '/Support/Data/sqlite-flow.sqlite';
+    $this->dbPath = dirname(__DIR__) . '/_output/sqlite-flow.sqlite';
+    @unlink($this->dbPath);
     $this->schemaOptions = new SchemaOptions(
       dbName: $this->dbPath,
       dialect: SQLDialect::SQLITE,
@@ -42,6 +43,11 @@ class SQLiteFlowCest
     Schema::createIfNotExists(MockEntity::class, $this->schemaOptions);
 
     $this->manager = $this->dataSource->manager;
+  }
+
+  public function _after(UnitTester $I): void
+  {
+    @unlink($this->dbPath);
   }
 
   public function testTheSQLiteFlow(UnitTester $I): void

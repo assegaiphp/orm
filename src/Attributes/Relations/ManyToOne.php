@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Relations;
 
+use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Relations\RelationOptions;
 use Attribute;
 
@@ -16,6 +17,7 @@ class ManyToOne
    * @param string|null $name
    * @param string|null $alias
    * @param RelationOptions|null $options
+   * @throws ClassNotFoundException
    */
   public function __construct(
     public readonly string $type,
@@ -26,6 +28,10 @@ class ManyToOne
   {
     if (is_null($this->options)) {
       $this->options = new RelationOptions();
+    }
+
+    if (!class_exists($type)) {
+      throw new ClassNotFoundException(className: $type);
     }
   }
 }

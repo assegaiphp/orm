@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Attributes\Relations;
 
+use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Relations\RelationOptions;
 use Attribute;
 
@@ -18,6 +19,7 @@ class OneToMany
    * @param string|null $name The name of the relation.
    * @param string|null $alias The alias of the relation.
    * @param RelationOptions|null $options The options of the relation.
+   * @throws ClassNotFoundException
    */
   public function __construct(
     public readonly string $type,
@@ -30,6 +32,10 @@ class OneToMany
   {
     if (is_null($this->options)) {
       $this->options = new RelationOptions();
+    }
+
+    if (!class_exists($type)) {
+      throw new ClassNotFoundException(className: $type);
     }
   }
 }

@@ -69,7 +69,7 @@ class InjectRepository
     }
 
     $dataSourceOptions = new DataSourceOptions(
-      entities: [$reflectionEntity->newInstance()],
+      entities: [$this->entity],
       name: $dataSourceName,
       type: $driver,
     );
