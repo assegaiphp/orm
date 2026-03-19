@@ -14,22 +14,27 @@ use Attribute;
 class JoinColumn
 {
   /**
-   * @var string|null The effective column name.
+   * @var string|null Internal resolved column name after defaults are applied.
    */
   public ?string $effectiveColumnName;
   /**
-   * @var string|null The effective referenced column name.
+   * @var string|null Internal resolved target column name after defaults are applied.
    */
   public ?string $effectiveReferencedColumnName;
   /**
-   * @var string|null The effective foreign key constraint name.
+   * @var string|null Internal resolved foreign key constraint name after defaults are applied.
    */
   public ?string $effectiveForeignKeyConstraintName;
 
   /**
-   * @param string|null $name Name of the column.
-   * @param string|null $referencedColumnName Name of the column in the entity to which this column is referenced.
+   * @param string|null $name Name of the foreign key column on the current table.
+   * Example: in `restaurants.organization_id`, the join column name is `'organization_id'`.
+   * @param string|null $referencedColumnName Name of the target column on the related table.
+   * In plain terms: "which column on the other table are we matching against?"
+   * Most of the time this is just `'id'`.
+   * Example: `#[JoinColumn(name: 'organization_id', referencedColumnName: 'id')]`
    * @param string|null $foreignKeyConstraintName Name of the foreign key constraint.
+   * @param ColumnType $type SQL column type for the foreign key column.
    */
   public function __construct(
     public readonly ?string $name = null,

@@ -11,15 +11,26 @@ use Attribute;
  * contains only one instance of A. For example, if we had `User` and
  * `Profile` entities, `User` can have only a single `Profile`, while a
  * single `Profile` is owned by one `User`.
+ *
+ * Example:
+ * ```php
+ * #[OneToOne(ProfileEntity::class)]
+ * #[JoinColumn('profile_id')]
+ * public ?ProfileEntity $profile = null;
+ * ```
  */
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class OneToOne
 {
   /**
-   * @param string $type
-   * @param string|null $name
-   * @param string|null $alias
-   * @param RelationOptions|null $options
+   * OneToOne constructor.
+   *
+   * @param class-string $type The entity class this property points to.
+   * Example: in `UserEntity::$profile`, use `ProfileEntity::class`.
+   * @param string|null $name Optional custom relation name. Most applications can leave this as `null`.
+   * @param string|null $alias Optional alias for custom query or mapping scenarios.
+   * Most applications can leave this as `null`.
+   * @param RelationOptions|null $options Extra relation behavior such as excluded fields.
    * @throws ClassNotFoundException
    */
   public function __construct(

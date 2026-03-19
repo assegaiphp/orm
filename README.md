@@ -14,6 +14,24 @@ An object-relational mapper for [AssegaiPHP](https://github.com/assegaiphp).
 $ composer require assegaiphp/orm
 ```
 
+## Guide map
+
+This package is designed to feel familiar to teams coming from TypeORM:
+
+- entities describe persistence shape
+- repositories are injected into services
+- data sources decide where a feature reads and writes
+- relations are explicit and ownership matters
+- migrations evolve the schema deliberately
+
+In the main Assegai guide set, the ORM track is:
+
+- `core/docs/data-and-orm.md`
+- `core/docs/orm-setup-and-data-sources.md`
+- `core/docs/orm-entities-repositories-and-results.md`
+- `core/docs/orm-relations.md`
+- `core/docs/orm-migrations-and-database-workflows.md`
+
 ## Quick Start
 
 [Overview & Tutorial](https://assegaiphp.com/guide/fundamentals/orm)
@@ -70,6 +88,16 @@ class Note
   public ?string $body = null;
 }
 ```
+
+## Relation mental model
+
+Relations follow the same ownership ideas you would expect from TypeORM:
+
+- `OneToOne`: the owner side has `#[JoinColumn(...)]`
+- `ManyToOne` and `OneToMany`: the foreign key lives on the `ManyToOne` side
+- `ManyToMany`: the owner side has `#[JoinTable(...)]`
+
+Load relations explicitly in `find()` and `findOne()` calls, and prefer writing through the owner side of the relation.
 
 If you want to use SQLite directly through the ORM, create a `DataSource`, ensure the table exists, and then work with
 the repository:
