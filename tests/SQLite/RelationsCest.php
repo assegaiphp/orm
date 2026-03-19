@@ -139,6 +139,31 @@ class RelationsCest
     $I->assertSame(['Deep Dive', 'Hello ORM'], array_values($postTitles));
   }
 
+  public function loadsRelationsEvenWhenPrimaryKeyIsExcludedFromPayload(UnitTester $I): void
+  {
+    $author = $this->manager->findOne(
+      RelationAuthor::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['posts'], exclude: ['id'])
+    )->getData();
+
+    $tag = $this->manager->findOne(
+      RelationTag::class,
+      new FindOneOptions(where: ['id' => 2], relations: ['posts'], exclude: ['id'])
+    )->getData();
+
+    $I->assertFalse(array_key_exists('id', get_object_vars($author)));
+    $I->assertCount(2, $author->posts);
+    $authorPostTitles = array_map(fn(object $item) => $item->title, $author->posts);
+    sort($authorPostTitles);
+    $I->assertSame(['Deep Dive', 'Hello ORM'], array_values($authorPostTitles));
+
+    $I->assertFalse(array_key_exists('id', get_object_vars($tag)));
+    $I->assertCount(2, $tag->posts);
+    $tagPostTitles = array_map(fn(object $item) => $item->title, $tag->posts);
+    sort($tagPostTitles);
+    $I->assertSame(['Deep Dive', 'Hello ORM'], array_values($tagPostTitles));
+  }
+
   public function insertsRelationObjectsUsingImplicitJoinColumns(UnitTester $I): void
   {
     $author = new RelationAuthor();

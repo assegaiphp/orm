@@ -539,6 +539,7 @@ class EntityManager implements IEntityStoreOwner
     $conditions = [];
     $availableRelations = [];
     $requestedRelations = $this->getRequestedRelationNames($findOptions);
+    $baseExcludeColumns = $this->resolveBaseEntityExcludeColumns($findOptions, $requestedRelations);
 
     if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
       $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
@@ -546,10 +547,11 @@ class EntityManager implements IEntityStoreOwner
 
     $columns = $this->entityInspector->getColumns(
       entity: $entity,
-      exclude: $findOptions->exclude ?? [],
+      exclude: $baseExcludeColumns,
       relations: $requestedRelations,
       relationProperties: $availableRelations
     );
+    $columns = $this->appendRequiredRelationColumns($entity, $columns, $availableRelations);
 
     $tableName = $this->entityInspector->getTableName(entity: $entity);
     $statement = $this->query->select()->all(columns: $columns)->from(tableReferences: $tableName);
@@ -594,6 +596,7 @@ class EntityManager implements IEntityStoreOwner
 
     $loadedRelations = $this->loadRequestedRelations($entityClass, $result->getData(), $findOptions, $availableRelations);
     $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
+    $resultSet = $this->stripExcludedColumns($resultSet, $findOptions->exclude ?? []);
 
     if ($findOptions->withRealTotal) {
       $total = $this->count(entityClass: $entityClass, options: $findOptions);
@@ -674,6 +677,172 @@ class EntityManager implements IEntityStoreOwner
     }
 
     return $requestedRelations;
+  }
+
+  /**
+   * Keeps relation keys available internally even when callers exclude them from the final payload.
+   *
+   * @param FindOptions|null $findOptions
+   * @param string[] $requestedRelations
+   * @return string[]
+   */
+  private function resolveBaseEntityExcludeColumns(?FindOptions $findOptions, array $requestedRelations): array
+  {
+    $excludeColumns = $findOptions?->exclude ?? [];
+
+    if (empty($excludeColumns) || empty($requestedRelations)) {
+      return $excludeColumns;
+    }
+
+    $requiredColumns = array_unique(array_merge(['id'], $requestedRelations));
+
+    return array_values(
+      array_filter(
+        $excludeColumns,
+        fn(string $column): bool => !in_array($column, $requiredColumns, true)
+      )
+    );
+  }
+
+  /**
+   * Ensures relation loading can still read required local keys from the root entity rows.
+   *
+   * @param array<int|string, string> $columns
+   * @param array<string, RelationPropertyMetadata> $availableRelations
+   * @return array<int|string, string>
+   * @throws ORMException
+   * @throws ReflectionException
+   */
+  private function appendRequiredRelationColumns(object $entity, array $columns, array $availableRelations): array
+  {
+    foreach ($availableRelations as $relationProperty) {
+      if (!$relationProperty instanceof RelationPropertyMetadata) {
+        continue;
+      }
+
+      $columns = match ($relationProperty->getRelationType()) {
+        RelationType::ONE_TO_ONE => $relationProperty->joinColumn
+          ? $this->appendJoinColumnSelection(
+            columns: $columns,
+            entityClass: $entity::class,
+            propertyName: $relationProperty->name,
+            joinColumn: $relationProperty->joinColumn
+          )
+          : $this->appendPropertyColumnSelection(
+            columns: $columns,
+            entity: $entity,
+            propertyName: 'id'
+          ),
+        RelationType::ONE_TO_MANY => $this->appendPropertyColumnSelection(
+          columns: $columns,
+          entity: $entity,
+          propertyName: $relationProperty->relationAttribute->referencedProperty ?? 'id'
+        ),
+        RelationType::MANY_TO_ONE => $this->appendJoinColumnSelection(
+          columns: $columns,
+          entityClass: $entity::class,
+          propertyName: $relationProperty->name,
+          joinColumn: $relationProperty->joinColumn
+            ?? $this->entityInspector->getJoinColumnAttribute($entity::class, $relationProperty->name)
+        ),
+        RelationType::MANY_TO_MANY => $this->appendPropertyColumnSelection(
+          columns: $columns,
+          entity: $entity,
+          propertyName: 'id'
+        ),
+        default => $columns,
+      };
+    }
+
+    return $columns;
+  }
+
+  /**
+   * @param array<int|string, string> $columns
+   * @return array<int|string, string>
+   */
+  private function appendPropertyColumnSelection(array $columns, object $entity, string $propertyName): array
+  {
+    if (!property_exists($entity, $propertyName)) {
+      return $columns;
+    }
+
+    $reflectionProperty = new ReflectionProperty($entity, $propertyName);
+
+    foreach ($reflectionProperty->getAttributes() as $attribute) {
+      $attributeInstance = $attribute->newInstance();
+
+      if (!$attributeInstance instanceof Column) {
+        continue;
+      }
+
+      $tableName = $this->entityInspector->getTableName($entity);
+      $columnName = $attributeInstance->name ?? $propertyName;
+      $columnAlias = $attributeInstance->alias ?: ($attributeInstance->name ? $propertyName : null);
+
+      return $this->appendColumnSelection($columns, $columnAlias, "$tableName.$columnName");
+    }
+
+    return $columns;
+  }
+
+  /**
+   * @param array<int|string, string> $columns
+   * @return array<int|string, string>
+   * @throws ORMException
+   */
+  private function appendJoinColumnSelection(array $columns, string $entityClass, string $propertyName, JoinColumn $joinColumn): array
+  {
+    $tableName = $this->entityInspector->getTableName($this->create($entityClass));
+    $columnName = $joinColumn->effectiveColumnName ?? $joinColumn->name ?? $propertyName;
+
+    return $this->appendColumnSelection($columns, $propertyName, "$tableName.$columnName");
+  }
+
+  /**
+   * @param array<int|string, string> $columns
+   * @return array<int|string, string>
+   */
+  private function appendColumnSelection(array $columns, ?string $columnAlias, string $columnSelection): array
+  {
+    if (
+      ($columnAlias !== null && array_key_exists($columnAlias, $columns)) ||
+      in_array($columnSelection, $columns, true) ||
+      in_array($columnSelection, array_values($columns), true)
+    ) {
+      return $columns;
+    }
+
+    if ($columnAlias === null) {
+      $columns[] = $columnSelection;
+      return $columns;
+    }
+
+    $columns[$columnAlias] = $columnSelection;
+
+    return $columns;
+  }
+
+  /**
+   * @param object[] $rows
+   * @param string[] $excludeColumns
+   * @return object[]
+   */
+  private function stripExcludedColumns(array $rows, array $excludeColumns): array
+  {
+    if (empty($excludeColumns)) {
+      return $rows;
+    }
+
+    return array_map(function(object|array $row) use ($excludeColumns): object {
+      $row = is_array($row) ? (object)$row : $row;
+
+      foreach ($excludeColumns as $column) {
+        unset($row->{$column});
+      }
+
+      return $row;
+    }, $rows);
   }
 
   /**
