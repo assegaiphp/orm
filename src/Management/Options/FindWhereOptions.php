@@ -5,10 +5,12 @@ namespace Assegai\Orm\Management\Options;
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Util\SqlIdentifier;
+use DateTimeInterface;
 use ReflectionClass;
 use ReflectionException;
-use ReflectionUnionType;
-use Symfony\Component\Console\Output\ConsoleOutput;
+use UnitEnum;
 
 /**
  * Class FindWhereOptions. Defines the options for the FindWhere method.
@@ -36,6 +38,8 @@ final readonly class FindWhereOptions
     public bool         $withRealTotal = false
   )
   {
+    $tableName = null;
+
     if ($this->entityClass) {
       try {
         $reflectionClass = new ReflectionClass($this->entityClass);
@@ -44,12 +48,14 @@ final readonly class FindWhereOptions
         foreach ($entityAttributes as $entityAttribute) {
           /** @var Entity $entityMetadata */
           $entityMetadata = (object)$entityAttribute->getArguments();
-          $this->tableName = $entityMetadata->table;
+          $tableName = $entityMetadata->table;
         }
       } catch (ReflectionException $e) {
         throw new ORMException($e->getMessage());
       }
     }
+
+    $this->tableName = $tableName;
   }
 
   /**
@@ -80,60 +86,123 @@ final readonly class FindWhereOptions
    */
   public function __toString(): string
   {
-    $output = '';
-    /** @var array{name: string, type: string} $entityClassProperties */
-    $entityClassColumns = [];
-    $out = new ConsoleOutput(decorated: true);
+    return $this->buildConditionString(
+      renderer: fn(string $identifier, mixed $value): string => match (true) {
+        is_null($value), $value === 'NULL' => "$identifier IS NULL",
+        is_array($value) && array_is_list($value) && !empty($value) => $identifier . ' IN (' . implode(', ', array_map(
+          fn(mixed $item): string => $this->stringifyValue($item),
+          $value
+        )) . ')',
+        default => $identifier . '=' . $this->stringifyValue($value),
+      }
+    );
+  }
 
-    if ($this->entityClass) {
-      $entityClassReflection = new ReflectionClass($this->entityClass);
-      foreach ($entityClassReflection->getProperties() as $property) {
-        $propertyType = $property->getType();
-        $type = match(true) {
-          $propertyType instanceof ReflectionUnionType => strval($propertyType),
-          default => $property->getType()?->getName() ?? ''
-        };
-        $column = ['name' => $property->getName(), 'type' => $type];
-        if (! isset($this->conditions[$column['name']])) {
-          $attributes = $property->getAttributes();
-
-          foreach ($attributes as $attribute) {
-            $attributeInstance = $attribute->newInstance();
-            if ($attributeInstance instanceof Column) {
-              $column['name'] = $attribute->getArguments()['name'] ?? $column['name'];
-            }
-          }
+  /**
+   * Compiles the where conditions and binds values onto the query.
+   *
+   * @param SQLQuery $query
+   * @return string
+   */
+  public function compile(SQLQuery $query): string
+  {
+    return $this->buildConditionString(
+      renderer: function(string $identifier, mixed $value) use ($query): string {
+        if (is_null($value) || $value === 'NULL') {
+          return "$identifier IS NULL";
         }
 
-        $entityClassColumns[$column['name']] = $column;
+        if (is_array($value) && array_is_list($value)) {
+          if (empty($value)) {
+            return '1 = 0';
+          }
+
+          return $identifier . ' IN (' . implode(', ', $query->addParams($value)) . ')';
+        }
+
+        return $identifier . '=' . $query->addParam($value);
       }
-    }
+    );
+  }
+
+  /**
+   * @param callable(string, mixed): string $renderer
+   * @return string
+   */
+  private function buildConditionString(callable $renderer): string
+  {
+    $parts = [];
 
     foreach ($this->conditions as $key => $value) {
-      $tableName = $this->tableName ?? '';
-
-      if ($tableName) {
-        $tableName = $tableName . '.';
-      }
-
-      $value = match (true) {
-        isset($entityClassColumns[$key]) => match ($entityClassColumns[$key]['type']) {
-          'string'  => "'$value'",
-          'int'     => (int)$value,
-          'float'   => (float)$value,
-          'bool'    => (bool)$value,
-          default   => $value
-        },
-        (bool)preg_match('/[!@#$%^&*()_\-+=\/\\\[\],]+/', $value) => "'$value'",
-        default => $value
-      };
-
-      $output .= $tableName .
-        ((is_null($value) || $value === 'NULL')
-          ? "$key IS $value"
-          : "$key=$value") . ' AND ';
+      $parts[] = $renderer(
+        $this->qualifyColumnName($this->resolveColumnName((string)$key)),
+        $value
+      );
     }
 
-    return trim($output, ' AND');
+    return implode(' AND ', $parts);
+  }
+
+  /**
+   * @param string $propertyOrColumn
+   * @return string
+   * @throws ORMException
+   */
+  private function resolveColumnName(string $propertyOrColumn): string
+  {
+    if (!$this->entityClass || !property_exists($this->entityClass, $propertyOrColumn)) {
+      return $propertyOrColumn;
+    }
+
+    try {
+      $property = new \ReflectionProperty($this->entityClass, $propertyOrColumn);
+
+      foreach ($property->getAttributes() as $attribute) {
+        $attributeInstance = $attribute->newInstance();
+
+        if ($attributeInstance instanceof Column) {
+          return $attribute->getArguments()['name'] ?? $propertyOrColumn;
+        }
+      }
+    } catch (ReflectionException $e) {
+      throw new ORMException($e->getMessage());
+    }
+
+    return $propertyOrColumn;
+  }
+
+  /**
+   * @param string $columnName
+   * @return string
+   */
+  private function qualifyColumnName(string $columnName): string
+  {
+    $qualifiedColumn = $this->tableName
+      ? "{$this->tableName}.{$columnName}"
+      : $columnName;
+
+    return SqlIdentifier::quote($qualifiedColumn);
+  }
+
+  /**
+   * @param mixed $value
+   * @return string
+   */
+  private function stringifyValue(mixed $value): string
+  {
+    if ($value instanceof UnitEnum && property_exists($value, 'value')) {
+      $value = $value->value;
+    }
+
+    if ($value instanceof DateTimeInterface) {
+      $value = $value->format('Y-m-d H:i:s');
+    }
+
+    return match (true) {
+      is_bool($value) => $value ? '1' : '0',
+      is_int($value), is_float($value) => (string)$value,
+      is_array($value), is_object($value) => "'" . addslashes(json_encode($value)) . "'",
+      default => "'" . addslashes((string)$value) . "'",
+    };
   }
 }

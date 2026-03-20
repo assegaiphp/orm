@@ -4,6 +4,7 @@ namespace Assegai\Orm\Traits;
 
 use Assegai\Orm\Queries\Sql\SQLKeyPart;
 use Assegai\Orm\Queries\Sql\SQLLimitClause;
+use Assegai\Orm\Util\SqlIdentifier;
 
 /**
  * SQLAggregatorTrait.
@@ -62,7 +63,10 @@ trait SQLAggregatorTrait
   public function groupBy(array $columnNames): static
   {
     if (property_exists($this, 'query')) {
-      $queryString = "GROUP BY " . implode(', ', $columnNames);
+      $queryString = "GROUP BY " . implode(', ', array_map(
+        fn(string $columnName): string => SqlIdentifier::quote($columnName),
+        $columnNames
+      ));
       $this->query->appendQueryString($queryString);
     }
 

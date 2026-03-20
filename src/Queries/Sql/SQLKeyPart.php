@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Util\SqlIdentifier;
 use JsonSerializable;
 
 /**
@@ -32,7 +33,7 @@ final class SQLKeyPart implements JsonSerializable
     private readonly ?bool $ascending = null
   )
   {
-    $this->queryString = "$this->key";
+    $this->queryString = SqlIdentifier::quote($this->key);
 
     if (!is_null($this->ascending)) {
       $this->queryString .= $this->ascending ? ' ASC' : ' DESC';

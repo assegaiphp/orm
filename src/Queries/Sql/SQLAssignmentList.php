@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Management\Options\FindOptions;
+use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Traits\ExecutableTrait;
 
 final class SQLAssignmentList
@@ -25,19 +27,22 @@ final class SQLAssignmentList
       {
         $value = password_hash($value, $this->query->passwordHashAlgorithm());
       }
-      $queryString .= is_numeric($value)
-        ? "`$key`={$value}{$separator}"
-        : (is_null($value) ? "`$key`=NULL" : "`$key`='$value'{$separator}");
+      if (is_string($value) && $value === 'CURRENT_TIMESTAMP') {
+        $queryString .= "`$key`={$value}{$separator}";
+        continue;
+      }
+
+      $queryString .= "`$key`=" . $this->query->addParam($value) . $separator;
     }
     $queryString = trim($queryString, $separator);
     $this->query->appendQueryString( tail: $queryString );
   }
 
   /**
-   * @param string $condition
+   * @param string|array|FindOptions|FindWhereOptions $condition
    * @return SQLWhereClause
    */
-  public function where(string $condition): SQLWhereClause
+  public function where(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
   {
     return new SQLWhereClause( query: $this->query, condition: $condition );
   }

@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Management\Options\FindOptions;
+use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Traits\ExecutableTrait;
 use Assegai\Orm\Traits\SQLAggregatorTrait;
 
@@ -21,14 +23,16 @@ final class SQLWhereClause
    */
   public function __construct(
     private readonly SQLQuery $query,
-    private readonly string $condition
+    private readonly string|array|FindOptions|FindWhereOptions $condition
   )
   {
-    if (!empty($this->condition)) {
+    $condition = $this->compileCondition($this->condition);
+
+    if (!empty($condition)) {
       if (!str_contains($this->query->queryString(), 'WHERE')) {
-       $this->query->appendQueryString("WHERE " . $this->filterConditionColumnNames($this->condition));
+       $this->query->appendQueryString("WHERE " . $this->filterConditionColumnNames($condition));
       } else {
-        $this->query->replaceWhereClause($this->condition);
+        $this->query->replaceWhereClause($condition);
       }
     }
   }
@@ -71,5 +75,26 @@ final class SQLWhereClause
   private function filterConditionColumnNames(string $conditions): string
   {
     return $conditions;
+  }
+
+  /**
+   * @param string|array|FindOptions|FindWhereOptions $condition
+   * @return string
+   */
+  private function compileCondition(string|array|FindOptions|FindWhereOptions $condition): string
+  {
+    if ($condition instanceof FindOptions) {
+      $condition = $condition->where ?? '';
+    }
+
+    if ($condition instanceof FindWhereOptions) {
+      return $condition->compile($this->query);
+    }
+
+    if (is_array($condition)) {
+      return (new FindWhereOptions(conditions: $condition))->compile($this->query);
+    }
+
+    return $condition;
   }
 }

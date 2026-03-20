@@ -191,7 +191,7 @@ final class EntityInspector
         'integer' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_INT),
         'double' => filter_var($propertyValue, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION),
         'boolean' => boolval($propertyValue),
-        'string' => filter_var($propertyValue, FILTER_SANITIZE_ADD_SLASHES),
+        'string' => (string)$propertyValue,
         default => $propertyValue
       };
 
