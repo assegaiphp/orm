@@ -57,22 +57,18 @@ final class SQLInsertIntoStatement
   {
     $queryString = "VALUES(";
     $separator = ', ';
-    $quoteExemptions = ['CURRENT_TIMESTAMP', 'NULL'];
 
     foreach ($valuesList as $index => $value) {
       if (in_array($index, $this->hashableIndexes)) {
         $value = password_hash($value, $this->query->passwordHashAlgorithm());
       }
-      if (is_bool($value)) {
-        $value = (int)$value;
+
+      if (is_string($value) && in_array($value, ['CURRENT_TIMESTAMP', 'NULL'], true)) {
+        $queryString .= "$value$separator";
+        continue;
       }
-      if (is_null($value)) {
-        $value = 'NULL';
-      }
-      if (is_array($value)) {
-        $value = json_encode($value);
-      }
-      $queryString .= (is_numeric($value) || in_array($value, $quoteExemptions)) ? "$value$separator" : "'$value'$separator";
+
+      $queryString .= $this->query->addParam($value) . $separator;
     }
 
     $queryString = trim(string: $queryString, characters: $separator) . ") ";

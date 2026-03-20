@@ -5,9 +5,11 @@ namespace Assegai\Orm\Queries\Sql;
 use Assegai\Core\Config;
 use Assegai\Core\Enumerations\EnvironmentType;
 use Assegai\Orm\Exceptions\ORMException;
+use DateTimeInterface;
 use PDO;
 use PDOException;
 use stdClass;
+use UnitEnum;
 
 /**
  * Class SQLQuery. Represents a SQL query.
@@ -165,6 +167,7 @@ final class SQLQuery
      */
     public function alter(): SQLAlterDefinition
     {
+        $this->init();
         return new SQLAlterDefinition(query: $this);
     }
 
@@ -173,6 +176,7 @@ final class SQLQuery
      */
     public function create(): SQLCreateDefinition
     {
+        $this->init();
         $this->type = SQLQueryType::CREATE;
         return new SQLCreateDefinition(query: $this);
     }
@@ -182,6 +186,7 @@ final class SQLQuery
      */
     public function drop(): SQLDropDefinition
     {
+        $this->init();
         $this->type = SQLQueryType::DROP;
         return new SQLDropDefinition(query: $this);
     }
@@ -191,6 +196,7 @@ final class SQLQuery
      */
     public function rename(): SQLRenameStatement
     {
+        $this->init();
         return new SQLRenameStatement(query: $this);
     }
 
@@ -200,6 +206,7 @@ final class SQLQuery
      */
     public function use(string $dbName): SQLUseStatement
     {
+        $this->init();
         $this->type = SQLQueryType::USE;
         return new SQLUseStatement(query: $this, dbName: $dbName);
     }
@@ -210,6 +217,7 @@ final class SQLQuery
      */
     public function describe(string $subject): SQLDescribeStatement
     {
+        $this->init();
         $this->type = SQLQueryType::DESCRIBE;
         return new SQLDescribeStatement(query: $this, subject: $subject);
     }
@@ -220,6 +228,7 @@ final class SQLQuery
      */
     public function insertInto(string $tableName): SQLInsertIntoDefinition
     {
+        $this->init();
         $this->type = SQLQueryType::INSERT;
         return new SQLInsertIntoDefinition(query: $this, tableName: $tableName);
     }
@@ -232,6 +241,7 @@ final class SQLQuery
      */
     public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): SQLUpdateDefinition
     {
+        $this->init();
         $this->type = SQLQueryType::UPDATE;
         return new SQLUpdateDefinition(query: $this, tableName: $tableName, lowPriority: $lowPriority, ignore: $ignore);
     }
@@ -241,6 +251,7 @@ final class SQLQuery
      */
     public function select(): SQLSelectDefinition
     {
+        $this->init();
         $this->type = SQLQueryType::SELECT;
         return new SQLSelectDefinition(query: $this);
     }
@@ -252,6 +263,7 @@ final class SQLQuery
      */
     public function deleteFrom(string $tableName, ?string $alias = null): SQLDeleteFromStatement
     {
+        $this->init();
         $this->type = SQLQueryType::DELETE;
         return new SQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
     }
@@ -262,8 +274,54 @@ final class SQLQuery
      */
     public function truncateTable(string $tableName): SQLTruncateStatement
     {
+        $this->init();
         $this->type = SQLQueryType::TRUNCATE;
         return new SQLTruncateStatement(query: $this, tableName: $tableName);
+    }
+
+    /**
+     * Adds a bound parameter to the current query and returns its placeholder.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    public function addParam(mixed $value): string
+    {
+        $this->params[] = $this->normalizeParamValue($value);
+
+        return '?';
+    }
+
+    /**
+     * @param list<mixed> $values
+     * @return list<string>
+     */
+    public function addParams(array $values): array
+    {
+        return array_map(fn(mixed $value): string => $this->addParam($value), $values);
+    }
+
+    /**
+     * Normalizes framework values into PDO-friendly scalars.
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private function normalizeParamValue(mixed $value): mixed
+    {
+        if ($value instanceof UnitEnum && property_exists($value, 'value')) {
+            return $value->value;
+        }
+
+        if ($value instanceof DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        return match (true) {
+            is_bool($value) => (int)$value,
+            $value instanceof stdClass, is_array($value) => json_encode($value),
+            default => $value,
+        };
     }
 
     /**
@@ -288,7 +346,7 @@ final class SQLQuery
 
                     return new SQLQueryResult(data: [], errors: $errors, raw: $this->queryString);
                 }
-                if (!empty($this->params)) {
+                if (!empty($this->fetchClassParams)) {
                     call_user_func_array([$statement, 'setFetchMode'], $this->fetchClassParams);
                 }
 

@@ -51,9 +51,10 @@ final class DatabaseManager
     }
     else
     {
+      $quotedDatabaseName = $this->quoteDatabaseIdentifier($dataSource, $databaseName);
       $statement = match ($dataSource->type) {
-        DataSourceType::MSSQL => "CREATE DATABASE $databaseName",
-        default => "CREATE DATABASE IF NOT EXISTS $databaseName"
+        DataSourceType::MSSQL => "CREATE DATABASE $quotedDatabaseName",
+        default => "CREATE DATABASE IF NOT EXISTS $quotedDatabaseName"
       };
 
       try
@@ -91,9 +92,10 @@ final class DatabaseManager
     {
       try
       {
+        $quotedDatabaseName = $this->quoteDatabaseIdentifier($dataSource, $databaseName);
         $result = match ($dataSource->type) {
-          DataSourceType::MSSQL => $dataSource->getClient()->exec("DROP DATABASE $databaseName"),
-          default => $dataSource->getClient()->exec("DROP DATABASE IF EXISTS $databaseName")
+          DataSourceType::MSSQL => $dataSource->getClient()->exec("DROP DATABASE $quotedDatabaseName"),
+          default => $dataSource->getClient()->exec("DROP DATABASE IF EXISTS $quotedDatabaseName")
         };
 
         if ($result === false)
@@ -150,5 +152,23 @@ final class DatabaseManager
 
       return false;
     }
+  }
+
+  /**
+   * @param DataSource $dataSource
+   * @param string $databaseName
+   * @return string
+   * @throws DataSourceException
+   */
+  private function quoteDatabaseIdentifier(DataSource $dataSource, string $databaseName): string
+  {
+    if (!preg_match('/^[A-Za-z0-9_][A-Za-z0-9_-]*$/', $databaseName)) {
+      throw new DataSourceException("Unsafe database name: $databaseName");
+    }
+
+    return match ($dataSource->type) {
+      DataSourceType::MSSQL => '[' . str_replace(']', ']]', $databaseName) . ']',
+      default => '`' . str_replace('`', '``', $databaseName) . '`',
+    };
   }
 }

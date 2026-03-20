@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Management\Options\FindOptions;
+use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Traits\ExecutableTrait;
 
 final class SQLDeleteFromStatement
@@ -29,10 +31,10 @@ final class SQLDeleteFromStatement
   }
 
   /**
-   * @param string $condition
+   * @param string|array|FindOptions|FindWhereOptions $condition
    * @return SQLWhereClause
    */
-  public function where(string $condition): SQLWhereClause
+  public function where(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
   {
     return new SQLWhereClause( query: $this->query, condition: $condition );
   }

@@ -55,6 +55,7 @@ use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Relations\RelationOptions;
 use Assegai\Orm\Util\Filter;
 use Assegai\Orm\Util\Log\Logger;
+use Assegai\Orm\Util\SqlIdentifier;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
 use DateInvalidTimeZoneException;
@@ -210,8 +211,21 @@ class EntityManager implements IEntityStoreOwner
    */
   public function query(string $query, array $parameters = []): PDOStatement|false
   {
-    // TODO: Add support for all raw query parameters e.g. mode, ...fetch_mode_args
-    return $this->connection->getClient()->query($query);
+    if (empty($parameters)) {
+      return $this->connection->getClient()->query($query);
+    }
+
+    $statement = $this->connection->getClient()->prepare($query);
+
+    if ($statement === false) {
+      return false;
+    }
+
+    if (!$statement->execute($parameters)) {
+      return false;
+    }
+
+    return $statement;
   }
 
   /**
@@ -1155,18 +1169,19 @@ class EntityManager implements IEntityStoreOwner
     );
     $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
 
-    $condition = $this->buildInCondition("$joinTableName.$localJoinColumn", $localIds);
-    if (!$condition) {
-      return [];
-    }
-
     $query = new SQLQuery($this->query->getConnection());
-    $result = $query
+    $statement = $query
       ->select()
       ->all(columns: $columns)
       ->from(tableReferences: $targetTable)
       ->join("`$joinTableName`")
-      ->on("$joinTableName.$targetJoinColumn = $targetTable.id")
+      ->on("$joinTableName.$targetJoinColumn = $targetTable.id");
+    $condition = $this->buildInCondition("$joinTableName.$localJoinColumn", $localIds, $query);
+    if (!$condition) {
+      return [];
+    }
+
+    $result = $statement
       ->where($condition)
       ->execute();
 
@@ -1209,17 +1224,18 @@ class EntityManager implements IEntityStoreOwner
     $entity = $this->create($entityClass);
     $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
     $tableName = $this->entityInspector->getTableName($entity);
-    $condition = $this->buildInCondition("$tableName.$conditionColumn", $conditionValues);
+    $query = new SQLQuery($this->query->getConnection());
+    $statement = $query
+      ->select()
+      ->all(columns: $columns)
+      ->from(tableReferences: $tableName);
+    $condition = $this->buildInCondition("$tableName.$conditionColumn", $conditionValues, $query);
 
     if (!$condition) {
       return [];
     }
 
-    $query = new SQLQuery($this->query->getConnection());
-    $result = $query
-      ->select()
-      ->all(columns: $columns)
-      ->from(tableReferences: $tableName)
+    $result = $statement
       ->where($condition)
       ->execute();
 
@@ -1411,21 +1427,15 @@ class EntityManager implements IEntityStoreOwner
   /**
    * @param list<mixed> $values
    */
-  private function buildInCondition(string $qualifiedColumn, array $values): ?string
+  private function buildInCondition(string $qualifiedColumn, array $values, ?SQLQuery $query = null): ?string
   {
     if (empty($values)) {
       return null;
     }
 
-    $quotedValues = array_map(function(mixed $value): string {
-      return match (true) {
-        is_int($value), is_float($value) => (string)$value,
-        is_numeric($value) && !str_starts_with((string)$value, '0') => (string)$value,
-        default => $this->query->getConnection()->quote((string)$value),
-      };
-    }, array_values($values));
+    $query ??= $this->query;
 
-    return $qualifiedColumn . ' IN (' . implode(', ', $quotedValues) . ')';
+    return SqlIdentifier::quote($qualifiedColumn) . ' IN (' . implode(', ', $query->addParams(array_values($values))) . ')';
   }
 
   private function resolveRelationExcludeColumns(RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
@@ -1464,7 +1474,7 @@ class EntityManager implements IEntityStoreOwner
         $conditions = array_merge($options->where->conditions ?? $options->where ?? [], [$deleteColumnName => 'NULL']);
       }
 
-      $statement = $statement->where(condition: new FindWhereOptions(conditions: $conditions));
+      $statement = $statement->where(condition: new FindWhereOptions(conditions: $conditions, entityClass: $entityClass));
     }
 
     if ($this->isDebug || $options?->isDebug) {
@@ -1520,7 +1530,10 @@ class EntityManager implements IEntityStoreOwner
   {
     $entity = $this->create(entityClass: $entityClass);
     if (is_array($where)) {
-      $where = $where['condition'] ?? '';
+      $where = new FindWhereOptions(
+        conditions: $where['condition'] ?? $where,
+        entityClass: $entityClass
+      );
     }
     $statement = $this->query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $where->exclude))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
 
@@ -1564,23 +1577,9 @@ class EntityManager implements IEntityStoreOwner
   public function update(string $entityClass, object|array $partialEntity, string|object|array $conditions, ?UpdateOptions $options = null): UpdateResult
   {
     $this->validateConditions(conditions: $conditions, methodName: __METHOD__);
-    $conditionString = '';
 
     if (empty($conditions)) {
       throw new ORMException("Empty criteria(s) are not allowed for the update method.");
-    }
-
-    if (!is_string($conditions)) {
-      foreach ($conditions as $key => $value) {
-        $conditionString .= "$key=" . match (true) {
-            is_numeric($value) => $value,
-            $value instanceof UnitEnum && property_exists($value, 'value') => $value->value,
-            default => "'$value'"
-          };
-      }
-
-    } else {
-      $conditionString = $conditions;
     }
 
     if (is_array($partialEntity)) {
@@ -1649,7 +1648,13 @@ class EntityManager implements IEntityStoreOwner
       return new UpdateResult(null, 0, $partialEntity, new stdClass());
     }
 
-    $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityInstance))->set(assignmentList: $assignmentList)->where(condition: $conditionString);
+    $statement = $this->query
+      ->update(tableName: $this->entityInspector->getTableName(entity: $entityInstance))
+      ->set(assignmentList: $assignmentList);
+    $conditionString = is_string($conditions)
+      ? $conditions
+      : $this->buildConditionClause($conditions, $this->query, $entityInstance);
+    $statement->where(condition: $conditionString);
 
     if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
@@ -1680,6 +1685,47 @@ class EntityManager implements IEntityStoreOwner
     if (empty($conditions)) {
       throw new EmptyCriteriaException(methodName: $methodName);
     }
+  }
+
+  /**
+   * @param int|object|array $conditions
+   * @param SQLQuery $query
+   * @param object|null $entity
+   * @return string
+   */
+  private function buildConditionClause(int|object|array $conditions, SQLQuery $query, ?object $entity = null): string
+  {
+    if (is_int($conditions)) {
+      return SqlIdentifier::quote('id') . '=' . $query->addParam($conditions);
+    }
+
+    $parts = [];
+
+    foreach ((array)$conditions as $key => $value) {
+      $columnName = $entity && is_string($key)
+        ? $this->getColumnNameFromProperty($entity, $key)
+        : (string)$key;
+      $identifier = SqlIdentifier::quote($columnName);
+
+      if (is_null($value) || $value === 'NULL') {
+        $parts[] = "$identifier IS NULL";
+        continue;
+      }
+
+      if (is_array($value) && array_is_list($value)) {
+        if (empty($value)) {
+          $parts[] = '1 = 0';
+          continue;
+        }
+
+        $parts[] = $identifier . ' IN (' . implode(', ', $query->addParams($value)) . ')';
+        continue;
+      }
+
+      $parts[] = $identifier . '=' . $query->addParam($value);
+    }
+
+    return implode(' AND ', $parts);
   }
 
   /**
@@ -1921,16 +1967,18 @@ class EntityManager implements IEntityStoreOwner
     $columns = $filteredColumns;
     $values = $filteredValues;
 
-    $quotedColumns = implode(', ', array_map(fn(string $column): string => "`$column`", $columns));
-    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => "`$column`", $conflictPaths));
-    $valueList = implode(', ', array_map([$this, 'toSqlLiteral'], $values));
-    $assignmentList = implode(', ', array_map(fn(string $column): string => "`$column`=excluded.`$column`", $updateColumns));
+    $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column), $columns));
+    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column), $conflictPaths));
+    $placeholders = array_fill(0, count($values), '?');
+    $valueList = implode(', ', $placeholders);
+    $assignmentList = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column) . '=excluded.' . SqlIdentifier::quote($column), $updateColumns));
     $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
 
     $queryString = "INSERT INTO `$tableName` ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction";
     $this->query->init();
     $this->query->insertInto(tableName: $tableName);
     $this->query->setQueryString($queryString);
+    $this->query->addParams($values);
 
     if ($this->isDebug) {
       $this->query->debug();
@@ -1968,25 +2016,6 @@ class EntityManager implements IEntityStoreOwner
     return end($parts);
   }
 
-  private function toSqlLiteral(mixed $value): string
-  {
-    if ($value instanceof UnitEnum && property_exists($value, 'value')) {
-      $value = $value->value;
-    }
-
-    if ($value instanceof DateTime || $value instanceof DateTimeImmutable) {
-      $value = $value->format('Y-m-d H:i:s');
-    }
-
-    return match (true) {
-      is_null($value) => 'NULL',
-      is_bool($value) => (string)intval($value),
-      is_numeric($value) => (string)$value,
-      is_array($value) => "'" . addslashes(json_encode($value)) . "'",
-      default => "'" . addslashes((string)$value) . "'",
-    };
-  }
-
   /**
    * Removes a given entity from the database.
    *
@@ -2001,7 +2030,10 @@ class EntityManager implements IEntityStoreOwner
   {
     if (is_object($entityOrEntities)) {
       $id = $entityOrEntities->id ?? 0;
-      $statement = $this->query->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->where("id=$id");
+      $statement = $this->query
+        ->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities));
+      $condition = $this->buildConditionClause(['id' => $id], $this->query, $entityOrEntities);
+      $statement = $statement->where($condition);
 
       if ($this->isDebug) {
         $statement->debug();
@@ -2059,10 +2091,11 @@ class EntityManager implements IEntityStoreOwner
       }
 
       $primaryKeyFieldValue = $entityOrEntities->{$primaryKeyField};
-      if (is_string($primaryKeyFieldValue)) {
-        $primaryKeyFieldValue = '"' . $primaryKeyFieldValue . '"';
-      }
-      $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt])->where("$primaryColumn=$primaryKeyFieldValue");
+      $statement = $this->query
+        ->update(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities))
+        ->set([Filter::getDeleteDateColumnName(entity: $entityOrEntities) => $deletedAt]);
+      $condition = $this->buildConditionClause([$primaryColumn => $primaryKeyFieldValue], $this->query, $entityOrEntities);
+      $statement = $statement->where($condition);
 
       if ($this->isDebug || $removeOptions?->isDebug) {
         $statement->debug();
@@ -2122,7 +2155,9 @@ class EntityManager implements IEntityStoreOwner
 
     $entity = $this->create(entityClass: $entityClass);
 
-    $statement = $this->query->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entity))->where(condition: $this->getConditionsString(conditions: $conditions));
+    $statement = $this->query
+      ->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entity));
+    $statement = $statement->where(condition: $this->buildConditionClause($conditions, $this->query, $entity));
 
     if ($this->isDebug) {
       $statement->debug();
@@ -2142,26 +2177,6 @@ class EntityManager implements IEntityStoreOwner
    *
    * @return string Returns an SQL condition string
    */
-  private function getConditionsString(int|object|array $conditions): string
-  {
-    $separator = ', ';
-    $conditionsString = '';
-
-    if (empty($conditions)) {
-      return '';
-    }
-
-    if (is_int($conditions)) {
-      $conditionsString = sprintf("id=%s", $conditions);
-    } else {
-      foreach ($conditions as $key => $value) {
-        $conditionsString .= sprintf("%s=%s%s", $key, (is_numeric($value) ? $value : "'$value'"), $separator);
-      }
-    }
-
-    return trim($conditionsString, $separator);
-  }
-
   /**
    * Restores entities by a given condition(s).
    * Unlike save method executes a primitive operation without cascades, relations and other operations included.
@@ -2180,7 +2195,10 @@ class EntityManager implements IEntityStoreOwner
   {
     $entity = $this->create(entityClass: $entityClass);
 
-    $statement = $this->query->update(tableName: $this->entityInspector->getTableName(entity: $entity))->set([Filter::getDeleteDateColumnName(entity: $entity) => NULL])->where(condition: $this->getConditionsString(conditions: $conditions));
+    $statement = $this->query
+      ->update(tableName: $this->entityInspector->getTableName(entity: $entity))
+      ->set([Filter::getDeleteDateColumnName(entity: $entity) => NULL]);
+    $statement = $statement->where(condition: $this->buildConditionClause($conditions, $this->query, $entity));
 
     if ($this->isDebug) {
       $statement->debug();

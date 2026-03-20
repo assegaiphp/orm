@@ -25,7 +25,7 @@ class RelationsCest
   {
     require_once __DIR__ . '/Fixtures/RelationFixtures.php';
 
-    $this->dbPath = dirname(__DIR__) . '/_output/sqlite-relations.sqlite';
+    $this->dbPath = dirname(__DIR__) . '/_output/sqlite-relations-' . uniqid('', true) . '.sqlite';
     @unlink($this->dbPath);
 
     $this->dataSource = new DataSource(new DataSourceOptions(
@@ -67,6 +67,7 @@ class RelationsCest
 
   public function _after(UnitTester $I): void
   {
+    unset($this->manager, $this->dataSource);
     @unlink($this->dbPath);
   }
 

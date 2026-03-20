@@ -55,7 +55,13 @@ final class SQLInsertIntoMultipleStatement
         {
           $value = password_hash($value, $this->query->passwordHashAlgorithm());
         }
-        $queryString .= is_numeric($value) ? "{$value}{$separator}" : "'{$value}'{$separator}";
+
+        if (is_string($value) && in_array($value, ['CURRENT_TIMESTAMP', 'NULL'], true)) {
+          $queryString .= "{$value}{$separator}";
+          continue;
+        }
+
+        $queryString .= $this->query->addParam($value) . $separator;
       }
       $queryString = trim($queryString, $separator);
       $queryString .= ")$separator";

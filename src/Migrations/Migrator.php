@@ -55,12 +55,11 @@ readonly class Migrator
     {
       throw new MigrationException("Migration name cannot be empty.");
     }
-    $quotedMigrationName = $this->dataSource->getClient()->quote($migrationName);
-    $quotedTimestamp = $this->dataSource->getClient()->quote(date('Y-m-d H:i:s'));
-    $migrationInsertionSql = "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES($quotedMigrationName, $quotedTimestamp)";
-    $statement = $this->dataSource->getClient()->query($migrationInsertionSql);
+    $statement = $this->dataSource->getClient()->prepare(
+      "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES (?, ?)"
+    );
 
-    if (false === $statement)
+    if (false === $statement || false === $statement->execute([$migrationName, date('Y-m-d H:i:s')]))
     {
       throw new MigrationException("Failed to record migration run: $migrationName");
     }
@@ -78,11 +77,11 @@ readonly class Migrator
     $migration->down($this->dataSource);
     $migrationName = $migration->getName();
 
-    $quotedMigrationName = $this->dataSource->getClient()->quote($migrationName);
-    $migrationDeletionSql = "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration=$quotedMigrationName";
-    $statement = $this->dataSource->getClient()->query($migrationDeletionSql);
+    $statement = $this->dataSource->getClient()->prepare(
+      "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration = ?"
+    );
 
-    if (false === $statement || false === $statement->execute())
+    if (false === $statement || false === $statement->execute([$migrationName]))
     {
       throw new MigrationException("Failed to record migration reversion: $migrationName.");
     }
