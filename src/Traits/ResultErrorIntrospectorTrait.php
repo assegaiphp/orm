@@ -13,58 +13,80 @@ use Traversable;
  */
 trait ResultErrorIntrospectorTrait
 {
-  /**
-   * Returns the first error from the result set. The first error is considered the earliest raised error.
-   *
-   * @property array|Traversable|null $errors The collection of errors.
-   *
-   * @return Throwable|null The first error, or null if there are no errors.
-   */
-  public function getFirstThrownError(): ?Throwable
-  {
-    if (!isset($this->errors)) {
-      return null;
+    /**
+     * Returns the first error from the result set. The first error is considered the earliest raised error.
+     *
+     * @return Throwable|null The first error, or null if there are no errors.
+     * @property array|Traversable|null $errors The collection of errors.
+     * @deprecated Use getEarliestError() instead for clearer naming. This method will be removed in future versions.
+     */
+    public function getFirstThrownError(): ?Throwable
+    {
+        return $this->getEarliestError();
     }
 
-    if ($this->errors instanceof Traversable) {
-      foreach ($this->errors as $error) {
-        return $error;
-      }
+    /**
+     * Returns the earliest error thrown in the stack of errors.
+     * @return Throwable|null The
+     * @property array|Traversable|null $errors The collection of errors.
+     *
+     */
+    public function getEarliestError(): ?Throwable
+    {
+        if (!isset($this->errors)) {
+            return null;
+        }
+
+        if ($this->errors instanceof Traversable) {
+            foreach ($this->errors as $error) {
+                return $error;
+            }
+        }
+
+        if (!is_array($this->errors)) {
+            return null;
+        }
+
+        return !empty($this->errors) ? $this->errors[0] : null;
     }
 
-    if (!is_array($this->errors)) {
-      return null;
+    /**
+     * Returns the last thrown error from the result set. The last thrown error is considered the most recent error.
+     *
+     * @return Throwable|null The last thrown error, or null if there are no errors.
+     * @property array|Traversable|null $errors The collection of errors.
+     * @deprecated Use getLatestError() instead for clearer naming. This method will be removed in future versions.
+     */
+    public function getLastThrownError(): ?Throwable
+    {
+        return $this->getLatestError();
     }
 
-    return !empty($this->errors) ? $this->errors[0] : null;
-  }
+    /**
+     * Returns the latest or most recent error in the error stack.
+     * @return Throwable|null The latest or most recent error in the error stack.
+     */
+    public function getLatestError(): ?Throwable
+    {
+        if (!isset($this->errors)) {
+            return null;
+        }
 
-  /**
-   * Returns the last thrown error from the result set. The last thrown error is considered the most recent error.
-   *
-   * @return Throwable|null The last thrown error, or null if there are no errors.
-   */
-  public function getLastThrownError(): ?Throwable
-  {
-    if (!isset($this->errors)) {
-      return null;
+        $errors = $this->errors;
+
+        if ($this->errors instanceof Traversable) {
+            $errors = iterator_to_array($errors);
+        }
+
+        if (!is_array($errors)) {
+            return null;
+        }
+
+        if (empty($errors)) {
+            return null;
+        }
+
+        return $errors[array_key_last($errors)];
     }
-
-    $errors = $this->errors;
-
-    if ($this->errors instanceof Traversable) {
-      $errors = iterator_to_array($errors);
-    }
-
-    if (!is_array($errors)) {
-      return null;
-    }
-
-    if (empty($errors)) {
-      return null;
-    }
-
-    return $errors[array_key_last($errors)];
-  }
 
 }
