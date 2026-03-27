@@ -12,147 +12,147 @@ use JsonSerializable;
  */
 class FindOptions implements JsonSerializable
 {
-  /**
-   * The default value for withRealTotal.
-   */
-  const bool DEFAULT_WITH_REAL_TOTAL = true;
+    /**
+     * The default value for withRealTotal.
+     */
+    const bool DEFAULT_WITH_REAL_TOTAL = true;
 
-  public null|object|array $relations;
+    public null|object|array $relations;
 
-  /**
-   * @param object|array|null $select The fields to select.
-   * @param object|array|null $relations The relations to include.
-   * @param FindWhereOptions|array|null $where The search criteria.
-   * @param object|array|null $order The order of the results.
-   * @param int|null $skip The number of results to skip.
-   * @param int|null $limit The number of results to return.
-   * @param array $exclude The fields to exclude.
-   * @param bool $withRealTotal Whether to get the real total.
-   * @param bool $isDebug Whether to enable debug mode.
-   * @param RelationOptions[] $relationOptions Options for relations.
-   */
-  public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
-  {
-    $this->relations = $this->normalizeRelations($relations);
-  }
-
-  /**
-   * Creates a FindOptions instance from an array.
-   *
-   * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool} $options The array of options.
-   * @return FindOptions
-   * @throws ORMException
-   */
-  public static function fromArray(array $options): FindOptions
-  {
-    $select = $options['select'] ?? null;
-    $relations = $options['relations'] ?? null;
-    $where = $options['where'] ?? null;
-    $order = $options['order'] ?? null;
-    $skip = $options['skip'] ?? null;
-    $limit = $options['limit'] ?? null;
-    $exclude = $options['exclude'] ?? ['password'];
-    $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
-
-    if (is_array($where)) {
-      $where = new FindWhereOptions($where);
+    /**
+     * @param object|array|null $select The fields to select.
+     * @param object|array|null $relations The relations to include.
+     * @param FindWhereOptions|array|null $where The search criteria.
+     * @param object|array|null $order The order of the results.
+     * @param int|null $skip The number of results to skip.
+     * @param int|null $limit The number of results to return.
+     * @param array $exclude The fields to exclude.
+     * @param bool $withRealTotal Whether to get the real total.
+     * @param bool $isDebug Whether to enable debug mode.
+     * @param RelationOptions[] $relationOptions Options for relations.
+     */
+    public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
+    {
+        $this->relations = $this->normalizeRelations($relations);
     }
 
-    return new FindOptions(select: $select, relations: $relations, where: $where, order: $order, skip: $skip, limit: $limit, exclude: $exclude, withRealTotal: $withRealTotal);
-  }
-
-  /**
-   * @return string
-   */
-  public function __toString(): string
-  {
-    $output = match (true) {
-      is_array($this->where) => (function () {
-        $where = '';
-        foreach ($this->where as $key => $value) {
-          $v = match (true) {
-            is_string($value) => "'$value'",
-            is_bool($value) => $value ? 'TRUE' : 'FALSE',
-            is_null($value), $value === 'NULL' => 'NULL',
-            default => $value
-          };
-          $where .= (($v === 'NULL') ? "$key IS $v" : "$key = $v") . " AND ";
+    /**
+     * @return array<string|int, mixed>
+     */
+    private function normalizeRelations(null|object|array $relations): array
+    {
+        if (is_null($relations)) {
+            return [];
         }
-        return rtrim($where, ' AND ');
-      })(),
-      $this->where instanceof FindWhereOptions => strval($this->where),
-      default => '',
-    };
 
-    if (!empty($limit)) {
-      $output .= " LIMIT $limit";
+        if (is_object($relations)) {
+            return $this->normalizeRelationMap((array)$relations);
+        }
 
-      if (!empty($skip)) {
-        $output .= " OFFSET $skip";
-      }
+        if (!array_is_list($relations)) {
+            return $this->normalizeRelationMap($relations);
+        }
+
+        return array_map(
+            fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")),
+            $relations
+        );
     }
 
-    return trim($output);
-  }
+    /**
+     * @param array<string, mixed> $relations
+     * @return array<string, mixed>
+     */
+    private function normalizeRelationMap(array $relations): array
+    {
+        $normalizedRelations = [];
 
-  /**
-   * @inheritDoc
-   */
-  public function jsonSerialize(): array
-  {
-    return self::toArray($this);
-  }
+        foreach ($relations as $relation => $value) {
+            if (!is_string($relation)) {
+                throw new InvalidArgumentException("Each relation key must be of type string");
+            }
 
-  /**
-   * Converts a FindOptions instance to an array.
-   *
-   * @param FindOptions $options
-   * @return array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool}
-   */
-  public static function toArray(self $options): array
-  {
-    return ['select' => $options->select, 'relations' => $options->relations, 'where' => $options->where, 'order' => $options->order, 'skip' => $options->skip, 'limit' => $options->limit, 'exclude' => $options->exclude, 'with_real_total' => $options->withRealTotal,];
-  }
+            $normalizedRelations[trim($relation)] = $value;
+        }
 
-  /**
-   * @return array<string|int, mixed>
-   */
-  private function normalizeRelations(null|object|array $relations): array
-  {
-    if (is_null($relations)) {
-      return [];
+        return $normalizedRelations;
     }
 
-    if (is_object($relations)) {
-      return $this->normalizeRelationMap((array)$relations);
+    /**
+     * Creates a FindOptions instance from an array.
+     *
+     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool} $options The array of options.
+     * @return FindOptions
+     * @throws ORMException
+     */
+    public static function fromArray(array $options): FindOptions
+    {
+        $select = $options['select'] ?? null;
+        $relations = $options['relations'] ?? null;
+        $where = $options['where'] ?? null;
+        $order = $options['order'] ?? null;
+        $skip = $options['skip'] ?? null;
+        $limit = $options['limit'] ?? null;
+        $exclude = $options['exclude'] ?? ['password'];
+        $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
+
+        if (is_array($where)) {
+            $where = new FindWhereOptions($where);
+        }
+
+        return new FindOptions(select: $select, relations: $relations, where: $where, order: $order, skip: $skip, limit: $limit, exclude: $exclude, withRealTotal: $withRealTotal);
     }
 
-    if (!array_is_list($relations)) {
-      return $this->normalizeRelationMap($relations);
+    /**
+     * @return string
+     */
+    public function __toString(): string
+    {
+        $output = match (true) {
+            is_array($this->where) => (function () {
+                $where = '';
+                foreach ($this->where as $key => $value) {
+                    $v = match (true) {
+                        is_string($value) => "'$value'",
+                        is_bool($value) => $value ? 'TRUE' : 'FALSE',
+                        is_null($value), $value === 'NULL' => 'NULL',
+                        default => $value
+                    };
+                    $where .= (($v === 'NULL') ? "$key IS $v" : "$key = $v") . " AND ";
+                }
+                return rtrim($where, ' AND ');
+            })(),
+            $this->where instanceof FindWhereOptions => strval($this->where),
+            default => '',
+        };
+
+        if (!empty($limit)) {
+            $output .= " LIMIT $limit";
+
+            if (!empty($skip)) {
+                $output .= " OFFSET $skip";
+            }
+        }
+
+        return trim($output);
     }
 
-    return array_map(
-      fn($relation) => (is_string($relation) ? trim($relation) : throw new InvalidArgumentException("Each relation must be of type string")),
-      $relations
-    );
-  }
-
-  /**
-   * @param array<string, mixed> $relations
-   * @return array<string, mixed>
-   */
-  private function normalizeRelationMap(array $relations): array
-  {
-    $normalizedRelations = [];
-
-    foreach ($relations as $relation => $value) {
-      if (!is_string($relation)) {
-        throw new InvalidArgumentException("Each relation key must be of type string");
-      }
-
-      $normalizedRelations[trim($relation)] = $value;
+    /**
+     * @inheritDoc
+     */
+    public function jsonSerialize(): array
+    {
+        return self::toArray($this);
     }
 
-    return $normalizedRelations;
-  }
+    /**
+     * Converts a FindOptions instance to an array.
+     *
+     * @param FindOptions $options
+     * @return array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], with_real_total: bool}
+     */
+    public static function toArray(self $options): array
+    {
+        return ['select' => $options->select, 'relations' => $options->relations, 'where' => $options->where, 'order' => $options->order, 'skip' => $options->skip, 'limit' => $options->limit, 'exclude' => $options->exclude, 'with_real_total' => $options->withRealTotal,];
+    }
 }
