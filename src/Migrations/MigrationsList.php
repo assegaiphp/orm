@@ -130,7 +130,7 @@ class MigrationsList implements Stringable
       return null;
     }
 
-    $lastKey = end($this->listOfMigrations);
-    return $this->listOfMigrations[$lastKey];
+    $lastIndex = array_key_last($this->listOfMigrations);
+    return $lastIndex === null ? null : $this->listOfMigrations[$lastIndex];
   }
 }

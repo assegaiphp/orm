@@ -51,6 +51,7 @@ readonly class DataSourceOptions implements Stringable
       'username' => $this->username,
       'password' => $this->password,
       'synchronize' => $this->synchronize,
+      'charSet' => $this->charSet?->value,
       'path' => $this->path,
     ];
   }
@@ -66,6 +67,11 @@ readonly class DataSourceOptions implements Stringable
       $type = DataSourceType::tryFrom($type) ?? DataSourceType::MYSQL;
     }
 
+    $charSet = $props['charSet'] ?? $props['charset'] ?? SQLCharacterSet::UTF8MB4;
+    if (is_string($charSet)) {
+      $charSet = SQLCharacterSet::tryFrom($charSet) ?? SQLCharacterSet::UTF8MB4;
+    }
+
     return new self(
       entities: $props['entities'] ?? [],
       name: $props['database'] ?? $props['name'] ?? '',
@@ -75,6 +81,7 @@ readonly class DataSourceOptions implements Stringable
       username: $props['username'] ?? $props['user'] ?? null,
       password: $props['password'] ?? $props['pass'] ?? null,
       synchronize: $props['synchronize'] ?? false,
+      charSet: $charSet,
       path: $props['path'] ?? null,
     );
   }

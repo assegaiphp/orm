@@ -2,9 +2,10 @@
 
 namespace Assegai\Orm\DataSource;
 
-use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Interfaces\DataSourceInterface;
+use Assegai\Orm\Support\OrmRuntime;
 use InvalidArgumentException;
 use PDO;
 
@@ -20,59 +21,45 @@ class PostgreSQLDataSource extends PDO implements DataSourceInterface
   /** @noinspection DuplicatedCode */
   public function __construct(protected string $name)
   {
-    $databases = Config::get('databases');
+    $databases = OrmRuntime::databaseConfigs();
 
-    if (! isset($databases[$this->type->value]) || ! isset($databases[$this->type->value][$name]) ) {
+    if (!isset($databases[$this->type->value]) || !isset($databases[$this->type->value][$name])) {
       throw new InvalidArgumentException("Database $name not found.");
     }
 
-    $config = $databases[$this->type->value][$name];
-    $host = $config['host'] ?? 'localhost';
-    $user = $config['user'] ?? 'postgres';
-    $password = $config['password'] ?? $config['pass'] ?? '';
-    $port = $config['port'] ?? 5432;
+    $options = DataSourceOptions::fromArray([
+      ...$databases[$this->type->value][$name],
+      'name' => $name,
+      'type' => $this->type,
+    ]);
+    $user = $options->username ?? 'postgres';
+    $password = $options->password ?? '';
 
-    $dsn = "pgsql:host=$host;port=$port;dbname=$name";
+    $dsn = DBFactory::buildPostgreSqlDsn($options->host, $options->port, $options->name);
     parent::__construct($dsn, $user, $password);
-    $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $this->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    DBFactory::applyConnectionAttributes($this, SQLDialect::POSTGRESQL);
   }
 
-  /**
-   * @inheritDoc
-   */
   public function connect(DataSourceOptions|array|null $options): void
   {
     // Do nothing.
   }
 
-  /**
-   * @inheritDoc
-   */
   public function disconnect(): void
   {
     // Do nothing.
   }
 
-  /**
-   * @inheritDoc
-   */
   public function isConnected(): bool
   {
     return true;
   }
 
-  /**
-   * @inheritDoc
-   */
   public function getClient(): static
   {
     return $this;
   }
 
-  /**
-   * @inheritDoc
-   */
   public function getName(): string
   {
     return $this->name;

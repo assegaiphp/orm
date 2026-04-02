@@ -2,13 +2,29 @@
     <a href="https://assegaiphp.com/" target="blank"><img src="https://assegaiphp.com/images/logos/logo-cropped.png" width="200" alt="Assegai Logo"></a>
 </div>
 
-<p align="center">A progressive PHP framework for building efficient and scalable server-side applications.</p>
+<p align="center">A standalone ORM for modern PHP applications, with optional AssegaiPHP integration.</p>
 
 ## Description
 
-An object-relational mapper for [AssegaiPHP](https://github.com/assegaiphp).
+An object-relational mapper for modern PHP applications. You can use it on its own, or plug it into
+[AssegaiPHP](https://github.com/assegaiphp) when you want repository injection and framework conventions.
 
 ## Installation
+
+```bash
+$ assegai add orm
+```
+
+That is the preferred path inside an Assegai workspace. It will:
+
+- require `assegaiphp/orm` if it is missing
+- import `OrmModule` into the root module
+- make the ORM CLI commands available through package discovery
+
+If you install the package manually first, `assegai add orm` is still safe to run afterward. It will just finish the
+workspace wiring.
+
+For standalone PHP projects that are not using Assegai, install the package directly:
 
 ```bash
 $ composer require assegaiphp/orm
@@ -19,7 +35,7 @@ $ composer require assegaiphp/orm
 This package is designed to feel familiar to teams coming from TypeORM:
 
 - entities describe persistence shape
-- repositories are injected into services
+- repositories can be used directly or injected into services in Assegai
 - data sources decide where a feature reads and writes
 - relations are explicit and ownership matters
 - migrations evolve the schema deliberately
@@ -35,6 +51,50 @@ In the main Assegai guide set, the ORM track is:
 ## Quick Start
 
 [Overview & Tutorial](https://assegaiphp.com/guide/fundamentals/orm)
+
+## Using it without Assegai
+
+You can use AssegaiORM directly in any PHP project. The standalone path is:
+
+1. configure named databases for the ORM runtime
+2. create a `DataSource`
+3. create or fetch repositories from that data source
+
+```php
+<?php
+
+use App\Entities\Note;
+use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\DataSource\DataSourceOptions;
+use Assegai\Orm\Enumerations\DataSourceType;
+use Assegai\Orm\Support\OrmRuntime;
+
+OrmRuntime::configure([
+  'databases' => [
+    'sqlite' => [
+      'app' => [
+        'path' => __DIR__ . '/storage/app.sqlite',
+      ],
+    ],
+  ],
+]);
+
+$dataSource = new DataSource(new DataSourceOptions(
+  name: 'app',
+  type: DataSourceType::SQLITE,
+  database: 'app',
+));
+
+$notes = $dataSource->getRepository(Note::class);
+
+$note = $notes->create((object)[
+  'title' => 'First note',
+  'body' => 'Stored without a framework',
+]);
+
+$created = $notes->save($note);
+$allNotes = $notes->find()->getData();
+```
 
 ## Using SQLite
 
@@ -137,8 +197,12 @@ $allNotes = $notes->find()->getData();
 $firstNote = $notes->findOne(['id' => 1])->getFirst();
 ```
 
-In an Assegai application, you can also inject the repository and let the entity metadata select the SQLite
-connection:
+## Using it inside Assegai
+
+Inside Assegai, import `OrmModule` once or let `assegai add orm` wire it for you. That module registers the repository
+resolver so `#[InjectRepository(...)]` can participate in the framework injector cleanly.
+
+Once the module is present, you can inject the repository and let the entity metadata select the SQLite connection:
 
 ```php
 <?php
@@ -146,11 +210,9 @@ connection:
 namespace App\Notes;
 
 use App\Entities\Note;
-use Assegai\Core\Attributes\Injectable;
 use Assegai\Orm\Attributes\InjectRepository;
 use Assegai\Orm\Management\Repository;
 
-#[Injectable]
 class NotesService
 {
   public function __construct(
@@ -165,6 +227,12 @@ class NotesService
   }
 }
 ```
+
+## Standalone first, framework optional
+
+The ORM no longer needs `assegaiphp/core` to function. When the core package is present, the ORM can still read
+framework config and repository metadata automatically. When it is not present, `Assegai\\Orm\\Support\\OrmRuntime`
+acts as the lightweight runtime seam for config, module options, and logging.
 
 ## Support
 

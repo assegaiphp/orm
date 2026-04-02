@@ -2,9 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Core\Config;
-use Assegai\Core\Enumerations\EnvironmentType;
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Support\OrmRuntime;
 use DateTimeInterface;
 use PDO;
 use PDOException;
@@ -61,7 +60,7 @@ final class SQLQuery
     )
     {
         if (empty($this->passwordHashAlgorithm)) {
-            $this->passwordHashAlgorithm = Config::get('default_password_hash_algo') ?? '2y';
+            $this->passwordHashAlgorithm = OrmRuntime::defaultPasswordHashAlgorithm();
 
             if (empty($this->passwordHashAlgorithm)) {
                 $this->passwordHashAlgorithm = PASSWORD_DEFAULT;
@@ -373,7 +372,7 @@ final class SQLQuery
         } catch (PDOException $exception) {
             $message = $exception->getMessage();
 
-            if (Config::environment() === EnvironmentType::PRODUCTION) {
+            if (OrmRuntime::isProduction()) {
                 $message = "Internal server error.";
             }
 

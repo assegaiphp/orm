@@ -3,7 +3,6 @@
 
 namespace Tests\Unit;
 
-use Assegai\Core\Config;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\DataSource\Schema;
@@ -15,6 +14,7 @@ use Assegai\Orm\Exceptions\DataSourceConnectionException;
 use Assegai\Orm\Exceptions\GeneralSQLQueryException;
 use Assegai\Orm\Exceptions\NotImplementedException;
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Support\OrmRuntime;
 use PDO;
 use ReflectionException;
 use Tests\Support\UnitTester;
@@ -45,7 +45,9 @@ class SchemaCest
       require __DIR__ . "/mocks/$classname.php";
     });
 
-    $dbConfig = Config::get('databases')['mysql'][self::DATASOURCE_NAME];
+    $config = require __DIR__ . '/config/default.php';
+    OrmRuntime::configure($config);
+    $dbConfig = OrmRuntime::databaseConfigs()['mysql'][self::DATASOURCE_NAME];
     $databaseType = DataSourceType::MYSQL;
 
     $this->entity = new MockEntity();

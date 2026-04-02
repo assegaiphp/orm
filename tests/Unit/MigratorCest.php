@@ -3,7 +3,6 @@
 
 namespace Tests\Unit;
 
-use Assegai\Core\Util\Paths;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\ORM\Exceptions\DataSourceException;
@@ -11,6 +10,7 @@ use Assegai\Orm\Exceptions\IOException;
 use Assegai\Orm\Exceptions\MigrationException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Migrations\Migrator;
+use Assegai\Orm\Support\OrmRuntime;
 use Codeception\Attribute\Skip;
 use Codeception\Scenario;
 use Tests\Support\UnitTester;
@@ -46,9 +46,9 @@ class MigratorCest
   public function _before(UnitTester $I, Scenario $scenario): void
   {
     $this->workingDirectory = __DIR__;
-    $this->staticMigrationsDirectory = Paths::join($this->workingDirectory, 'static_migrations', 'database', 'migrations');
+    $this->staticMigrationsDirectory = OrmRuntime::joinPath($this->workingDirectory, 'static_migrations', 'database', 'migrations');
 
-    $configFilename = Paths::join(__DIR__, 'config', 'default.php');
+    $configFilename = OrmRuntime::joinPath(__DIR__, 'config', 'default.php');
     $config = require($configFilename);
 
     if (is_array($config))
@@ -135,7 +135,7 @@ QUERY
     $I->wantToTest("generating a migration file from a snake-case name");
     $migrationName = "create_test_table";
     $filename =
-      Paths::join(self::MIGRATIONS_DIR, $this->migrator->generateMigrationFileName('create_test_table'));
+      OrmRuntime::joinPath(self::MIGRATIONS_DIR, $this->migrator->generateMigrationFileName('create_test_table'));
 
     $this->migrator->generate($migrationName, $this->workingDirectory);
     $I->assertFileExists($filename);

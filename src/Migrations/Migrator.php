@@ -2,12 +2,14 @@
 
 namespace Assegai\Orm\Migrations;
 
-use Assegai\Core\Util\Debug\Log;
-use Assegai\Core\Util\Paths;
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\IOException;
 use Assegai\Orm\Exceptions\MigrationException;
+use Assegai\Orm\Support\OrmRuntime;
+use Assegai\Orm\Util\SqlDialectHelper;
 use PDO;
+use PDOException;
 
 /**
  * Class for handling the processing of 'Migration' objects
@@ -24,6 +26,7 @@ readonly class Migrator
    * @param DataSource $dataSource The DataSource to be used for migrations.
    * @param string $migrationsDirectory Directory containing all migrations.
    * @throws IOException if the migrations directory does not exist
+   * @throws MigrationException if the migrations tracking table cannot be prepared.
    */
   public function __construct(
     private DataSource $dataSource,
@@ -35,6 +38,7 @@ readonly class Migrator
       throw new IOException("Directory not found: " . $this->migrationsDirectory);
     }
 
+    $this->ensureMigrationsTableExists();
     $this->ranMigrationsList = new MigrationsList($this->dataSource);
   }
 
@@ -49,14 +53,19 @@ readonly class Migrator
   {
     $migration->up($this->dataSource);
 
-    # Record migration
     $migrationName = $migration->getName();
     if (empty($migrationName))
     {
       throw new MigrationException("Migration name cannot be empty.");
     }
+
     $statement = $this->dataSource->getClient()->prepare(
-      "INSERT INTO " . self::MIGRATION_TABLE_NAME . " (migration, ran_on) VALUES (?, ?)"
+      sprintf(
+        'INSERT INTO %s (%s, %s) VALUES (?, ?)',
+        $this->getQualifiedMigrationTableName(),
+        $this->quoteMigrationColumn('migration'),
+        $this->quoteMigrationColumn('ran_on'),
+      )
     );
 
     if (false === $statement || false === $statement->execute([$migrationName, date('Y-m-d H:i:s')]))
@@ -78,7 +87,11 @@ readonly class Migrator
     $migrationName = $migration->getName();
 
     $statement = $this->dataSource->getClient()->prepare(
-      "DELETE FROM " . self::MIGRATION_TABLE_NAME . " WHERE migration = ?"
+      sprintf(
+        'DELETE FROM %s WHERE %s = ?',
+        $this->getQualifiedMigrationTableName(),
+        $this->quoteMigrationColumn('migration'),
+      )
     );
 
     if (false === $statement || false === $statement->execute([$migrationName]))
@@ -98,7 +111,6 @@ readonly class Migrator
    */
   public function generate(string $name, ?string $targetDirectory = null): void
   {
-    // Set the target directory
     $targetDirectory = $targetDirectory ?? getcwd();
     $targetDirectory = rtrim($targetDirectory, " \t\n\r\0\x0B" . DIRECTORY_SEPARATOR);
 
@@ -107,18 +119,15 @@ readonly class Migrator
       $targetDirectory .= DIRECTORY_SEPARATOR . 'database' . DIRECTORY_SEPARATOR . 'migrations';
     }
 
-    // Validate the target directory
     if (!is_dir($targetDirectory))
     {
       throw new MigrationException("Target directory $targetDirectory is not a valid directory.");
     }
 
-    // Generate the migration file name
     $filename = $this->generateMigrationFileName($name);
     $classname = $this->generateMigrationClassName($name);
 
-    // Build the migration class content
-    $content = <<<EOF
+    $content = <<<EOF2
 <?php
 
 use Assegai\Orm\DataSource\DataSource;
@@ -135,10 +144,9 @@ class $classname extends Migration
     // TODO: implement the $classname::down() method
   }
 }
-EOF;
+EOF2;
 
-    // Write the migration class file
-    $filepath = Paths::join($targetDirectory, $filename);
+    $filepath = OrmRuntime::joinPath($targetDirectory, $filename);
     if (!file_put_contents($filepath, $content))
     {
       throw new MigrationException("Could not create migration file $filepath.");
@@ -167,7 +175,6 @@ EOF;
 
       $migrationFiles = $this->getMigrations($migrationsDirectory);
 
-      # Search migrations files for file with same name as $migration->name
       foreach ($migrationFiles as $migrationFile)
       {
         if ($migrationFile->getName() === $migration->name)
@@ -231,24 +238,23 @@ EOF;
   {
     $migrations = [];
     $migrationsDirectory = $migrationsDirectory ?? $this->migrationsDirectory;
-    // code to retrieve all migrations in the migrations directory and store them in the $migrations array
 
     $fileNames = scandir($migrationsDirectory);
     $fileNames = array_slice($fileNames, 2);
 
     foreach ($fileNames as $fileName)
     {
-      $path = Paths::join($migrationsDirectory, $fileName);
+      $path = OrmRuntime::joinPath($migrationsDirectory, $fileName);
       if (!is_file($path))
       {
-        Log::warn(__METHOD__, "File not found: $fileName");
+        OrmRuntime::log('warning', __METHOD__, "File not found: $fileName");
         continue;
       }
 
       $pathDidLoad = require($path);
       if (boolval($pathDidLoad) === false)
       {
-        Log::warn(__METHOD__, "Failed to load migration file $path");
+        OrmRuntime::log('warning', __METHOD__, "Failed to load migration file $path");
         continue;
       }
 
@@ -256,7 +262,7 @@ EOF;
       $migrationClassname = extract_class_name($migrationFileContent);
       if (false === $migrationClassname)
       {
-        Log::warn(__METHOD__, "Failed to extract a class name from $path");
+        OrmRuntime::log('warning', __METHOD__, "Failed to extract a class name from $path");
         continue;
       }
 
@@ -321,7 +327,7 @@ EOF;
   {
     $ranMigrations = [];
 
-    $sql = "SELECT * FROM " . self::MIGRATION_TABLE_NAME;
+    $sql = sprintf('SELECT * FROM %s', $this->getQualifiedMigrationTableName());
 
     $statement = $this->dataSource->getClient()->query($sql);
 
@@ -332,7 +338,6 @@ EOF;
 
     $results = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-    /** @var [migration, ran_on] $record */
     foreach ($results as $record)
     {
       $key = $record['migration'];
@@ -376,5 +381,60 @@ EOF;
   {
     $this->ranMigrationsList->loadList();
     return $this->ranMigrationsList;
+  }
+
+  private function ensureMigrationsTableExists(): void
+  {
+    $statement = $this->dataSource->getClient()->prepare($this->buildCreateMigrationsTableStatement());
+
+    if (false === $statement || false === $statement->execute()) {
+      throw new MigrationException('Failed to prepare the schema migrations table.');
+    }
+  }
+
+  private function getQualifiedMigrationTableName(): string
+  {
+    $dialect = $this->dataSource->getDialect();
+
+    return SqlDialectHelper::qualifyTable(
+      self::MIGRATION_TABLE_NAME,
+      $dialect === SQLDialect::MYSQL || $dialect === SQLDialect::MARIADB ? $this->dataSource->getDatabaseName() : null,
+      $dialect,
+    );
+  }
+
+  private function quoteMigrationColumn(string $column): string
+  {
+    return SqlDialectHelper::quoteIdentifier($column, $this->dataSource->getDialect());
+  }
+
+  private function buildCreateMigrationsTableStatement(): string
+  {
+    $dialect = $this->dataSource->getDialect();
+    $tableName = $this->getQualifiedMigrationTableName();
+    $migrationColumn = $this->quoteMigrationColumn('migration');
+    $ranOnColumn = $this->quoteMigrationColumn('ran_on');
+
+    return match ($dialect) {
+      SQLDialect::POSTGRESQL => <<<SQL
+CREATE TABLE IF NOT EXISTS $tableName (
+  $migrationColumn VARCHAR(50) NOT NULL PRIMARY KEY,
+  $ranOnColumn TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+SQL,
+      SQLDialect::SQLITE => <<<SQL
+CREATE TABLE IF NOT EXISTS $tableName (
+  $migrationColumn TEXT NOT NULL PRIMARY KEY,
+  $ranOnColumn TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+SQL,
+      default => <<<SQL
+CREATE TABLE IF NOT EXISTS $tableName (
+  $migrationColumn VARCHAR(50) NOT NULL,
+  $ranOnColumn DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY ($migrationColumn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+SQL,
+    };
   }
 }
