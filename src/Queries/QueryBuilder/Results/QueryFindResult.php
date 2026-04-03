@@ -8,13 +8,13 @@ use Throwable;
 use Traversable;
 
 /**
- * Class FindResult represents a result of a find query.
+ * Internal find-query result implementation shared by public-facing result objects.
  * @package Assegai\Orm\Queries\QueryBuilder\Results
  *
  * @template T
  * @template-implements QueryResultInterface<T>
  */
-readonly class FindResult implements QueryResultInterface
+readonly class QueryFindResult implements QueryResultInterface
 {
   use ResultErrorIntrospectorTrait;
 

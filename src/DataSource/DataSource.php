@@ -72,8 +72,9 @@ class DataSource implements DataSourceInterface
   /**
    * Gets a repository for the specified entity.
    *
-   * @param class-string $entityName The target entity for the repository
-   * @return RepositoryInterface The repository for the specified entity
+   * @template TEntity of object
+   * @param class-string<TEntity> $entityName The target entity for the repository
+   * @return RepositoryInterface<TEntity> The repository for the specified entity
    * @throws ClassNotFoundException
    * @throws IllegalTypeException
    * @throws ReflectionException
@@ -179,8 +180,12 @@ class DataSource implements DataSourceInterface
    */
   public function disconnect(): void
   {
+    if ($this->connection instanceof PDO && $this->connection->inTransaction()) {
+      $this->connection->rollBack();
+    }
+
     if ($this->options instanceof DataSourceOptions) {
-      DBFactory::disconnectConnection($this->options->name, $this->getDialect());
+      DBFactory::disconnectConnection($this->getConnectionIdentifierForDisconnect(), $this->getDialect());
     }
 
     $this->connection = null;
@@ -281,11 +286,19 @@ class DataSource implements DataSourceInterface
     $path = $options->path ?? $options->name;
 
     if ($this->isDirectSqlitePath($path)) {
-      $dsn = "sqlite:" . SqlDialectHelper::normalizeSqlitePath($path);
-      return new PDO($dsn);
+      return DBFactory::getSQLiteConnection(dbName: $path);
     }
 
     return DBFactory::getSQLiteConnection(dbName: $options->name);
+  }
+
+  private function getConnectionIdentifierForDisconnect(): string
+  {
+    if ($this->type === DataSourceType::SQLITE) {
+      return $this->options->path ?? $this->options->name;
+    }
+
+    return $this->options->name;
   }
 
   private function isDirectSqlitePath(string $path): bool

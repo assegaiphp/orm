@@ -14,7 +14,7 @@ use Assegai\Orm\Management\Options\RemoveOptions;
 use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
-use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
+use Assegai\Orm\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use stdClass as Entity;
@@ -23,7 +23,7 @@ use stdClass as Entity;
  * Interface RepositoryInterface
  * @package Assegai\Orm\Interfaces
  *
- * @template T
+ * @template T of object
  */
 interface RepositoryInterface
 {
@@ -82,7 +82,7 @@ interface RepositoryInterface
    *
    * @param array|object $entity The entity to insert.
    * @param InsertOptions|null $options The options to use when inserting the entity.
-   * @return InsertResult
+   * @return InsertResult<T>
    * @throws ORMException
    */
   public function insert(array|object $entity, ?InsertOptions $options = null): InsertResult;
@@ -97,7 +97,7 @@ interface RepositoryInterface
    * @param string|object|array $conditions The condition(s) to find the entity.
    * @param object|array|null $entity The entity or entities to update.
    * @param UpdateOptions|null $options The options to use when updating the entity.
-   * @return UpdateResult
+   * @return UpdateResult<T>
    * @throws ORMException
    */
   public function update(string|object|array $conditions, object|array|null $entity, ?UpdateOptions $options = null): UpdateResult;
@@ -107,7 +107,7 @@ interface RepositoryInterface
    *
    * @param object|object[] $entity The entity or entities to upsert.
    * @param UpsertOptions|array $options The options to use when upserting.
-   * @return InsertResult|UpdateResult Returns the inserted or updated entity or entities.
+   * @return InsertResult<T>|UpdateResult<T> Returns the inserted or updated entity or entities.
    */
   public function upsert(object|array|null $entity, UpsertOptions|array $options = []): InsertResult|UpdateResult;
 

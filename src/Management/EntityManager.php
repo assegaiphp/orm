@@ -44,7 +44,7 @@ use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
-use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
+use Assegai\Orm\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Queries\Sql\SQLQuery;
@@ -338,10 +338,11 @@ class EntityManager implements IEntityStoreOwner
    * duplicate entity is being inserted.
    * You can execute bulk inserts using this method.
    *
-   * @param string $entityClass The entity class name.
-   * @param array|object $entity The entity to insert.
+   * @template TEntity of object
+   * @param class-string<TEntity> $entityClass The entity class name.
+   * @param TEntity|array<string, mixed> $entity The entity to insert.
    * @param InsertOptions|null $options The options to use when inserting the entity.
-   * @return InsertResult
+   * @return InsertResult<TEntity>
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException
    * @throws ORMException

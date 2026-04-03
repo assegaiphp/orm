@@ -192,10 +192,24 @@ final class DBFactory
 
     if ($dialect === SQLDialect::SQLITE) {
       $cacheKey = self::getSqliteCacheKey($dbName);
+      $connection = self::$connections[$type][$cacheKey] ?? null;
+
+      if ($connection instanceof PDO && $connection->inTransaction()) {
+        $connection->rollBack();
+      }
+
+      self::$connections[$type][$cacheKey] = null;
       unset(self::$connections[$type][$cacheKey]);
       return;
     }
 
+    $connection = self::$connections[$type][$dbName] ?? null;
+
+    if ($connection instanceof PDO && $connection->inTransaction()) {
+      $connection->rollBack();
+    }
+
+    self::$connections[$type][$dbName] = null;
     unset(self::$connections[$type][$dbName]);
   }
 
@@ -289,7 +303,42 @@ final class DBFactory
 
     if ($dialect === SQLDialect::SQLITE) {
       $connection->exec('PRAGMA foreign_keys = ON');
+      $connection->exec('PRAGMA busy_timeout = 5000');
+
+      if (self::shouldEnableSqliteWal($connection)) {
+        $connection->exec('PRAGMA journal_mode = WAL');
+        $connection->exec('PRAGMA synchronous = NORMAL');
+      }
     }
+  }
+
+  private static function shouldEnableSqliteWal(PDO $connection): bool
+  {
+    $databasePath = self::getPrimarySqliteDatabasePath($connection);
+
+    return is_string($databasePath)
+      && $databasePath !== ''
+      && $databasePath !== ':memory:';
+  }
+
+  private static function getPrimarySqliteDatabasePath(PDO $connection): ?string
+  {
+    $statement = $connection->query('PRAGMA database_list');
+
+    if ($statement === false) {
+      return null;
+    }
+
+    $database = $statement->fetch(PDO::FETCH_ASSOC);
+    $statement->closeCursor();
+
+    if (!is_array($database)) {
+      return null;
+    }
+
+    $path = $database['file'] ?? null;
+
+    return is_string($path) ? $path : null;
   }
 
   private static function isDirectSqlitePath(string $path): bool

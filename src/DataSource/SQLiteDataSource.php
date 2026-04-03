@@ -17,6 +17,7 @@ use PDO;
 class SQLiteDataSource extends PDO implements DataSourceInterface
 {
   protected DataSourceType $type = DataSourceType::SQLITE;
+  protected bool $connected = true;
 
   /** @noinspection DuplicatedCode */
   public function __construct(protected string $name)
@@ -30,9 +31,7 @@ class SQLiteDataSource extends PDO implements DataSourceInterface
     $path = SqlDialectHelper::normalizeSqlitePath($databases[$this->type->value][$name]['path']);
     $dsn = 'sqlite:' . $path;
     parent::__construct($dsn);
-    $this->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $this->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $this->exec('PRAGMA foreign_keys = ON');
+    DBFactory::applyConnectionAttributes($this, SQLDialect::SQLITE);
   }
 
   public function connect(DataSourceOptions|array|null $options): void
@@ -42,12 +41,16 @@ class SQLiteDataSource extends PDO implements DataSourceInterface
 
   public function disconnect(): void
   {
-    // Do nothing.
+    if ($this->inTransaction()) {
+      $this->rollBack();
+    }
+
+    $this->connected = false;
   }
 
   public function isConnected(): bool
   {
-    return true;
+    return $this->connected;
   }
 
   public function getClient(): static

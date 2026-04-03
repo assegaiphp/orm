@@ -251,7 +251,7 @@ EOF2;
         continue;
       }
 
-      $pathDidLoad = require($path);
+      $pathDidLoad = require_once($path);
       if (boolval($pathDidLoad) === false)
       {
         OrmRuntime::log('warning', __METHOD__, "Failed to load migration file $path");

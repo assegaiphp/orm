@@ -7,7 +7,6 @@ namespace Assegai\Orm\Interfaces;
  * @package Assegai\Orm\Interfaces
  *
  * @template T
- * @template-implements QueryResultInterface<T>
  */
 interface QueryResultInterface
 {
