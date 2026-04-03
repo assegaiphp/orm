@@ -44,6 +44,10 @@ class DataSource implements DataSourceInterface
    * @var array<class-string> The entities.
    */
   public readonly array $entities;
+  /**
+   * @var bool Whether the connection is managed by the shared DBFactory cache.
+   */
+  protected bool $usesSharedConnection = false;
 
   /**
    * Constructs a DataSource.
@@ -159,10 +163,15 @@ class DataSource implements DataSourceInterface
       fn(string|object $entity): string => $this->normalizeEntityClass($entity),
       $options->entities ?? []
     );
+    $this->usesSharedConnection = false;
 
     try {
       $this->connection = $this->createConnection($options);
       DBFactory::applyConnectionAttributes($this->connection, SqlDialectHelper::fromDataSourceType($this->type));
+
+      if ($this->usesSharedConnection) {
+        DBFactory::retainSharedConnection($this->getConnectionIdentifierForDisconnect(), $this->getDialect());
+      }
     } catch (PDOException) {
       throw new DataSourceConnectionException($this->type);
     }
@@ -180,15 +189,18 @@ class DataSource implements DataSourceInterface
    */
   public function disconnect(): void
   {
-    if ($this->connection instanceof PDO && $this->connection->inTransaction()) {
+    if (!$this->connection instanceof PDO) {
+      return;
+    }
+
+    if ($this->usesSharedConnection && $this->options instanceof DataSourceOptions) {
+      DBFactory::releaseSharedConnection($this->getConnectionIdentifierForDisconnect(), $this->getDialect());
+    } elseif ($this->connection->inTransaction()) {
       $this->connection->rollBack();
     }
 
-    if ($this->options instanceof DataSourceOptions) {
-      DBFactory::disconnectConnection($this->getConnectionIdentifierForDisconnect(), $this->getDialect());
-    }
-
     $this->connection = null;
+    $this->usesSharedConnection = false;
   }
 
   /**
@@ -258,6 +270,7 @@ class DataSource implements DataSourceInterface
   private function createMySqlConnection(DataSourceOptions $options): PDO
   {
     if (empty($options->username) && empty($options->password)) {
+      $this->usesSharedConnection = true;
       return DBFactory::getMySQLConnection(dbName: $options->name);
     }
 
@@ -271,6 +284,7 @@ class DataSource implements DataSourceInterface
   private function createPostgreSqlConnection(DataSourceOptions $options): PDO
   {
     if (empty($options->username) && empty($options->password)) {
+      $this->usesSharedConnection = true;
       return DBFactory::getPostgresSQLConnection(dbName: $options->name);
     }
 
@@ -284,6 +298,7 @@ class DataSource implements DataSourceInterface
   private function createSqliteConnection(DataSourceOptions $options): PDO
   {
     $path = $options->path ?? $options->name;
+    $this->usesSharedConnection = true;
 
     if ($this->isDirectSqlitePath($path)) {
       return DBFactory::getSQLiteConnection(dbName: $path);

@@ -14,9 +14,11 @@ use PDO;
  *
  * @package Assegai\Orm\DataSource
  */
-class PostgreSQLDataSource extends PDO implements DataSourceInterface
+class PostgreSQLDataSource implements DataSourceInterface
 {
   protected DataSourceType $type = DataSourceType::POSTGRESQL;
+  protected bool $connected = true;
+  protected PDO $client;
 
   /** @noinspection DuplicatedCode */
   public function __construct(protected string $name)
@@ -36,8 +38,8 @@ class PostgreSQLDataSource extends PDO implements DataSourceInterface
     $password = $options->password ?? '';
 
     $dsn = DBFactory::buildPostgreSqlDsn($options->host, $options->port, $options->name);
-    parent::__construct($dsn, $user, $password);
-    DBFactory::applyConnectionAttributes($this, SQLDialect::POSTGRESQL);
+    $this->client = new PDO($dsn, $user, $password);
+    DBFactory::applyConnectionAttributes($this->client, SQLDialect::POSTGRESQL);
   }
 
   public function connect(DataSourceOptions|array|null $options): void
@@ -47,17 +49,21 @@ class PostgreSQLDataSource extends PDO implements DataSourceInterface
 
   public function disconnect(): void
   {
-    // Do nothing.
+    if ($this->client->inTransaction()) {
+      $this->client->rollBack();
+    }
+
+    $this->connected = false;
   }
 
   public function isConnected(): bool
   {
-    return true;
+    return $this->connected;
   }
 
-  public function getClient(): static
+  public function getClient(): PDO
   {
-    return $this;
+    return $this->client;
   }
 
   public function getName(): string

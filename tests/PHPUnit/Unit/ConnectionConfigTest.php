@@ -4,10 +4,13 @@ namespace Tests\PHPUnit\Unit;
 
 use Assegai\Orm\DataSource\DBFactory;
 use Assegai\Orm\DataSource\DataSource;
+use Assegai\Orm\DataSource\DataSourceFactory;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\DataSource\SQLCharacterSet;
+use Assegai\Orm\DataSource\SQLiteDataSource;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
+use Assegai\Orm\Support\OrmRuntime;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -44,7 +47,7 @@ final class ConnectionConfigTest extends TestCase
     public function testCachesSqliteConnectionsAcrossFactoryCalls(): void
     {
         $path = sys_get_temp_dir() . '/assegai-sqlite-factory-' . uniqid('', true) . '.sqlite';
-        @unlink($path);
+        self::cleanupSqliteFiles($path);
 
         $first = DBFactory::getSQLiteConnection($path);
         $second = DBFactory::getSQLiteConnection($path);
@@ -54,7 +57,7 @@ final class ConnectionConfigTest extends TestCase
         DBFactory::disconnectConnection($path, SQLDialect::SQLITE);
         $first = null;
         $second = null;
-        @unlink($path);
+        self::cleanupSqliteFiles($path);
     }
 
     public function testAppliesSqliteBusyTimeoutPragma(): void
@@ -84,7 +87,7 @@ final class ConnectionConfigTest extends TestCase
     public function testFileBackedSqliteDataSourcesReuseManagedConnections(): void
     {
         $path = sys_get_temp_dir() . '/assegai-sqlite-datasource-' . uniqid('', true) . '.sqlite';
-        @unlink($path);
+        self::cleanupSqliteFiles($path);
 
         $first = new DataSource(new DataSourceOptions(entities: [], name: $path, type: DataSourceType::SQLITE));
         $second = new DataSource(new DataSourceOptions(entities: [], name: $path, type: DataSourceType::SQLITE));
@@ -93,13 +96,34 @@ final class ConnectionConfigTest extends TestCase
 
         $first->disconnect();
         $second->disconnect();
-        @unlink($path);
+        self::cleanupSqliteFiles($path);
+    }
+
+    public function testDisconnectDoesNotRollbackSharedSqliteTransactionsFromAnotherDataSource(): void
+    {
+        $path = sys_get_temp_dir() . '/assegai-sqlite-shared-tx-' . uniqid('', true) . '.sqlite';
+        self::cleanupSqliteFiles($path);
+
+        $first = new DataSource(new DataSourceOptions(entities: [], name: $path, type: DataSourceType::SQLITE));
+        $second = new DataSource(new DataSourceOptions(entities: [], name: $path, type: DataSourceType::SQLITE));
+        $first->getClient()->exec('CREATE TABLE tx_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
+        $first->getClient()->beginTransaction();
+        $first->getClient()->exec("INSERT INTO tx_probe (name) VALUES ('pending')");
+
+        $second->disconnect();
+
+        self::assertTrue($first->getClient()->inTransaction());
+        self::assertSame(1, (int) $first->getClient()->query('SELECT COUNT(*) FROM tx_probe')->fetchColumn());
+
+        $first->getClient()->rollBack();
+        $first->disconnect();
+        self::cleanupSqliteFiles($path);
     }
 
     public function testDisconnectRollsBackActiveSqliteTransactions(): void
     {
         $path = sys_get_temp_dir() . '/assegai-sqlite-transaction-' . uniqid('', true) . '.sqlite';
-        @unlink($path);
+        self::cleanupSqliteFiles($path);
 
         $dataSource = new DataSource(new DataSourceOptions(entities: [], name: $path, type: DataSourceType::SQLITE));
         $dataSource->getClient()->exec('CREATE TABLE tx_probe (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
@@ -117,10 +141,36 @@ final class ConnectionConfigTest extends TestCase
         self::cleanupSqliteFiles($path);
     }
 
+    public function testDataSourceFactoryCanCreateSqliteDataSources(): void
+    {
+        $name = 'sqlite_factory_' . uniqid('', true);
+        $path = sys_get_temp_dir() . '/assegai-sqlite-factory-runtime-' . uniqid('', true) . '.sqlite';
+        self::cleanupSqliteFiles($path);
+
+        OrmRuntime::mergeConfig([
+            'databases' => [
+                'sqlite' => [
+                    $name => ['path' => $path],
+                ],
+            ],
+        ]);
+
+        $dataSource = DataSourceFactory::create(DataSourceType::SQLITE, $name);
+
+        self::assertInstanceOf(SQLiteDataSource::class, $dataSource);
+        self::assertSame($name, $dataSource->getName());
+        self::assertTrue($dataSource->isConnected());
+
+        $dataSource->disconnect();
+        self::cleanupSqliteFiles($path);
+    }
+
     private static function cleanupSqliteFiles(string $path): void
     {
-        @unlink($path);
-        @unlink($path . '-wal');
-        @unlink($path . '-shm');
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (file_exists($file)) {
+                unlink($file);
+            }
+        }
     }
 }

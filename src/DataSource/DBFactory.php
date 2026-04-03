@@ -28,6 +28,17 @@ final class DBFactory
   ];
 
   /**
+   * @var array<string, array<string, int>>
+   */
+  private static array $sharedConnectionReferences = [
+    'mysql'   => [],
+    'mariadb' => [],
+    'pgsql'   => [],
+    'sqlite'  => [],
+    'mongodb' => [],
+  ];
+
+  /**
    * @param string $dbName
    * @param SQLDialect|null $dialect
    * @return PDO
@@ -181,36 +192,48 @@ final class DBFactory
     }
   }
 
-  public static function disconnectConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+  public static function retainSharedConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
   {
-    $type = match ($dialect) {
-      SQLDialect::MARIADB => 'mariadb',
-      SQLDialect::POSTGRESQL => 'pgsql',
-      SQLDialect::SQLITE => 'sqlite',
-      default => 'mysql',
-    };
+    $type = self::getConnectionPoolType($dialect);
+    $cacheKey = self::getConnectionCacheKey($dbName, $dialect);
 
-    if ($dialect === SQLDialect::SQLITE) {
-      $cacheKey = self::getSqliteCacheKey($dbName);
-      $connection = self::$connections[$type][$cacheKey] ?? null;
+    self::$sharedConnectionReferences[$type][$cacheKey] = (self::$sharedConnectionReferences[$type][$cacheKey] ?? 0) + 1;
+  }
 
-      if ($connection instanceof PDO && $connection->inTransaction()) {
-        $connection->rollBack();
-      }
+  public static function releaseSharedConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+  {
+    $type = self::getConnectionPoolType($dialect);
+    $cacheKey = self::getConnectionCacheKey($dbName, $dialect);
 
-      self::$connections[$type][$cacheKey] = null;
-      unset(self::$connections[$type][$cacheKey]);
+    if (!isset(self::$sharedConnectionReferences[$type][$cacheKey])) {
+      self::disconnectConnection($dbName, $dialect);
       return;
     }
 
-    $connection = self::$connections[$type][$dbName] ?? null;
+    self::$sharedConnectionReferences[$type][$cacheKey]--;
+
+    if (self::$sharedConnectionReferences[$type][$cacheKey] > 0) {
+      return;
+    }
+
+    unset(self::$sharedConnectionReferences[$type][$cacheKey]);
+    self::disconnectConnection($dbName, $dialect);
+  }
+
+  public static function disconnectConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+  {
+    $type = self::getConnectionPoolType($dialect);
+    $cacheKey = self::getConnectionCacheKey($dbName, $dialect);
+    $connection = self::$connections[$type][$cacheKey] ?? null;
+
+    unset(self::$sharedConnectionReferences[$type][$cacheKey]);
 
     if ($connection instanceof PDO && $connection->inTransaction()) {
       $connection->rollBack();
     }
 
-    self::$connections[$type][$dbName] = null;
-    unset(self::$connections[$type][$dbName]);
+    self::$connections[$type][$cacheKey] = null;
+    unset(self::$connections[$type][$cacheKey]);
   }
 
   /**
@@ -339,6 +362,23 @@ final class DBFactory
     $path = $database['file'] ?? null;
 
     return is_string($path) ? $path : null;
+  }
+
+  private static function getConnectionPoolType(?SQLDialect $dialect): string
+  {
+    return match ($dialect) {
+      SQLDialect::MARIADB => 'mysql',
+      SQLDialect::POSTGRESQL => 'pgsql',
+      SQLDialect::SQLITE => 'sqlite',
+      default => 'mysql',
+    };
+  }
+
+  private static function getConnectionCacheKey(string $dbName, ?SQLDialect $dialect): string
+  {
+    return $dialect === SQLDialect::SQLITE
+      ? self::getSqliteCacheKey($dbName)
+      : $dbName;
   }
 
   private static function isDirectSqlitePath(string $path): bool

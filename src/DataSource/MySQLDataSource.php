@@ -14,9 +14,11 @@ use PDO;
  *
  * @package Assegai\Orm\DataSource
  */
-class MySQLDataSource extends PDO implements DataSourceInterface
+class MySQLDataSource implements DataSourceInterface
 {
   protected DataSourceType $type = DataSourceType::MYSQL;
+  protected bool $connected = true;
+  protected PDO $client;
 
   /** @noinspection DuplicatedCode */
   public function __construct(protected string $name)
@@ -36,8 +38,8 @@ class MySQLDataSource extends PDO implements DataSourceInterface
     $password = $options->password ?? '';
 
     $dsn = DBFactory::buildMySqlDsn($options->host, $options->port, $options->name, $options->charSet);
-    parent::__construct($dsn, $user, $password);
-    DBFactory::applyConnectionAttributes($this, SQLDialect::MYSQL);
+    $this->client = new PDO($dsn, $user, $password);
+    DBFactory::applyConnectionAttributes($this->client, SQLDialect::MYSQL);
   }
 
   public function connect(DataSourceOptions|array|null $options): void
@@ -47,17 +49,21 @@ class MySQLDataSource extends PDO implements DataSourceInterface
 
   public function disconnect(): void
   {
-    // Do nothing.
+    if ($this->client->inTransaction()) {
+      $this->client->rollBack();
+    }
+
+    $this->connected = false;
   }
 
   public function isConnected(): bool
   {
-    return true;
+    return $this->connected;
   }
 
-  public function getClient(): static
+  public function getClient(): PDO
   {
-    return $this;
+    return $this->client;
   }
 
   public function getName(): string
