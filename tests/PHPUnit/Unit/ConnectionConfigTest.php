@@ -40,7 +40,7 @@ final class ConnectionConfigTest extends TestCase
         self::assertSame(SQLCharacterSet::UTF8MB4, $options->charSet);
     }
 
-    public function testDoesNotCacheSqliteConnectionsAcrossFactoryCalls(): void
+    public function testCachesSqliteConnectionsAcrossFactoryCalls(): void
     {
         $path = sys_get_temp_dir() . '/assegai-sqlite-factory-' . uniqid('', true) . '.sqlite';
         @unlink($path);
@@ -48,8 +48,9 @@ final class ConnectionConfigTest extends TestCase
         $first = DBFactory::getSQLiteConnection($path);
         $second = DBFactory::getSQLiteConnection($path);
 
-        self::assertNotSame($first, $second);
+        self::assertSame($first, $second);
 
+        DBFactory::disconnectConnection($path, SQLDialect::SQLITE);
         $first = null;
         $second = null;
         @unlink($path);

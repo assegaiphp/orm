@@ -168,13 +168,35 @@ final class DBFactory
       }
 
       $path = SqlDialectHelper::normalizeSqlitePath((string)$path);
-      $connection = new PDO(dsn: "sqlite:$path");
-      self::applyConnectionAttributes($connection, SQLDialect::SQLITE);
+      $cacheKey = self::getSqliteCacheKey($dbName, $path);
 
-      return $connection;
+      if (!isset(self::$connections[$type][$cacheKey]) || empty(self::$connections[$type][$cacheKey])) {
+        self::$connections[$type][$cacheKey] = new PDO(dsn: "sqlite:$path");
+        self::applyConnectionAttributes(self::$connections[$type][$cacheKey], SQLDialect::SQLITE);
+      }
+
+      return self::$connections[$type][$cacheKey];
     } catch (PDOException) {
       throw new DataSourceConnectionException(DataSourceType::SQLITE);
     }
+  }
+
+  public static function disconnectConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+  {
+    $type = match ($dialect) {
+      SQLDialect::MARIADB => 'mariadb',
+      SQLDialect::POSTGRESQL => 'pgsql',
+      SQLDialect::SQLITE => 'sqlite',
+      default => 'mysql',
+    };
+
+    if ($dialect === SQLDialect::SQLITE) {
+      $cacheKey = self::getSqliteCacheKey($dbName);
+      unset(self::$connections[$type][$cacheKey]);
+      return;
+    }
+
+    unset(self::$connections[$type][$dbName]);
   }
 
   /**
@@ -277,5 +299,18 @@ final class DBFactory
       || str_contains($path, DIRECTORY_SEPARATOR)
       || str_contains($path, '/')
       || preg_match('/\.(sqlite|sqlite3|db)$/i', $path) === 1;
+  }
+
+  private static function getSqliteCacheKey(string $dbName, ?string $path = null): string
+  {
+    $resolvedPath = $path
+      ?? OrmRuntime::databaseConfigs()['sqlite'][$dbName]['path']
+      ?? $dbName;
+
+    if (!self::isDirectSqlitePath($resolvedPath)) {
+      return $dbName;
+    }
+
+    return SqlDialectHelper::normalizeSqlitePath((string)$resolvedPath);
   }
 }

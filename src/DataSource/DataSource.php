@@ -64,6 +64,11 @@ class DataSource implements DataSourceInterface
     $this->connect($options);
   }
 
+  public function __destruct()
+  {
+    $this->disconnect();
+  }
+
   /**
    * Gets a repository for the specified entity.
    *
@@ -174,6 +179,10 @@ class DataSource implements DataSourceInterface
    */
   public function disconnect(): void
   {
+    if ($this->options instanceof DataSourceOptions) {
+      DBFactory::disconnectConnection($this->options->name, $this->getDialect());
+    }
+
     $this->connection = null;
   }
 

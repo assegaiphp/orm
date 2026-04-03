@@ -355,6 +355,8 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
+    $primaryKey = $this->getPrimaryKeyMetadata($instance);
+    $primaryKeyField = $primaryKey['field'];
     $columnsMeta = [];
     $relations = [];
     $relationProperties = [];
@@ -387,8 +389,9 @@ class EntityManager implements IEntityStoreOwner
       return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: $result, errors: [$error]);
     }
 
-    # Find the record by the last insert id and hydrate the entity
-    $result = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: ['id' => $this->lastInsertId()]));
+    # Find the record by the resolved primary key and hydrate the entity
+    $identifierValue = $instance->{$primaryKeyField} ?? $this->lastInsertId();
+    $result = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: [$primaryKeyField => $identifierValue]));
 
     if ($result->isError()) {
       if (!headers_sent()) {
@@ -405,7 +408,7 @@ class EntityManager implements IEntityStoreOwner
       : $result->getData();
 
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
-    $generatedMaps->id = $this->lastInsertId();
+    $generatedMaps->{$primaryKeyField} = $identifierValue;
 
     foreach ($generatedMaps as $prop => $value) {
       if (in_array($prop, $this->getSecure())) {
@@ -1943,8 +1946,9 @@ class EntityManager implements IEntityStoreOwner
     $this->validateEntityName(entityClass: $entityClass);
 
     // TODO: Configure the upsert options
-    $primaryKeyField = 'id';
-    $primaryColumn = $this->getPrimaryKeyColumnName($entityOrEntities, $primaryKeyField);
+    $primaryKey = $this->getPrimaryKeyMetadata($entityOrEntities);
+    $primaryKeyField = $primaryKey['field'];
+    $primaryColumn = $primaryKey['column'];
 
     $columns = $this->entityInspector->getColumns(entity: $entityOrEntities);
     $updateColumns = $this->entityInspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
@@ -1952,7 +1956,7 @@ class EntityManager implements IEntityStoreOwner
     $tableName = $this->entityInspector->getTableName(entity: $entityOrEntities);
 
     if ($this->connection->type === DataSourceType::SQLITE) {
-      return $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options);
+      return $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn);
     }
 
     $assignmentList = array_map(function($column): string {
@@ -2046,13 +2050,15 @@ class EntityManager implements IEntityStoreOwner
     array $columns,
     array $updateColumns,
     array $values,
-    UpsertOptions $options
+    UpsertOptions $options,
+    string $primaryKeyField,
+    string $primaryColumn,
   ): InsertResult
   {
-    $originalId = $entity->id ?? null;
+    $originalId = $entity->{$primaryKeyField} ?? null;
     $columns = array_map([$this, 'stripTableName'], array_values($columns));
     $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
-    $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: ['id']);
+    $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: [$primaryColumn]);
 
     $filteredColumns = [];
     $filteredValues = [];
@@ -2099,14 +2105,14 @@ class EntityManager implements IEntityStoreOwner
     if ($result->isOk()) {
       $lastInsertId = $this->lastInsertId();
       if (empty($originalId) && $lastInsertId) {
-        $entity->id = $lastInsertId;
+        $entity->{$primaryKeyField} = $lastInsertId;
       }
     }
 
-    $identifier = $entity->id ?? $originalId ?? $this->lastInsertId();
+    $identifier = $entity->{$primaryKeyField} ?? $originalId ?? $this->lastInsertId();
 
     return new InsertResult(
-      identifiers: (object)['id' => $identifier],
+      identifiers: (object)[$primaryKeyField => $identifier],
       raw: $this->query->queryString(),
       generatedMaps: $entity,
       errors: $errors,
@@ -2505,21 +2511,51 @@ class EntityManager implements IEntityStoreOwner
    */
   private function getPrimaryKeyColumnName(object $entity, string $primaryKeyField = 'id'): string
   {
+    return $this->getPrimaryKeyMetadata($entity, $primaryKeyField)['column'];
+  }
+
+  /**
+   * @return array{field: string, column: string}
+   * @throws ClassNotFoundException
+   * @throws ORMException
+   */
+  private function getPrimaryKeyMetadata(object $entity, ?string $preferredField = null): array
+  {
     $this->entityInspector->validateEntityName($entity::class);
 
-    $primaryColumn = null;
-    $columns = $this->entityInspector->getColumns(entity: $entity);
-    foreach ($columns as $alias => $column) {
-      if ($alias === $primaryKeyField || $column === $primaryKeyField) {
-        $primaryColumn = $column;
-        break;
+    $preferredField = is_string($preferredField) ? $this->stripTableName($preferredField) : null;
+    $reflectionClass = new ReflectionClass($entity);
+    $fallback = null;
+
+    foreach ($reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+      foreach ($property->getAttributes() as $attribute) {
+        $attributeInstance = $attribute->newInstance();
+
+        if (!$attributeInstance instanceof Column || !$attributeInstance->isPrimaryKey) {
+          continue;
+        }
+
+        $columnName = $attributeInstance->name ?: $property->getName();
+        $metadata = [
+          'field' => $property->getName(),
+          'column' => $columnName,
+        ];
+
+        if (
+          $preferredField !== null &&
+          ($preferredField === $metadata['field'] || $preferredField === $metadata['column'])
+        ) {
+          return $metadata;
+        }
+
+        $fallback ??= $metadata;
       }
     }
 
-    if (!$primaryColumn) {
-      throw new ORMException("Entity " . $entity::class . " does not have a primary key column.");
+    if ($fallback) {
+      return $fallback;
     }
 
-    return $primaryColumn;
+    throw new ORMException("Entity " . $entity::class . " does not have a primary key column.");
   }
 }

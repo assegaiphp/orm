@@ -45,6 +45,11 @@
         "test:sqlite": "php -d register_argc_argv=On vendor/bin/codecept run SQLite",
         "test:legacy-unit": "php -d register_argc_argv=On vendor/bin/codecept run Unit"
     },
+    "config": {
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
     "extra": {
         "assegai": {
             "aliases": [
