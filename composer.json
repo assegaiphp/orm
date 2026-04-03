@@ -1,7 +1,6 @@
 {
     "name": "assegaiphp/orm",
     "description": "AssegaiORM is a standalone ORM for modern PHP applications, with optional AssegaiPHP integration.",
-    "version": "0.8.0",
     "type": "library",
     "license": "MIT",
     "autoload": {
