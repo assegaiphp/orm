@@ -9,17 +9,19 @@ use Assegai\Orm\Traits\ResultErrorIntrospectorTrait;
  * Class InsertResult represents a result of an insert query.
  * @package Assegai\Orm\Queries\QueryBuilder\Results
  *
- * @template T
+ * @template T of object
  * @template-implements QueryResultInterface<T>
+ * @property-read T|null $identifiers
+ * @property-read T|null $generatedMaps
  */
 readonly class InsertResult implements QueryResultInterface
 {
   use ResultErrorIntrospectorTrait;
 
   /**
-   * @param object|null $identifiers Contains inserted entity id. Has entity-like structure (not just column database name and values).
+   * @param T|null $identifiers Contains inserted entity identifiers in an entity-like shape.
    * @param mixed $raw Raw SQL result returned by executed query.
-   * @param object|null $generatedMaps Generated values returned by a database. Has entity-like structure (not just column database name and values).
+   * @param T|null $generatedMaps Generated values returned by the database in an entity-like shape.
    * @param array $errors List of errors.
    */
   public function __construct(
@@ -57,13 +59,33 @@ readonly class InsertResult implements QueryResultInterface
   }
 
   /**
-   * Returns the inserted entity id. Has entity-like structure (not just column database name and values).
+   * Returns the inserted entity identifiers in an entity-like shape.
    *
-   * @return null|object The inserted entity id. Has entity-like structure (not just column database name and values).
+   * @return T|null
    */
   public function getData(): ?object
   {
     return $this->identifiers;
+  }
+
+  /**
+   * Returns the inserted entity identifiers in an entity-like shape.
+   *
+   * @return T|null
+   */
+  public function getIdentifiers(): ?object
+  {
+    return $this->identifiers;
+  }
+
+  /**
+   * Returns generated values returned by the database in an entity-like shape.
+   *
+   * @return T|null
+   */
+  public function getGeneratedMaps(): ?object
+  {
+    return $this->generatedMaps;
   }
 
   /**

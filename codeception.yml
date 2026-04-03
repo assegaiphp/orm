@@ -11,4 +11,4 @@ extensions:
     enabled:
         - Codeception\Extension\RunFailed
 params:
-    - .env
+    - tests/Support/codeception-params.php

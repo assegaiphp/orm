@@ -71,7 +71,7 @@ You can use AssegaiORM directly in any PHP project. The standalone path is:
 ```php
 <?php
 
-use App\Entities\Note;
+use App\Entities\NoteEntity;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\Enumerations\DataSourceType;
@@ -93,7 +93,7 @@ $dataSource = new DataSource(new DataSourceOptions(
   database: 'app',
 ));
 
-$notes = $dataSource->getRepository(Note::class);
+$notes = $dataSource->getRepository(NoteEntity::class);
 
 $note = $notes->create((object)[
   'title' => 'First note',
@@ -144,7 +144,7 @@ use Assegai\Orm\Queries\Sql\ColumnType;
   database: 'app',
   driver: DataSourceType::SQLITE,
 )]
-class Note
+class NoteEntity
 {
   #[PrimaryGeneratedColumn]
   public ?int $id = null;
@@ -173,7 +173,7 @@ the repository:
 ```php
 <?php
 
-use App\Entities\Note;
+use App\Entities\NoteEntity;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\Enumerations\DataSourceType;
@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS `notes` (
 )
 SQL);
 
-$notes = $dataSource->getRepository(Note::class);
+$notes = $dataSource->getRepository(NoteEntity::class);
 
 $newNote = $notes->create([
   'title' => 'First note',
@@ -217,14 +217,16 @@ Once the module is present, you can inject the repository and let the entity met
 
 namespace App\Notes;
 
-use App\Entities\Note;
+use App\Entities\NoteEntity;
+use Assegai\Core\Attributes\Injectable;
 use Assegai\Orm\Attributes\InjectRepository;
 use Assegai\Orm\Management\Repository;
 
+#[Injectable]
 class NotesService
 {
   public function __construct(
-    #[InjectRepository(Note::class)]
+    #[InjectRepository(NoteEntity::class)]
     private readonly Repository $notes,
   ) {
   }

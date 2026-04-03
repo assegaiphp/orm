@@ -24,7 +24,7 @@ use Assegai\Orm\Management\Options\RemoveOptions;
 use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
-use Assegai\Orm\Queries\QueryBuilder\Results\FindResult;
+use Assegai\Orm\Results\FindResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
@@ -37,13 +37,13 @@ use stdClass;
  * Represents a repository for a specific entity.
  * @package Assegai\Orm\Management
  *
- * @template T
+ * @template T of object
  * @template-implements RepositoryInterface<T>
  */
 readonly class Repository implements RepositoryInterface
 {
   /**
-   * @param string $entityId
+   * @param class-string<T> $entityId
    * @param EntityManager $manager
    * @throws IllegalTypeException
    * @throws ReflectionException
@@ -110,6 +110,7 @@ readonly class Repository implements RepositoryInterface
 
   /**
    * @inheritDoc
+   * @return InsertResult<T>
    * @throws ReflectionException
    */
   public function insert(array|object $entity, ?InsertOptions $options = null): InsertResult
@@ -119,6 +120,7 @@ readonly class Repository implements RepositoryInterface
 
   /**
    * @inheritDoc
+   * @return UpdateResult<T>
    * @throws ReflectionException
    */
   public function update(string|object|array $conditions, object|array|null $entity, ?UpdateOptions $options = null): UpdateResult
@@ -129,7 +131,7 @@ readonly class Repository implements RepositoryInterface
   /**
    * @inheritDoc
    * @param array|object|null $entity
-   * @return UpdateResult|InsertResult
+   * @return UpdateResult<T>|InsertResult<T>
    * @throws ClassNotFoundException
    * @throws ContainerException
    * @throws NotImplementedException
