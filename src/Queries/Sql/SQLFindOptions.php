@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-class FindOptions
+class SQLFindOptions
 {
   /**
    * @param array $select Indicates which properties of the main object must be selected.
