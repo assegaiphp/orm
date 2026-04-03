@@ -9,7 +9,7 @@ use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Repository;
-use Assegai\Core\ModuleManager;
+use Assegai\Orm\Support\OrmRuntime;
 use Attribute;
 use ReflectionClass;
 use ReflectionException;
@@ -17,47 +17,29 @@ use ReflectionException;
 #[Attribute(Attribute::TARGET_PARAMETER | Attribute::TARGET_PROPERTY)]
 class InjectRepository
 {
-  /**
-   * @var DataSource The data source for the repository.
-   */
   public readonly DataSource $dataSource;
-  /**
-   * @var Repository The repository for the entity.
-   */
   public readonly Repository $repository;
 
-  /**
-   * Constructs an InjectRepository attribute.
-   *
-   * @param string $entity The entity class name.
-   * @throws ClassNotFoundException If the entity is not found.
-   * @throws ORMException If the entity is not an entity.
-   * @throws ReflectionException If the entity is not found.
-   */
   public function __construct(public readonly string $entity)
   {
     EntityManager::validateEntityName($this->entity);
 
     $reflectionEntity = new ReflectionClass($this->entity);
-
     $reflectionAttributes = $reflectionEntity->getAttributes(Entity::class);
 
-    if ( empty($reflectionAttributes) ) {
+    if (empty($reflectionAttributes)) {
       throw new ClassNotFoundException(className: Entity::class);
     }
 
     $reflectionAttribute = array_pop($reflectionAttributes);
-
     $entityAttribute = $reflectionAttribute->newInstance();
 
-    if (! $entityAttribute instanceof Entity) {
+    if (!$entityAttribute instanceof Entity) {
       throw new ClassNotFoundException(className: Entity::class);
     }
 
-    $moduleManager = ModuleManager::getInstance();
-
     $driver = $entityAttribute->driver;
-    $dataSourceName = $entityAttribute->database ?? $moduleManager->getConfig('data_source') ?? throw new ORMException('No data source name provided');
+    $dataSourceName = $entityAttribute->database ?? OrmRuntime::moduleConfig('data_source') ?? throw new ORMException('No data source name provided');
 
     if (preg_match('/[\w]+:[\w]+/', $dataSourceName)) {
       [$driver, $dataSourceName] = explode(':', $dataSourceName);
@@ -74,7 +56,12 @@ class InjectRepository
       type: $driver,
     );
 
-    $this->dataSource = new DataSource( options: $dataSourceOptions );
+    $this->dataSource = new DataSource(options: $dataSourceOptions);
     $this->repository = $this->dataSource->getRepository($this->entity);
+  }
+
+  public function resolveParameterValue(): Repository
+  {
+    return $this->repository;
   }
 }

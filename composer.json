@@ -1,16 +1,11 @@
 {
     "name": "assegaiphp/orm",
-    "description": "AssegaiORM is an ORM written in modern PHP. It supports both Active Record and Data Mapper patterns. AssegaiORM is highly influenced by other ORMs, such as TypeORM, Doctrine and Entity Framework.",
+    "description": "AssegaiORM is a standalone ORM for modern PHP applications, with optional AssegaiPHP integration.",
     "type": "library",
     "license": "MIT",
     "autoload": {
         "psr-4": {
             "Assegai\\Orm\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Assegai\\Core\\": "../core/src/"
         }
     },
     "authors": [
@@ -27,18 +22,53 @@
         "ext-pdo_mysql": "*",
         "ext-pdo_pgsql": "*",
         "ext-pdo_sqlite": "*",
-        "assegaiphp/core": "^0.6.0 || ^0.7.0",
         "assegaiphp/util": "^0.4.4",
+        "psr/log": "^3.0",
         "symfony/console": "^7.1",
         "predis/predis": "^2.3"
+    },
+    "suggest": {
+        "assegaiphp/core": "Optional: enables framework-aware config and repository integration inside Assegai applications.",
+        "assegaiphp/console": "Optional: enables Assegai CLI installers and ORM command discovery."
     },
     "require-dev": {
         "codeception/codeception": "^5.0",
         "codeception/module-phpbrowser": "*",
         "codeception/module-asserts": "*",
-        "codeception/module-db": "^3.1"
+        "codeception/module-db": "^3.1",
+        "vlucas/phpdotenv": "^5.6"
     },
     "scripts": {
-        "test": "codecept run Unit"
+        "test": "vendor/bin/phpunit -c phpunit.xml",
+        "test:unit": "vendor/bin/phpunit -c phpunit.xml",
+        "test:mysql": "vendor/bin/phpunit -c phpunit.mysql.xml",
+        "test:sqlite": "php -d register_argc_argv=On vendor/bin/codecept run SQLite",
+        "test:legacy-unit": "php -d register_argc_argv=On vendor/bin/codecept run Unit"
+    },
+    "config": {
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "extra": {
+        "assegai": {
+            "aliases": [
+                "orm"
+            ],
+            "installer": "Assegai\\Orm\\Assegai\\Console\\OrmPackageInstaller",
+            "commands": [
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Database\\DatabaseConfigure",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Database\\DatabaseLoad",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Database\\DatabaseSeed",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Database\\DatabaseSetup",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationCreate",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationList",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationUp",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationDown",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationRefresh",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationSetup",
+                "Assegai\\Orm\\Assegai\\Console\\Commands\\Migration\\MigrationRedo"
+            ]
+        }
     }
 }

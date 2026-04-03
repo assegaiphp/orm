@@ -107,24 +107,49 @@ SQL
 
   public function testTheSaveMethod(UnitTester $I): void
   {
+    $name = self::TEST_NAME . '-save-' . uniqid();
+    $description = self::TEST_DESCRIPTION . ' - save insert';
+
     $mockEntity = new MockEntity();
-    $mockEntity->name = self::TEST_NAME;
-    $mockEntity->description = self::TEST_DESCRIPTION;
+    $mockEntity->name = $name;
+    $mockEntity->description = $description;
     $mockEntity->colorType = MockColorType::RED;
 
-    try {
-      $entity = $this->entityManager->save($mockEntity);
-      $I->assertNotNull($entity->id);
+    $result = $this->entityManager->save($mockEntity);
 
-      $I->seeInDatabase('mocks', [
-        'id' => $entity->id,
-        'name' => self::TEST_NAME,
-        'description' => self::TEST_DESCRIPTION,
-        'color_type' => MockColorType::RED->value
-      ]);
-      $statement = $this->entityManager->query("TRUNCATE TABLE `mocks`");
-      $I->assertTrue($statement->execute());
-    } catch (Exception) { }
+    $I->assertInstanceOf(InsertResult::class, $result);
+    $I->assertTrue($result->isOk());
+    $I->assertNotNull($result->generatedMaps?->id ?? $result->identifiers?->id);
+    $I->seeInDatabase('mocks', [
+      'id' => $result->generatedMaps?->id ?? $result->identifiers?->id,
+      'name' => $name,
+      'description' => $description,
+      'color_type' => MockColorType::RED->value,
+    ]);
+  }
+
+  public function testTheSaveMethodInsertsWhenPrimaryKeyDoesNotExist(UnitTester $I): void
+  {
+    $name = self::TEST_NAME . '-save-missing-' . uniqid();
+    $description = self::TEST_DESCRIPTION . ' - save missing id';
+
+    $mockEntity = new MockEntity();
+    $mockEntity->id = random_int(1000000, 1999999);
+    $mockEntity->name = $name;
+    $mockEntity->description = $description;
+    $mockEntity->colorType = MockColorType::BLUE;
+
+    $result = $this->entityManager->save($mockEntity);
+
+    $I->assertInstanceOf(InsertResult::class, $result);
+    $I->assertTrue($result->isOk());
+    $I->assertNotNull($result->generatedMaps?->id ?? $result->identifiers?->id);
+    $I->seeInDatabase('mocks', [
+      'id' => $result->generatedMaps?->id ?? $result->identifiers?->id,
+      'name' => $name,
+      'description' => $description,
+      'color_type' => MockColorType::BLUE->value,
+    ]);
   }
 
   /** @noinspection SpellCheckingInspection */
@@ -270,6 +295,39 @@ SQL
   public function testTheUpdateMethod(UnitTester $I): void
   {
     // TODO: Implement testTheUpdateMethod() method.
+  }
+
+  public function testTheUpsertMethodReturnsExistingIdentifierWhenConflictUpdates(UnitTester $I): void
+  {
+    $name = self::TEST_NAME . '-upsert-' . uniqid();
+
+    $first = new MockEntity();
+    $first->name = $name;
+    $first->description = 'first upsert';
+    $first->colorType = MockColorType::RED;
+
+    $firstResult = $this->entityManager->upsert(MockEntity::class, $first, ['name']);
+    $firstId = $firstResult->generatedMaps?->id ?? $firstResult->identifiers?->id;
+
+    $I->assertTrue($firstResult->isOk());
+    $I->assertNotNull($firstId);
+
+    $second = new MockEntity();
+    $second->name = $name;
+    $second->description = 'updated through duplicate key';
+    $second->colorType = MockColorType::BLUE;
+
+    $secondResult = $this->entityManager->upsert(MockEntity::class, $second, ['name']);
+
+    $I->assertTrue($secondResult->isOk());
+    $I->assertSame((int)$firstId, (int)($secondResult->identifiers?->id ?? 0));
+    $I->assertSame((int)$firstId, (int)($secondResult->generatedMaps?->id ?? 0));
+    $I->seeInDatabase('mocks', [
+      'id' => $firstId,
+      'name' => $name,
+      'description' => 'updated through duplicate key',
+      'color_type' => MockColorType::BLUE->value,
+    ]);
   }
 
   public function testTheUpsertMethod(UnitTester $I): void

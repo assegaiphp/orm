@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\DataSource;
 
-use Assegai\Core\Config;
+use Assegai\Orm\Support\OrmRuntime;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
@@ -64,6 +64,11 @@ class DataSource implements DataSourceInterface
     $this->connect($options);
   }
 
+  public function __destruct()
+  {
+    $this->disconnect();
+  }
+
   /**
    * Gets a repository for the specified entity.
    *
@@ -116,6 +121,11 @@ class DataSource implements DataSourceInterface
     return $this->options->name;
   }
 
+  public function getOptions(): DataSourceOptions
+  {
+    return $this->options;
+  }
+
   /**
    * @inheritDoc
    * @param DataSourceOptions|array|null $options
@@ -151,7 +161,7 @@ class DataSource implements DataSourceInterface
 
     try {
       $this->connection = $this->createConnection($options);
-      $this->configureConnection($this->connection, SqlDialectHelper::fromDataSourceType($this->type));
+      DBFactory::applyConnectionAttributes($this->connection, SqlDialectHelper::fromDataSourceType($this->type));
     } catch (PDOException) {
       throw new DataSourceConnectionException($this->type);
     }
@@ -169,6 +179,10 @@ class DataSource implements DataSourceInterface
    */
   public function disconnect(): void
   {
+    if ($this->options instanceof DataSourceOptions) {
+      DBFactory::disconnectConnection($this->options->name, $this->getDialect());
+    }
+
     $this->connection = null;
   }
 
@@ -198,7 +212,7 @@ class DataSource implements DataSourceInterface
    */
   private function resolveOptions(DataSourceOptions $options): DataSourceOptions
   {
-    $databaseConfigs = Config::get('databases') ?? [];
+    $databaseConfigs = OrmRuntime::databaseConfigs();
     $type = $options->type->value;
     $databaseConfig = $databaseConfigs[$type][$options->name] ?? null;
 
@@ -242,7 +256,7 @@ class DataSource implements DataSourceInterface
       return DBFactory::getMySQLConnection(dbName: $options->name);
     }
 
-    $dsn = "mysql:host={$options->host};port={$options->port};dbname={$options->name}";
+    $dsn = DBFactory::buildMySqlDsn($options->host, $options->port, $options->name, $options->charSet);
     return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
   }
 
@@ -255,7 +269,7 @@ class DataSource implements DataSourceInterface
       return DBFactory::getPostgresSQLConnection(dbName: $options->name);
     }
 
-    $dsn = "pgsql:host={$options->host};port={$options->port};dbname={$options->name}";
+    $dsn = DBFactory::buildPostgreSqlDsn($options->host, $options->port, $options->name);
     return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
   }
 
@@ -272,16 +286,6 @@ class DataSource implements DataSourceInterface
     }
 
     return DBFactory::getSQLiteConnection(dbName: $options->name);
-  }
-
-  private function configureConnection(PDO $connection, SQLDialect $dialect): void
-  {
-    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-    if ($dialect === SQLDialect::SQLITE) {
-      $connection->exec('PRAGMA foreign_keys = ON');
-    }
   }
 
   private function isDirectSqlitePath(string $path): bool

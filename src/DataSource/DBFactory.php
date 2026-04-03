@@ -2,7 +2,7 @@
 
 namespace Assegai\Orm\DataSource;
 
-use Assegai\Core\Config;
+use Assegai\Orm\Support\OrmRuntime;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
@@ -56,13 +56,12 @@ final class DBFactory
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
+    if (!isset(self::$connections[$type][$dbName]) || empty(self::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
-      $config = Config::get('databases')[$type][$dbName];
+      $config = OrmRuntime::databaseConfigs()[$type][$dbName];
 
       if (empty($config)) {
-        # Attempt to get the first config we find
-        $databases = Config::get('databases')[$type];
+        $databases = OrmRuntime::databaseConfigs()[$type];
 
         if (!empty($databases)) {
           $config = array_pop($databases);
@@ -70,24 +69,27 @@ final class DBFactory
       }
 
       try {
-        $host = null;
-        $port = null;
-        $name = $dbName;
-        $user = null;
-        $password = null;
-        extract($config);
-        DBFactory::$connections[$type][$dbName] = new PDO(
-          dsn: "mysql:host=$host;port=$port;dbname=$name",
+        $options = DataSourceOptions::fromArray([
+          ...$config,
+          'name' => $config['name'] ?? $dbName,
+          'database' => $config['database'] ?? $dbName,
+          'type' => DataSourceType::MYSQL,
+        ]);
+        $user = $options->username ?? 'root';
+        $password = $options->password ?? '';
+
+        self::$connections[$type][$dbName] = new PDO(
+          dsn: self::buildMySqlDsn($options->host, $options->port, $options->name, $options->charSet),
           username: $user,
           password: $password
         );
-        self::configureConnection(DBFactory::$connections[$type][$dbName], SQLDialect::MYSQL);
+        self::applyConnectionAttributes(self::$connections[$type][$dbName], SQLDialect::MYSQL);
       } catch (PDOException) {
         throw new DataSourceConnectionException();
       }
     }
 
-    return DBFactory::$connections[$type][$dbName];
+    return self::$connections[$type][$dbName];
   }
 
   /**
@@ -113,29 +115,32 @@ final class DBFactory
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
+    if (!isset(self::$connections[$type][$dbName]) || empty(self::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
-      $config = Config::get('databases')[$type][$dbName];
+      $config = OrmRuntime::databaseConfigs()[$type][$dbName];
 
       try {
-        $host = null;
-        $port = null;
-        $name = null;
-        $user = null;
-        $password = null;
-        extract($config);
-        DBFactory::$connections[$type][$dbName] = new PDO(
-          dsn: "pgsql:host=$host;port=$port;dbname=$name",
+        $options = DataSourceOptions::fromArray([
+          ...$config,
+          'name' => $config['name'] ?? $dbName,
+          'database' => $config['database'] ?? $dbName,
+          'type' => DataSourceType::POSTGRESQL,
+        ]);
+        $user = $options->username ?? 'postgres';
+        $password = $options->password ?? '';
+
+        self::$connections[$type][$dbName] = new PDO(
+          dsn: self::buildPostgreSqlDsn($options->host, $options->port, $options->name),
           username: $user,
           password: $password
         );
-        self::configureConnection(DBFactory::$connections[$type][$dbName], SQLDialect::POSTGRESQL);
+        self::applyConnectionAttributes(self::$connections[$type][$dbName], SQLDialect::POSTGRESQL);
       } catch (PDOException) {
         throw new DataSourceConnectionException(DataSourceType::POSTGRESQL);
       }
     }
 
-    return DBFactory::$connections[$type][$dbName];
+    return self::$connections[$type][$dbName];
   }
 
   /**
@@ -151,27 +156,47 @@ final class DBFactory
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
-      $config = Config::get('databases')[$type][$dbName] ?? null;
+    $config = OrmRuntime::databaseConfigs()[$type][$dbName] ?? null;
 
-      try {
-        $path = self::isDirectSqlitePath($dbName)
-          ? $dbName
-          : ($config['path'] ?? null);
+    try {
+      $path = self::isDirectSqlitePath($dbName)
+        ? $dbName
+        : ($config['path'] ?? null);
 
-        if (empty($path)) {
-          throw new DataSourceConnectionException(DataSourceType::SQLITE);
-        }
-
-        $path = SqlDialectHelper::normalizeSqlitePath((string)$path);
-        DBFactory::$connections[$type][$dbName] = new PDO(dsn: "sqlite:$path");
-        self::configureConnection(DBFactory::$connections[$type][$dbName], SQLDialect::SQLITE);
-      } catch (PDOException) {
+      if (empty($path)) {
         throw new DataSourceConnectionException(DataSourceType::SQLITE);
       }
+
+      $path = SqlDialectHelper::normalizeSqlitePath((string)$path);
+      $cacheKey = self::getSqliteCacheKey($dbName, $path);
+
+      if (!isset(self::$connections[$type][$cacheKey]) || empty(self::$connections[$type][$cacheKey])) {
+        self::$connections[$type][$cacheKey] = new PDO(dsn: "sqlite:$path");
+        self::applyConnectionAttributes(self::$connections[$type][$cacheKey], SQLDialect::SQLITE);
+      }
+
+      return self::$connections[$type][$cacheKey];
+    } catch (PDOException) {
+      throw new DataSourceConnectionException(DataSourceType::SQLITE);
+    }
+  }
+
+  public static function disconnectConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+  {
+    $type = match ($dialect) {
+      SQLDialect::MARIADB => 'mariadb',
+      SQLDialect::POSTGRESQL => 'pgsql',
+      SQLDialect::SQLITE => 'sqlite',
+      default => 'mysql',
+    };
+
+    if ($dialect === SQLDialect::SQLITE) {
+      $cacheKey = self::getSqliteCacheKey($dbName);
+      unset(self::$connections[$type][$cacheKey]);
+      return;
     }
 
-    return DBFactory::$connections[$type][$dbName];
+    unset(self::$connections[$type][$dbName]);
   }
 
   /**
@@ -187,9 +212,9 @@ final class DBFactory
       throw new DataSourceConnectionException();
     }
 
-    if (!isset(DBFactory::$connections[$type][$dbName]) || empty(DBFactory::$connections[$type][$dbName])) {
+    if (!isset(self::$connections[$type][$dbName]) || empty(self::$connections[$type][$dbName])) {
       self::validateDatabaseDetails(type: $type, dbName: $dbName);
-      $config = Config::get('databases')[$type][$dbName];
+      $config = OrmRuntime::databaseConfigs()[$type][$dbName];
 
       try {
         # TODO #16 Implement mongodb connection @amasiye
@@ -198,7 +223,7 @@ final class DBFactory
       }
     }
 
-    return DBFactory::$connections[$type][$dbName];
+    return self::$connections[$type][$dbName];
   }
 
   /**
@@ -209,17 +234,58 @@ final class DBFactory
    */
   private static function validateDatabaseDetails(string $type, string $dbName): void
   {
-    $databases = Config::get('databases');
+    $databases = OrmRuntime::databaseConfigs();
 
     if (!isset($databases[$type]) || !isset($databases[$type][$dbName])) {
       throw new DataSourceConnectionException();
     }
   }
 
-  private static function configureConnection(PDO $connection, SQLDialect $dialect): void
+  public static function buildMySqlDsn(
+    string $host,
+    int $port,
+    string $database,
+    ?SQLCharacterSet $charSet = SQLCharacterSet::UTF8MB4
+  ): string
   {
-    $connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $segments = [
+      sprintf('mysql:host=%s', $host),
+      sprintf('port=%d', $port),
+      sprintf('dbname=%s', $database),
+    ];
+
+    if ($charSet instanceof SQLCharacterSet) {
+      $segments[] = sprintf('charset=%s', $charSet->value);
+    }
+
+    return implode(';', $segments);
+  }
+
+  public static function buildPostgreSqlDsn(string $host, int $port, string $database): string
+  {
+    return sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $database);
+  }
+
+  public static function getDefaultPdoAttributes(SQLDialect $dialect): array
+  {
+    $attributes = [
+      PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+      PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+      PDO::ATTR_STRINGIFY_FETCHES => false,
+    ];
+
+    if (in_array($dialect, [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
+      $attributes[PDO::ATTR_EMULATE_PREPARES] = false;
+    }
+
+    return $attributes;
+  }
+
+  public static function applyConnectionAttributes(PDO $connection, SQLDialect $dialect): void
+  {
+    foreach (self::getDefaultPdoAttributes($dialect) as $attribute => $value) {
+      $connection->setAttribute($attribute, $value);
+    }
 
     if ($dialect === SQLDialect::SQLITE) {
       $connection->exec('PRAGMA foreign_keys = ON');
@@ -233,5 +299,18 @@ final class DBFactory
       || str_contains($path, DIRECTORY_SEPARATOR)
       || str_contains($path, '/')
       || preg_match('/\.(sqlite|sqlite3|db)$/i', $path) === 1;
+  }
+
+  private static function getSqliteCacheKey(string $dbName, ?string $path = null): string
+  {
+    $resolvedPath = $path
+      ?? OrmRuntime::databaseConfigs()['sqlite'][$dbName]['path']
+      ?? $dbName;
+
+    if (!self::isDirectSqlitePath($resolvedPath)) {
+      return $dbName;
+    }
+
+    return SqlDialectHelper::normalizeSqlitePath((string)$resolvedPath);
   }
 }

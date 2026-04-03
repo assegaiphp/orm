@@ -12,15 +12,16 @@ use Assegai\Orm\Enumerations\OrderType;
  */
 readonly class OrderByCondition
 {
-  /**
-   * Constructs an OrderByCondition instance.
-   *
-   * @param OrderType $order The order type (ASC or DESC).
-   * @param NullType|null $nulls Specifies how to handle NULL values.
-   */
-  public function __construct(
-    public OrderType $order,
-    public ?NullType $nulls = null,
-  )
-  {}
+    /**
+     * Constructs an OrderByCondition instance.
+     *
+     * @param OrderType $order The order type (ASC or DESC).
+     * @param NullType|null $nulls Specifies how to handle NULL values.
+     */
+    public function __construct(
+        public OrderType $order,
+        public ?NullType $nulls = null,
+    )
+    {
+    }
 }

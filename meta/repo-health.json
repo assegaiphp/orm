@@ -1,0 +1,15 @@
+{
+  "repository": "assegaiphp/orm",
+  "package": "assegaiphp/orm",
+  "php": ">=8.3",
+  "license": "MIT",
+  "ci": {
+    "workflow": "php.yml",
+    "label": "tests"
+  },
+  "status": {
+    "label": "0.9.0 rewrite in progress",
+    "color": "f59e0b",
+    "summary": "MySQL hardening first, then SQLite polish and PostgreSQL parity."
+  }
+}

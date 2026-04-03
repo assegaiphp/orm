@@ -9,6 +9,7 @@ use Assegai\Orm\DataSource\SchemaOptions;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Management\EntityManager;
+use Tests\SQLite\Fixtures\UuidPrimaryMockEntity;
 use Tests\Support\UnitTester;
 use Unit\mocks\MockColorType;
 use Unit\mocks\MockEntity;
@@ -24,6 +25,7 @@ class SQLiteFlowCest
   {
     require_once dirname(__DIR__) . '/Unit/mocks/MockColorType.php';
     require_once dirname(__DIR__) . '/Unit/mocks/MockEntity.php';
+    require_once __DIR__ . '/Fixtures/UuidPrimaryMockEntity.php';
 
     $this->dbPath = dirname(__DIR__) . '/_output/sqlite-flow-' . uniqid('', true) . '.sqlite';
     @unlink($this->dbPath);
@@ -34,7 +36,7 @@ class SQLiteFlowCest
     );
 
     $this->dataSource = new DataSource(new DataSourceOptions(
-      entities: [MockEntity::class],
+      entities: [MockEntity::class, UuidPrimaryMockEntity::class],
       name: $this->dbPath,
       type: DataSourceType::SQLITE,
     ));
@@ -105,5 +107,37 @@ class SQLiteFlowCest
 
     $count = (int)$this->dataSource->getClient()->query('SELECT COUNT(*) FROM `mocks`')->fetchColumn();
     $I->assertSame(0, $count);
+  }
+
+  public function testSQLiteUpsertSupportsEntitiesWhosePrimaryKeyIsNotNamedId(UnitTester $I): void
+  {
+    Schema::dropIfExists(UuidPrimaryMockEntity::class, $this->schemaOptions);
+    Schema::createIfNotExists(UuidPrimaryMockEntity::class, $this->schemaOptions);
+
+    $entity = new UuidPrimaryMockEntity();
+    $entity->uuid = 'uuid-flow-001';
+    $entity->name = 'sqlite custom primary key';
+    $entity->description = 'Inserted through custom primary key flow';
+
+    $insertResult = $this->manager->insert(UuidPrimaryMockEntity::class, $entity);
+    $I->assertTrue($insertResult->isOk());
+
+    $entity->description = 'Updated through custom primary key upsert';
+
+    $upsertResult = $this->manager->upsert(UuidPrimaryMockEntity::class, $entity, ['uuid']);
+
+    $I->assertTrue($upsertResult->isOk());
+    $I->assertSame('uuid-flow-001', $entity->uuid);
+    $I->assertSame('uuid-flow-001', $upsertResult->identifiers?->uuid);
+    $I->assertSame('uuid-flow-001', $upsertResult->generatedMaps?->uuid);
+
+    $statement = $this->dataSource->getClient()->prepare(
+      'SELECT `uuid`, `description` FROM `uuid_mocks` WHERE `uuid` = :uuid'
+    );
+    $statement->execute(['uuid' => $entity->uuid]);
+    $row = $statement->fetch();
+
+    $I->assertSame('uuid-flow-001', $row['uuid']);
+    $I->assertSame('Updated through custom primary key upsert', $row['description']);
   }
 }

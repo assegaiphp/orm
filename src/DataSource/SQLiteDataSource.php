@@ -2,9 +2,9 @@
 
 namespace Assegai\Orm\DataSource;
 
-use Assegai\Core\Config;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Interfaces\DataSourceInterface;
+use Assegai\Orm\Support\OrmRuntime;
 use Assegai\Orm\Util\SqlDialectHelper;
 use InvalidArgumentException;
 use PDO;
@@ -21,9 +21,9 @@ class SQLiteDataSource extends PDO implements DataSourceInterface
   /** @noinspection DuplicatedCode */
   public function __construct(protected string $name)
   {
-    $databases = Config::get('databases');
+    $databases = OrmRuntime::databaseConfigs();
 
-    if (! isset($databases[$this->type->value]) || ! isset($databases[$this->type->value][$name]) ) {
+    if (!isset($databases[$this->type->value]) || !isset($databases[$this->type->value][$name])) {
       throw new InvalidArgumentException("Database $name not found.");
     }
 
@@ -35,41 +35,26 @@ class SQLiteDataSource extends PDO implements DataSourceInterface
     $this->exec('PRAGMA foreign_keys = ON');
   }
 
-  /**
-   * @inheritDoc
-   */
   public function connect(DataSourceOptions|array|null $options): void
   {
     // Do nothing.
   }
 
-  /**
-   * @inheritDoc
-   */
   public function disconnect(): void
   {
     // Do nothing.
   }
 
-  /**
-   * @inheritDoc
-   */
   public function isConnected(): bool
   {
     return true;
   }
 
-  /**
-   * @inheritDoc
-   */
   public function getClient(): static
   {
     return $this;
   }
 
-  /**
-   * @inheritDoc
-   */
   public function getName(): string
   {
     return $this->name;

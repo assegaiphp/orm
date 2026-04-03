@@ -77,19 +77,28 @@ class Schema implements ISchema
    */
   public static function createIfNotExists(string $entityClass, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
-    if (!$options)
-    {
-      $options = new SchemaOptions();
-    }
+    $options ??= new SchemaOptions();
 
     try
     {
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
-      $options = self::resolveSchemaOptions($entityInstance, $options);
-      $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
+      $resolvedOptions = self::resolveSchemaOptions($entityInstance, $options);
+      $resolvedOptions = new SchemaOptions(
+        dbName: $resolvedOptions->dbName,
+        dialect: $resolvedOptions->dialect,
+        entityPrefix: $resolvedOptions->entityPrefix,
+        logging: $resolvedOptions->logging,
+        dropSchema: $resolvedOptions->dropSchema,
+        synchronize: $resolvedOptions->synchronize,
+        checkIfExists: true,
+        isTemporary: $resolvedOptions->isTemporary,
+        characterSet: $resolvedOptions->characterSet,
+        engine: $resolvedOptions->engine,
+      );
+      $db = DBFactory::getSQLConnection(dbName: $resolvedOptions->dbName, dialect: $resolvedOptions->dialect);
 
-      $query = self::getDDLStatementFromEntity($entityInstance, $options);
+      $query = self::getDDLStatementFromEntity($entityInstance, $resolvedOptions);
       $statement = $db->prepare(query: $query);
 
       return $statement->execute();
@@ -162,17 +171,17 @@ class Schema implements ISchema
     $entityReflection = new ReflectionClass($entityClass);
     $entityInstance = $entityReflection->newInstance();
     $options = self::resolveSchemaOptions($entityInstance, $options);
-
-    if ($options->dialect === SQLDialect::SQLITE) {
-      throw new ORMException('Schema alterations are not supported for SQLite yet.');
-    }
-
     $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
     $tableFields = self::getTableDescriptions($entityInstance, $db);
 
     if (empty($tableFields))
     {
       return null;
+    }
+
+    if ($options->dialect === SQLDialect::SQLITE)
+    {
+      return self::commitSqliteSchemaChanges($db, $entityReflection, $entityInstance, $options, $tableFields);
     }
 
     $changes = self::compileChanges($entityReflection, $tableFields, $options->dialect);
@@ -448,7 +457,13 @@ class Schema implements ISchema
 
     return match ($options->dialect) {
       SQLDialect::MYSQL,
-      SQLDialect::MARIADB => $query . ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci',
+      SQLDialect::MARIADB => sprintf(
+        '%s ENGINE=%s DEFAULT CHARSET=%s COLLATE=%s',
+        $query,
+        ($options->engine?->value ?? 'InnoDB'),
+        ($options->characterSet ?? SQLCharacterSet::UTF8MB4)->value,
+        ($options->characterSet ?? SQLCharacterSet::UTF8MB4)->getDefaultCollation(),
+      ),
       default => $query,
     };
   }
@@ -589,6 +604,147 @@ class Schema implements ISchema
     return false;
   }
 
+  private static function commitSqliteSchemaChanges(PDO|IDataObject $connection, ReflectionClass $entityReflection, object $entityInstance, SchemaOptions $options, array $tableFields): bool
+  {
+    $entityInspector = EntityInspector::getInstance();
+    $tableName = $entityInspector->getTableName($entityInstance);
+    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::SQLITE);
+    $temporaryTableName = self::generateTemporaryTableName($tableName);
+    $quotedTemporaryTableName = SqlDialectHelper::quoteIdentifier($temporaryTableName, SQLDialect::SQLITE);
+    $createTableOptions = new SchemaOptions(
+      dbName: $options->dbName,
+      dialect: $options->dialect,
+      entityPrefix: $options->entityPrefix,
+      logging: $options->logging,
+      dropSchema: false,
+      synchronize: $options->synchronize,
+      checkIfExists: false,
+      isTemporary: false,
+      characterSet: $options->characterSet,
+      engine: $options->engine,
+    );
+    $createTableSql = self::getDDLStatementFromEntity($entityInstance, $createTableOptions);
+    $temporaryCreateTableSql = self::replaceSqliteCreateTableName($createTableSql, $quotedTemporaryTableName);
+    $targetColumns = self::getEntityColumnNames($entityReflection);
+    $currentColumns = array_map(fn(SQLTableDescription $field) => $field->Field, $tableFields);
+    $sharedColumns = array_values(array_intersect($currentColumns, $targetColumns));
+
+    try
+    {
+      self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = OFF');
+      $connection->beginTransaction();
+      self::executeSqliteStatement($connection, $temporaryCreateTableSql);
+
+      if (!empty($sharedColumns))
+      {
+        $quotedColumns = implode(', ', array_map(
+          fn(string $columnName) => SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::SQLITE),
+          $sharedColumns,
+        ));
+
+        self::executeSqliteStatement(
+          $connection,
+          "INSERT INTO $quotedTemporaryTableName ($quotedColumns) SELECT $quotedColumns FROM $quotedTableName"
+        );
+      }
+
+      self::executeSqliteStatement($connection, "DROP TABLE $quotedTableName");
+      self::executeSqliteStatement(
+        $connection,
+        'ALTER TABLE ' . $quotedTemporaryTableName . ' RENAME TO ' . SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::SQLITE)
+      );
+      $connection->commit();
+      self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = ON');
+    }
+    catch (PDOException $e)
+    {
+      if ($connection->inTransaction())
+      {
+        $connection->rollBack();
+      }
+
+      try
+      {
+        self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = ON');
+      }
+      catch (ORMException)
+      {
+        // Best effort cleanup.
+      }
+
+      throw new ORMException($e->getMessage());
+    }
+    catch (ORMException $e)
+    {
+      if ($connection->inTransaction())
+      {
+        $connection->rollBack();
+      }
+
+      try
+      {
+        self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = ON');
+      }
+      catch (ORMException)
+      {
+        // Best effort cleanup.
+      }
+
+      throw $e;
+    }
+
+    return true;
+  }
+
+  private static function getEntityColumnNames(ReflectionClass $entityReflection): array
+  {
+    $columnInspector = ColumnInspector::getInstance();
+    $columnNames = [];
+
+    foreach ($entityReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $propertyReflection)
+    {
+      if (!$columnInspector->propertyHasColumnAttribute($propertyReflection))
+      {
+        continue;
+      }
+
+      $column = $columnInspector->getMetaDataFromReflection($propertyReflection);
+      $columnNames[] = $column->name ?: $propertyReflection->getName();
+    }
+
+    return $columnNames;
+  }
+
+  private static function replaceSqliteCreateTableName(string $query, string $quotedTemporaryTableName): string
+  {
+    $updatedQuery = preg_replace(
+      '/^(CREATE(?:\s+TEMPORARY)?\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+)([`\"]?[A-Za-z0-9_]+[`\"]?)/i',
+      '$1' . $quotedTemporaryTableName,
+      $query,
+      1,
+    );
+
+    if (!is_string($updatedQuery))
+    {
+      throw new ORMException('Failed to rewrite the SQLite CREATE TABLE statement for schema alteration.');
+    }
+
+    return $updatedQuery;
+  }
+
+  private static function generateTemporaryTableName(string $tableName): string
+  {
+    return '__assegai_tmp_' . $tableName . '_' . str_replace('.', '', uniqid('', true));
+  }
+
+  private static function executeSqliteStatement(PDO|IDataObject $connection, string $query): void
+  {
+    if (false === $connection->exec($query))
+    {
+      $errorMessage = json_encode($connection->errorInfo());
+      throw new ORMException($errorMessage ?: "Failed to execute SQLite statement: $query");
+    }
+  }
   /**
    * @param string $entityClass
    * @return object
