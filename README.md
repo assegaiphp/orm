@@ -17,6 +17,13 @@
 An object-relational mapper for modern PHP applications. You can use it on its own, or plug it into
 [AssegaiPHP](https://github.com/assegaiphp) when you want repository injection and framework conventions.
 
+## Contribution workflow
+
+For commit and pull request conventions in this repo, see:
+
+- [docs/commit-and-pr-guidelines.md](./docs/commit-and-pr-guidelines.md)
+
+
 ## Installation
 
 ```bash

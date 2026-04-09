@@ -4,6 +4,7 @@ namespace Assegai\Orm\Management\Options;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Util\SqlIdentifier;
@@ -87,6 +88,7 @@ final readonly class FindWhereOptions
     public function __toString(): string
     {
         return $this->buildConditionString(
+            dialect: SQLDialect::MYSQL,
             renderer: fn(string $identifier, mixed $value): string => match (true) {
                 is_null($value), $value === 'NULL' => "$identifier IS NULL",
                 is_array($value) && array_is_list($value) && !empty($value) => $identifier . ' IN (' . implode(', ', array_map(
@@ -99,16 +101,17 @@ final readonly class FindWhereOptions
     }
 
     /**
+     * @param SQLDialect $dialect
      * @param callable(string, mixed): string $renderer
      * @return string
      */
-    private function buildConditionString(callable $renderer): string
+    private function buildConditionString(SQLDialect $dialect, callable $renderer): string
     {
         $parts = [];
 
         foreach ($this->conditions as $key => $value) {
             $parts[] = $renderer(
-                $this->qualifyColumnName($this->resolveColumnName((string)$key)),
+                $this->qualifyColumnName($this->resolveColumnName((string)$key), $dialect),
                 $value
             );
         }
@@ -118,15 +121,16 @@ final readonly class FindWhereOptions
 
     /**
      * @param string $columnName
+     * @param SQLDialect $dialect
      * @return string
      */
-    private function qualifyColumnName(string $columnName): string
+    private function qualifyColumnName(string $columnName, SQLDialect $dialect = SQLDialect::MYSQL): string
     {
         $qualifiedColumn = $this->tableName
             ? "{$this->tableName}.{$columnName}"
             : $columnName;
 
-        return SqlIdentifier::quote($qualifiedColumn);
+        return SqlIdentifier::quote($qualifiedColumn, $dialect);
     }
 
     /**
@@ -188,6 +192,7 @@ final readonly class FindWhereOptions
     public function compile(SQLQuery $query): string
     {
         return $this->buildConditionString(
+            dialect: $query->getDialect(),
             renderer: function (string $identifier, mixed $value) use ($query): string {
                 if (is_null($value) || $value === 'NULL') {
                     return "$identifier IS NULL";

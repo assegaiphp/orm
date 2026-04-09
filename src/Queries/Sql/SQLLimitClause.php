@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Traits\ExecutableTrait;
 
 final class SQLLimitClause
@@ -19,7 +20,12 @@ final class SQLLimitClause
     private readonly ?int     $offset = null,
   )
   {
-    $queryString = "LIMIT " . (!is_null($offset) ? "$offset,$limit" : "$limit");
+    $queryString = match (true) {
+      is_null($offset) => "LIMIT $limit",
+      $this->query->getDialect() === SQLDialect::POSTGRESQL => "LIMIT $limit OFFSET $offset",
+      default => "LIMIT $offset,$limit",
+    };
+
     $this->query->appendQueryString($queryString);
   }
 }

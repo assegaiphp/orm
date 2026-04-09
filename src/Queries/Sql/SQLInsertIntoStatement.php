@@ -21,24 +21,24 @@ final class SQLInsertIntoStatement
    */
   public function __construct(private readonly SQLQuery $query, private readonly array $columns = [])
   {
-    $queryString = "";
+    $queryString = '';
     $columns = array_map(function(string $column): string {
       $parts = explode('.', $column);
       return end($parts);
     }, array_values($columns));
 
     if (!empty($columns)) {
-      $quotedColumns = array_map(fn(string $column): string => "`$column`", $columns);
-      $queryString = "(" . implode(', ', $quotedColumns) . ") ";
+      $quotedColumns = array_map(fn(string $column): string => $this->query->quoteIdentifier($column), $columns);
+      $queryString = '(' . implode(', ', $quotedColumns) . ') ';
 
       $columnIndex = 0;
       foreach ($columns as $index => $column) {
         if (is_numeric($index)) {
-          if (in_array($column, $this->query->passwordHashFields())) {
+          if (in_array($column, $this->query->passwordHashFields(), true)) {
             $this->hashableIndexes[] = $index;
           }
         } else {
-          if (in_array($index, $this->query->passwordHashFields())) {
+          if (in_array($index, $this->query->passwordHashFields(), true)) {
             $this->hashableIndexes[] = $columnIndex;
           }
         }
@@ -55,11 +55,11 @@ final class SQLInsertIntoStatement
    */
   public function values(array $valuesList): SQLInsertIntoStatement
   {
-    $queryString = "VALUES(";
+    $queryString = 'VALUES(';
     $separator = ', ';
 
     foreach ($valuesList as $index => $value) {
-      if (in_array($index, $this->hashableIndexes)) {
+      if (in_array($index, $this->hashableIndexes, true)) {
         $value = password_hash($value, $this->query->passwordHashAlgorithm());
       }
 
@@ -71,7 +71,7 @@ final class SQLInsertIntoStatement
       $queryString .= $this->query->addParam($value) . $separator;
     }
 
-    $queryString = trim(string: $queryString, characters: $separator) . ") ";
+    $queryString = trim(string: $queryString, characters: $separator) . ') ';
     $this->query->appendQueryString($queryString);
     return $this;
   }

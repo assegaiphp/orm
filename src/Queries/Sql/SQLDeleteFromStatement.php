@@ -21,11 +21,11 @@ final class SQLDeleteFromStatement
     private readonly ?string $alias = null
   )
   {
-    $tableName = str_replace('`', '', $tableName);
-    $queryString = "DELETE FROM `$tableName`";
+    $tableName = str_replace(['`', '"'], '', $tableName);
+    $queryString = 'DELETE FROM ' . $this->query->quoteIdentifier($tableName);
     if (!is_null($alias))
     {
-      $queryString .= "AS $alias";
+      $queryString .= ' AS ' . $this->query->quoteIdentifier($alias);
     }
     $this->query->setQueryString(queryString: $queryString);
   }

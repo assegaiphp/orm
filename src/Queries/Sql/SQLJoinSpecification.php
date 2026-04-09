@@ -22,7 +22,7 @@ final class SQLJoinSpecification
   ) {
     $specification =
       is_array($conditionOrList)
-      ? '(' . implode(',', $conditionOrList) . ')'
+      ? '(' . implode(', ', array_map(fn(string $identifier): string => $this->query->quoteIdentifier($identifier), $conditionOrList)) . ')'
       : $conditionOrList;
 
     $queryString = $isUsing ? "USING $specification" : "ON $specification";

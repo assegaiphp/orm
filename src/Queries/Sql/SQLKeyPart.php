@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Util\SqlIdentifier;
 use JsonSerializable;
 
@@ -27,13 +28,15 @@ final class SQLKeyPart implements JsonSerializable
    * @param bool|null $ascending Sort specifier. If set to `true`, appends 
    * `ASC` to resulting Sql. If set to `false`, appends `DESC` to
    * resulting Sql. If set to `null` then omits sorting string.
+   * @param SQLDialect $dialect The SQL dialect to render identifiers for.
    */
   public function __construct(
     private readonly string $key,
-    private readonly ?bool $ascending = null
+    private readonly ?bool $ascending = null,
+    private readonly SQLDialect $dialect = SQLDialect::MYSQL
   )
   {
-    $this->queryString = SqlIdentifier::quote($this->key);
+    $this->queryString = SqlIdentifier::quote($this->key, $this->dialect);
 
     if (!is_null($this->ascending)) {
       $this->queryString .= $this->ascending ? ' ASC' : ' DESC';

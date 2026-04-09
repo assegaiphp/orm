@@ -1223,7 +1223,7 @@ class EntityManager implements IEntityStoreOwner
       ->select()
       ->all(columns: $columns)
       ->from(tableReferences: $targetTable)
-      ->join("`$joinTableName`")
+      ->join($joinTableName)
       ->on("$joinTableName.$targetJoinColumn = $targetTable.id");
     $condition = $this->buildInCondition("$joinTableName.$localJoinColumn", $localIds, $query);
     if (!$condition) {
@@ -1484,7 +1484,7 @@ class EntityManager implements IEntityStoreOwner
 
     $query ??= $this->query;
 
-    return SqlIdentifier::quote($qualifiedColumn) . ' IN (' . implode(', ', $query->addParams(array_values($values))) . ')';
+    return SqlIdentifier::quote($qualifiedColumn, $query->getDialect()) . ' IN (' . implode(', ', $query->addParams(array_values($values))) . ')';
   }
 
   private function resolveRelationExcludeColumns(RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
@@ -1745,7 +1745,7 @@ class EntityManager implements IEntityStoreOwner
   private function buildConditionClause(int|object|array $conditions, SQLQuery $query, ?object $entity = null): string
   {
     if (is_int($conditions)) {
-      return SqlIdentifier::quote('id') . '=' . $query->addParam($conditions);
+      return SqlIdentifier::quote('id', $query->getDialect()) . '=' . $query->addParam($conditions);
     }
 
     $parts = [];
@@ -1754,7 +1754,7 @@ class EntityManager implements IEntityStoreOwner
       $columnName = $entity && is_string($key)
         ? $this->getColumnNameFromProperty($entity, $key)
         : (string)$key;
-      $identifier = SqlIdentifier::quote($columnName);
+      $identifier = SqlIdentifier::quote($columnName, $query->getDialect());
 
       if (is_null($value) || $value === 'NULL') {
         $parts[] = "$identifier IS NULL";
@@ -2078,14 +2078,14 @@ class EntityManager implements IEntityStoreOwner
     $columns = $filteredColumns;
     $values = $filteredValues;
 
-    $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column), $columns));
-    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column), $conflictPaths));
+    $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
+    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
     $placeholders = array_fill(0, count($values), '?');
     $valueList = implode(', ', $placeholders);
-    $assignmentList = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column) . '=excluded.' . SqlIdentifier::quote($column), $updateColumns));
+    $assignmentList = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()) . '=excluded.' . SqlIdentifier::quote($column, $this->query->getDialect()), $updateColumns));
     $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
 
-    $queryString = "INSERT INTO `$tableName` ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction";
+    $queryString = 'INSERT INTO ' . $this->query->quoteIdentifier($tableName) . " ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction";
     $this->query->init();
     $this->query->insertInto(tableName: $tableName);
     $this->query->setQueryString($queryString);

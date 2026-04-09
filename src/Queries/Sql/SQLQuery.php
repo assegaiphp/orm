@@ -2,8 +2,11 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Support\OrmRuntime;
+use Assegai\Orm\Util\SqlIdentifier;
+use Assegai\Orm\Util\SqlDialectHelper;
 use DateTimeInterface;
 use PDO;
 use PDOException;
@@ -39,6 +42,10 @@ final class SQLQuery
      * @var int|null The number of columns affected by the query.
      */
     private ?int $columnCount = null;
+    /**
+     * @var SQLDialect The SQL dialect used for rendering queries.
+     */
+    private readonly SQLDialect $dialect;
 
     /**
      * Constructs a new SQLQuery instance.
@@ -49,6 +56,7 @@ final class SQLQuery
      * @param array $fetchClassParams The parameters to pass to the fetch class.
      * @param array $passwordHashFields The fields to hash.
      * @param string $passwordHashAlgorithm The algorithm to use for hashing.
+     * @param SQLDialect|null $dialect The SQL dialect to render queries for.
      */
     public function __construct(
         private readonly PDO    $db,
@@ -56,9 +64,11 @@ final class SQLQuery
         private readonly int    $fetchMode = PDO::FETCH_ASSOC,
         private readonly array  $fetchClassParams = [],
         private readonly array  $passwordHashFields = ['password'],
-        private string          $passwordHashAlgorithm = ''
+        private string          $passwordHashAlgorithm = '',
+        ?SQLDialect             $dialect = null
     )
     {
+        $this->dialect = $dialect ?? SqlDialectHelper::fromPdo($db);
         if (empty($this->passwordHashAlgorithm)) {
             $this->passwordHashAlgorithm = OrmRuntime::defaultPasswordHashAlgorithm();
 
@@ -129,6 +139,27 @@ final class SQLQuery
     public function queryString(): string
     {
         return $this->queryString;
+    }
+
+    /**
+     * Returns the SQL dialect used for query rendering.
+     *
+     * @return SQLDialect
+     */
+    public function getDialect(): SQLDialect
+    {
+        return $this->dialect;
+    }
+
+    /**
+     * Quotes an SQL identifier for the current query dialect.
+     *
+     * @param string $identifier
+     * @return string
+     */
+    public function quoteIdentifier(string $identifier): string
+    {
+        return SqlIdentifier::quote($identifier, $this->dialect);
     }
 
     /**
