@@ -788,6 +788,7 @@ class Schema implements ISchema
         self::applyPostgreSqlColumnChange(
           $connection,
           $tableName,
+          $columnName,
           $changeStatement->columnDefinition,
           $currentField,
         );
@@ -821,11 +822,11 @@ class Schema implements ISchema
   private static function applyPostgreSqlColumnChange(
     PDO|IDataObject $connection,
     string $tableName,
+    string $columnName,
     \Assegai\Orm\Queries\Sql\SQLColumnDefinition $columnDefinition,
     ?SQLTableDescription $currentField,
   ): void {
     $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
-    $columnName = $columnDefinition->name;
     $quotedColumnName = SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::POSTGRESQL);
 
     self::executeDialectStatement(
