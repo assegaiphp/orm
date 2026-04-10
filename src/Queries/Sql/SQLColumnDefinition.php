@@ -65,6 +65,44 @@ class SQLColumnDefinition implements Stringable
     return $this->queryString();
   }
 
+  public function getTypeExpression(): string
+  {
+    return match ($this->dialect) {
+      SQLDialect::POSTGRESQL => $this->getPostgreSqlType(),
+      SQLDialect::SQLITE => $this->getSqliteType(),
+      default => $this->type->value,
+    };
+  }
+
+  public function getDefaultExpression(): ?string
+  {
+    if (is_null($this->defaultValue)) {
+      return null;
+    }
+
+    return $this->normalizeDefaultValue($this->defaultValue);
+  }
+
+  public function isNullable(): bool
+  {
+    return $this->nullable;
+  }
+
+  public function isAutoIncrement(): bool
+  {
+    return $this->autoIncrement;
+  }
+
+  public function isUnique(): bool
+  {
+    return $this->isUnique;
+  }
+
+  public function isPrimaryKey(): bool
+  {
+    return $this->isPrimaryKey;
+  }
+
   private function buildMySqlDefinition(): string
   {
     $queryString = $this->getQuotedColumnName() . ' ';

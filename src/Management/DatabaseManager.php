@@ -85,10 +85,11 @@ final class DatabaseManager
       $databaseName,
       $dataSource->getOptions()->charSet
     );
-    $client = $this->getManagementClient($dataSource, $databaseName);
+    $client = null;
 
     try
     {
+      $client = $this->getManagementClient($dataSource, $databaseName);
       $result = $client->exec($statement);
 
       if ($result === false)
@@ -103,7 +104,10 @@ final class DatabaseManager
     }
     finally
     {
-      $this->closeTemporaryManagementClient($dataSource, $client);
+      if ($client instanceof PDO)
+      {
+        $this->closeTemporaryManagementClient($dataSource, $client);
+      }
     }
   }
 
@@ -140,10 +144,12 @@ final class DatabaseManager
       return;
     }
 
-    $client = $this->getManagementClient($dataSource, $databaseName);
+    $client = null;
 
     try
     {
+      $client = $this->getManagementClient($dataSource, $databaseName);
+
       if ($dataSource->type === DataSourceType::POSTGRESQL)
       {
         $this->terminatePostgreSqlConnections($client, $databaseName);
@@ -165,7 +171,10 @@ final class DatabaseManager
     }
     finally
     {
-      $this->closeTemporaryManagementClient($dataSource, $client);
+      if ($client instanceof PDO)
+      {
+        $this->closeTemporaryManagementClient($dataSource, $client);
+      }
     }
   }
 
