@@ -30,14 +30,14 @@ final class SQLAlterTableOption
    */
   public function addColumn(SQLColumnDefinition $dataType, ?bool $first = false, ?string $afterColumn = null): SQLAlterTableOption
   {
-    $this->query->appendQueryString(tail: "ADD $dataType");
-    if ($first)
+    $this->query->appendQueryString(tail: "ADD COLUMN $dataType");
+    if ($first && in_array($this->query->getDialect(), [\Assegai\Orm\Enumerations\SQLDialect::MYSQL, \Assegai\Orm\Enumerations\SQLDialect::MARIADB], true))
     {
       $this->query->appendQueryString(tail: "FIRST");
     }
-    else if (!is_null($afterColumn))
+    else if (!is_null($afterColumn) && in_array($this->query->getDialect(), [\Assegai\Orm\Enumerations\SQLDialect::MYSQL, \Assegai\Orm\Enumerations\SQLDialect::MARIADB], true))
     {
-      $this->query->appendQueryString(tail: "AFTER `$afterColumn`");
+      $this->query->appendQueryString(tail: "AFTER " . $this->query->quoteIdentifier($afterColumn));
     }
     return $this;
   }
@@ -63,7 +63,9 @@ final class SQLAlterTableOption
    */
   public function renameColumn(string $oldColumnName, string $newColumnName): SQLAlterTableOption
   {
-    $this->query->appendQueryString(tail: "RENAME COLUMN `$oldColumnName` TO `$newColumnName`");
+    $this->query->appendQueryString(
+      tail: "RENAME COLUMN {$this->query->quoteIdentifier($oldColumnName)} TO {$this->query->quoteIdentifier($newColumnName)}"
+    );
     return $this;
   }
 
@@ -75,7 +77,7 @@ final class SQLAlterTableOption
    */
   public function dropColumn(string $columnName): SQLAlterTableOption
   {
-    $this->query->appendQueryString(tail: "DROP COLUMN `$columnName`");
+    $this->query->appendQueryString(tail: "DROP COLUMN " . $this->query->quoteIdentifier($columnName));
     return $this;
   }
 }

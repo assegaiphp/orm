@@ -45,6 +45,15 @@ For standalone PHP projects that are not using Assegai, install the package dire
 $ composer require assegaiphp/orm
 ```
 
+Then enable only the PDO driver you actually plan to use:
+
+- `pdo_mysql` for MySQL or MariaDB
+- `pdo_pgsql` for PostgreSQL
+- `pdo_sqlite` for SQLite
+
+AssegaiORM no longer forces all three database extensions at install time. If you choose a driver without enabling its
+matching PDO extension, the ORM will tell you exactly which extension is missing when you try to connect.
+
 ## Guide map
 
 This package is designed to feel familiar to teams coming from TypeORM:

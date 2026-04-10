@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
+
 /**
  * Class SQLUpdateDefinition
  *
@@ -25,11 +27,11 @@ final readonly class SQLUpdateDefinition
   {
     $queryString = 'UPDATE ';
 
-    if ($this->lowPriority) {
+    if ($this->lowPriority && in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
       $queryString .= 'LOW_PRIORITY ';
     }
 
-    if ($this->ignore) {
+    if ($this->ignore && in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
       $queryString .= 'IGNORE ';
     }
 

@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
+
 final class SQLRenameTableStatement
 {
   private string $queryString = '';
@@ -17,7 +19,14 @@ final class SQLRenameTableStatement
     private readonly string   $newTableName,
   )
   {
-    $this->queryString = "RENAME TABLE `$oldTableName` TO `$newTableName`";
+    $quotedOldTableName = $this->query->quoteIdentifier($oldTableName);
+    $quotedNewTableName = $this->query->quoteIdentifier($newTableName);
+
+    $this->queryString = match ($this->query->getDialect()) {
+      SQLDialect::POSTGRESQL,
+      SQLDialect::SQLITE => "ALTER TABLE $quotedOldTableName RENAME TO $quotedNewTableName",
+      default => "RENAME TABLE $quotedOldTableName TO $quotedNewTableName",
+    };
     $this->query->setQueryString($this->queryString);
   }
 

@@ -19,6 +19,7 @@ use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\RelationType;
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ClassNotFoundException;
 use Assegai\Orm\Exceptions\ContainerException;
 use Assegai\Orm\Exceptions\EmptyCriteriaException;
@@ -374,11 +375,16 @@ class EntityManager implements IEntityStoreOwner
 
     $this->query->insertInto(tableName: $this->entityInspector->getTableName(entity: $instance))->singleRow(columns: $columns)->values(valuesList: $values);
 
+    if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+      $this->query->appendQueryString('RETURNING ' . $this->buildReturningProjection($instance));
+    }
+
     if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
     }
 
     $result = $this->query->execute();
+    $raw = $result->getRaw();
 
     if ($result->isError()) {
       if (!headers_sent()) {
@@ -387,7 +393,25 @@ class EntityManager implements IEntityStoreOwner
       $error = new GeneralSQLQueryException($this->query);
       OrmRuntime::log('error', self::LOG_TAG, $error->getMessage());
 
-      return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: $result, errors: [$error]);
+      return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $raw, generatedMaps: null, errors: [$error]);
+    }
+
+    if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+      $generatedMaps = $this->hydrateGeneratedMaps($entityClass, $result->getData()) ?? $instance;
+      $generatedMaps = $this->sanitizeGeneratedMaps($generatedMaps);
+      $identifierValue = $generatedMaps?->{$primaryKeyField} ?? $instance->{$primaryKeyField} ?? $this->lastInsertId();
+
+      if ($identifierValue !== null && $identifierValue !== '') {
+        $instance->{$primaryKeyField} = $identifierValue;
+      }
+
+      return new InsertResult(
+        identifiers: (object)[$primaryKeyField => $identifierValue],
+        raw: $raw,
+        generatedMaps: $generatedMaps,
+        errors: [],
+        affected: $this->query->rowCount() ?? 0,
+      );
     }
 
     # Find the record by the resolved primary key and hydrate the entity
@@ -401,7 +425,7 @@ class EntityManager implements IEntityStoreOwner
       $error = new GeneralSQLQueryException($this->query);
       OrmRuntime::log('error', self::LOG_TAG, $error->getMessage());
 
-      return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: $result, errors: [$result->getErrors()]);
+      return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $raw, generatedMaps: null, errors: [$result->getErrors()]);
     }
 
     $entity = is_array($result->getData()) && array_is_list($result->getData())
@@ -419,7 +443,7 @@ class EntityManager implements IEntityStoreOwner
 
     $identifiers = is_array($entity) ? (object)$entity : $entity;
 
-    return new InsertResult(identifiers: $identifiers, raw: $this->query->queryString(), generatedMaps: $generatedMaps);
+    return new InsertResult(identifiers: $identifiers, raw: $raw, generatedMaps: $generatedMaps);
   }
 
   /**
@@ -442,7 +466,6 @@ class EntityManager implements IEntityStoreOwner
     if (!empty($entityLike)) {
       foreach ($entityLike as $entityLikePropertyName => $entityLikePropertyValue) {
         if (property_exists($entity, $entityLikePropertyName)) {
-          $entityLikeReflectionProperty = new ReflectionProperty($entityLike, $entityLikePropertyName);
           $entityClassReflectionProperty = new ReflectionProperty($entityClass, $entityLikePropertyName);
 
           if (is_null($entityLikePropertyValue)) {
@@ -453,10 +476,12 @@ class EntityManager implements IEntityStoreOwner
             }
           }
 
-          $entityLikeReflectionPropertyType = match (true) {
-            $entityLikeReflectionProperty->getType() instanceof ReflectionUnionType => strtolower(gettype($entityLikePropertyValue)),
-            default => $entityLikeReflectionProperty->getType()?->getName()
-          };
+          $entityLikeReflectionPropertyType = is_array($entityLike)
+            ? strtolower(gettype($entityLikePropertyValue))
+            : match (true) {
+              (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType() instanceof ReflectionUnionType => strtolower(gettype($entityLikePropertyValue)),
+              default => (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType()?->getName()
+            };
           $entityClassReflectionPropertyType = match (true) {
             $entityClassReflectionProperty->getType() instanceof ReflectionUnionType => strval($entityClassReflectionProperty->getType()),
             default => $entityClassReflectionProperty->getType()?->getName()
@@ -1631,7 +1656,7 @@ class EntityManager implements IEntityStoreOwner
       throw new ORMException("Empty criteria(s) are not allowed for the update method.");
     }
 
-    if (is_array($partialEntity)) {
+    if (is_array($partialEntity) && array_is_list($partialEntity)) {
       $raw = '';
       $affected = 0;
       $generatedMaps = new stdClass();
@@ -1705,20 +1730,46 @@ class EntityManager implements IEntityStoreOwner
       : $this->buildConditionClause($conditions, $this->query, $entityInstance);
     $statement->where(condition: $conditionString);
 
+    if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+      $this->query->appendQueryString('RETURNING ' . $this->buildReturningProjection($entityInstance));
+    }
+
     if ($this->isDebug || $options?->isDebug) {
       $this->query->debug();
     }
 
     $result = $this->query->execute();
+    $raw = $result->getRaw();
 
     if ($result->isError()) {
       throw new GeneralSQLQueryException($this->query);
     }
 
-    $updatedEntity = $this->findOne(entityClass: $entityClass, options: new FindOptions(where: $conditions));
-    $generatedMaps = $updatedEntity->getData() ?? new stdClass();
+    $generatedMaps = null;
 
-    return new UpdateResult(raw: $this->query->queryString(), affected: $this->query->rowCount(), identifiers: $partialEntity, generatedMaps: $generatedMaps);
+    if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+      $generatedMaps = $this->hydrateGeneratedMaps($entityClass, $result->getData());
+    }
+
+    if (!$generatedMaps) {
+      $updatedEntity = $this->findOne(entityClass: $entityClass, options: new FindOptions(where: $conditions));
+      $generatedMaps = $updatedEntity->getData() ?? new stdClass();
+    }
+
+    $generatedMaps = $this->sanitizeGeneratedMaps($generatedMaps);
+
+    $identifiers = is_array($partialEntity) ? (object)$partialEntity : $partialEntity;
+    if ($generatedMaps && is_object($generatedMaps)) {
+      $primaryKeyMetadata = $this->getPrimaryKeyMetadata($entityInstance);
+      $primaryKeyField = $primaryKeyMetadata['field'];
+      $identifierValue = $generatedMaps->{$primaryKeyField} ?? null;
+
+      if ($identifierValue !== null && $identifierValue !== '') {
+        $identifiers = (object)(array_merge((array)$identifiers, [$primaryKeyField => $identifierValue]));
+      }
+    }
+
+    return new UpdateResult(raw: $raw, affected: $this->query->rowCount(), identifiers: $identifiers, generatedMaps: $generatedMaps);
   }
 
   /**
@@ -1956,10 +2007,25 @@ class EntityManager implements IEntityStoreOwner
     $values = $this->entityInspector->getValues(entity: $entityOrEntities);
     $tableName = $this->entityInspector->getTableName(entity: $entityOrEntities);
 
-    if ($this->connection->type === DataSourceType::SQLITE) {
-      return $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn);
-    }
+    return match ($this->query->getDialect()) {
+      SQLDialect::SQLITE => $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      SQLDialect::POSTGRESQL => $this->executePostgreSqlUpsert($entityClass, $tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      default => $this->executeMySqlUpsert($entityClass, $tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+    };
+  }
 
+  private function executeMySqlUpsert(
+    string $entityClass,
+    string $tableName,
+    object $entityOrEntities,
+    array $columns,
+    array $updateColumns,
+    array $values,
+    UpsertOptions $options,
+    string $primaryKeyField,
+    string $primaryColumn,
+  ): InsertResult
+  {
     $assignmentList = array_map(function($column): string {
       $column = $this->stripTableName($column);
       return "$column=VALUES($column)";
@@ -1974,6 +2040,7 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $result = $this->query->execute();
+    $raw = $result->getRaw();
 
     $errors = [];
     if ($result->isError()) {
@@ -2009,7 +2076,7 @@ class EntityManager implements IEntityStoreOwner
 
     return new InsertResult(
       identifiers: (object)[$primaryKeyField => $identifierValue],
-      raw: $this->query->queryString(),
+      raw: $raw,
       generatedMaps: $generatedMaps,
       errors: $errors,
       affected: $this->query->rowCount() ?? 0,
@@ -2059,24 +2126,8 @@ class EntityManager implements IEntityStoreOwner
     $originalId = $entity->{$primaryKeyField} ?? null;
     $columns = array_map([$this, 'stripTableName'], array_values($columns));
     $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
-    $conflictPaths = array_map([$this, 'stripTableName'], $options->conflictPaths ?: [$primaryColumn]);
-
-    $filteredColumns = [];
-    $filteredValues = [];
-
-    foreach ($columns as $index => $column) {
-      $value = $values[$index] ?? null;
-
-      if ($value === null && !in_array($column, $conflictPaths, true) && !in_array($column, $updateColumns, true)) {
-        continue;
-      }
-
-      $filteredColumns[] = $column;
-      $filteredValues[] = $value;
-    }
-
-    $columns = $filteredColumns;
-    $values = $filteredValues;
+    $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
+    [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
 
     $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
     $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
@@ -2096,6 +2147,7 @@ class EntityManager implements IEntityStoreOwner
     }
 
     $result = $this->query->execute();
+    $raw = $result->getRaw();
     $errors = [];
 
     if ($result->isError()) {
@@ -2114,11 +2166,228 @@ class EntityManager implements IEntityStoreOwner
 
     return new InsertResult(
       identifiers: (object)[$primaryKeyField => $identifier],
-      raw: $this->query->queryString(),
+      raw: $raw,
       generatedMaps: $entity,
       errors: $errors,
       affected: $this->query->rowCount() ?? 0,
     );
+  }
+
+  private function executePostgreSqlUpsert(
+    string $entityClass,
+    string $tableName,
+    object $entity,
+    array $columns,
+    array $updateColumns,
+    array $values,
+    UpsertOptions $options,
+    string $primaryKeyField,
+    string $primaryColumn,
+  ): InsertResult
+  {
+    $originalId = $entity->{$primaryKeyField} ?? null;
+    $columns = array_map([$this, 'stripTableName'], array_values($columns));
+    $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
+    $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
+    [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
+
+    $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
+    $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
+    $placeholders = array_fill(0, count($values), '?');
+    $valueList = implode(', ', $placeholders);
+    $assignmentList = implode(', ', array_map(
+      fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()) . '=excluded.' . SqlIdentifier::quote($column, $this->query->getDialect()),
+      $updateColumns
+    ));
+    $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
+    $returning = $this->query->quoteIdentifier($primaryColumn) . ' AS ' . $this->query->quoteIdentifier($primaryKeyField);
+
+    $queryString = 'INSERT INTO ' . $this->query->quoteIdentifier($tableName)
+      . " ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction RETURNING $returning";
+
+    $this->query->init();
+    $this->query->insertInto(tableName: $tableName);
+    $this->query->setQueryString($queryString);
+    $this->query->addParams($values);
+
+    if ($this->isDebug) {
+      $this->query->debug();
+    }
+
+    $result = $this->query->execute();
+    $raw = $result->getRaw();
+    $errors = [];
+
+    if ($result->isError()) {
+      $errors[] = $this->query->getConnection()->errorInfo();
+      $errors[] = new GeneralSQLQueryException($this->query);
+    }
+
+    $identifierValue = $this->extractReturningIdentifier($result->getData(), $primaryKeyField, $primaryColumn)
+      ?? $originalId
+      ?? $this->lastInsertId();
+    $generatedMaps = $entity;
+
+    if ($result->isOk()) {
+      if ($identifierValue !== null && $identifierValue !== '') {
+        $entity->{$primaryKeyField} = $identifierValue;
+      }
+
+      $lookupConditions = $this->buildUpsertLookupConditions($entity, $options, $primaryKeyField);
+
+      if ($identifierValue !== null && $identifierValue !== '') {
+        $lookupConditions = [$primaryKeyField => $identifierValue];
+      }
+
+      if (!empty($lookupConditions)) {
+        $persistedResult = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: $lookupConditions));
+        $persistedEntity = $persistedResult->getData();
+
+        if (is_object($persistedEntity)) {
+          $generatedMaps = $persistedEntity;
+          $identifierValue = $persistedEntity->{$primaryKeyField} ?? $identifierValue;
+        }
+      }
+    }
+
+    return new InsertResult(
+      identifiers: (object)[$primaryKeyField => $identifierValue],
+      raw: $raw,
+      generatedMaps: $generatedMaps,
+      errors: $errors,
+      affected: $this->query->rowCount() ?? 0,
+    );
+  }
+
+  private function resolveUpsertConflictColumns(object $entity, array $conflictPaths): array
+  {
+    $columnMap = [];
+
+    foreach ($this->entityInspector->getColumns($entity) as $field => $column) {
+      $columnName = $this->stripTableName($column);
+
+      if (is_string($field)) {
+        $columnMap[$field] = $columnName;
+      }
+
+      $columnMap[$columnName] = $columnName;
+    }
+
+    $resolved = array_map(function(string $conflictPath) use ($columnMap): string {
+      $conflictPath = $this->stripTableName($conflictPath);
+
+      return $columnMap[$conflictPath] ?? $conflictPath;
+    }, $conflictPaths);
+
+    return array_values(array_unique($resolved));
+  }
+
+  private function filterNullableUpsertColumns(array $columns, array $values, array $conflictPaths, array $updateColumns): array
+  {
+    $filteredColumns = [];
+    $filteredValues = [];
+
+    foreach ($columns as $index => $column) {
+      $value = $values[$index] ?? null;
+
+      if ($value === null && !in_array($column, $conflictPaths, true) && !in_array($column, $updateColumns, true)) {
+        continue;
+      }
+
+      $filteredColumns[] = $column;
+      $filteredValues[] = $value;
+    }
+
+    return [$filteredColumns, $filteredValues];
+  }
+
+  private function extractReturningIdentifier(array $rows, string $primaryKeyField, string $primaryColumn): mixed
+  {
+    $row = $rows[0] ?? null;
+
+    if (!is_array($row)) {
+      return null;
+    }
+
+    foreach ([$primaryKeyField, $primaryColumn, 'id'] as $key) {
+      if (array_key_exists($key, $row)) {
+        return $row[$key];
+      }
+    }
+
+    return null;
+  }
+
+  private function buildReturningProjection(object $entity): string
+  {
+    $projection = [];
+
+    foreach ($this->entityInspector->getColumns(entity: $entity) as $field => $column) {
+      $columnName = $this->stripTableName($column);
+      $alias = is_string($field) ? $field : $columnName;
+
+      $projection[] = $this->query->quoteIdentifier($columnName) . ' AS ' . $this->query->quoteIdentifier($alias);
+    }
+
+    return implode(', ', $projection);
+  }
+
+  private function hydrateGeneratedMaps(string $entityClass, array $rows): ?object
+  {
+    $row = $rows[0] ?? null;
+
+    if (!is_array($row)) {
+      return null;
+    }
+
+    $row = $this->normalizeReturnedRowForEntity($entityClass, $row);
+
+    return $this->create($entityClass, (object)$row);
+  }
+
+  private function normalizeReturnedRowForEntity(string $entityClass, array $row): array
+  {
+    $reflection = new ReflectionClass($entityClass);
+
+    foreach ($row as $property => $value) {
+      if (!is_string($property) || !property_exists($entityClass, $property)) {
+        continue;
+      }
+
+      if ($value === null) {
+        continue;
+      }
+
+      $propertyReflection = $reflection->getProperty($property);
+      $propertyType = $propertyReflection->getType();
+
+      if ($propertyType instanceof ReflectionUnionType || $propertyType === null) {
+        continue;
+      }
+
+      $targetType = $propertyType->getName();
+
+      if (enum_exists($targetType) && is_string($value) && method_exists($targetType, 'from')) {
+        $row[$property] = $targetType::from($value);
+      }
+    }
+
+    return $row;
+  }
+
+  private function sanitizeGeneratedMaps(?object $entity): ?object
+  {
+    if (!$entity) {
+      return null;
+    }
+
+    foreach ($this->getSecure() as $prop) {
+      if (property_exists($entity, $prop)) {
+        unset($entity->{$prop});
+      }
+    }
+
+    return $entity;
   }
 
   private function stripTableName(string $column): string
@@ -2140,23 +2409,35 @@ class EntityManager implements IEntityStoreOwner
   public function remove(object|array $entityOrEntities, ?RemoveOptions $removeOptions = null): DeleteResult
   {
     if (is_object($entityOrEntities)) {
-      $id = $entityOrEntities->id ?? 0;
+      $primaryKey = $this->getPrimaryKeyMetadata($entityOrEntities);
+      $primaryKeyField = $primaryKey['field'];
+      $primaryColumn = $primaryKey['column'];
+      $identifierValue = $entityOrEntities->{$primaryKeyField} ?? 0;
       $statement = $this->query
         ->deleteFrom(tableName: $this->entityInspector->getTableName(entity: $entityOrEntities));
-      $condition = $this->buildConditionClause(['id' => $id], $this->query, $entityOrEntities);
+      $condition = $this->buildConditionClause([$primaryKeyField => $identifierValue], $this->query, $entityOrEntities);
       $statement = $statement->where($condition);
+
+      if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+        $this->query->appendQueryString('RETURNING ' . $this->query->quoteIdentifier($primaryColumn));
+      }
 
       if ($this->isDebug) {
         $statement->debug();
       }
 
       $result = $statement->execute();
+      $raw = $result->getRaw();
 
       if ($result->isError()) {
         throw new GeneralSQLQueryException($this->query);
       }
 
-      return new DeleteResult(raw: $this->query->queryString(), affected: $result->getTotalAffectedRows());
+      $affected = $this->query->getDialect() === SQLDialect::POSTGRESQL
+        ? count($result->getData())
+        : $result->getTotalAffectedRows();
+
+      return new DeleteResult(raw: $raw, affected: $affected);
     }
 
     $affected = 0;

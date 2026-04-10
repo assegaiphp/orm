@@ -33,6 +33,15 @@ final class DatabaseManagerSqlTest extends TestCase
         self::assertSame('DROP DATABASE IF EXISTS `assegai_blog`', $sql);
     }
 
+    public function testBuildsPostgreSqlDatabaseStatementsSafely(): void
+    {
+        $createSql = DatabaseManager::buildCreateDatabaseStatement(DataSourceType::POSTGRESQL, 'assegai_blog');
+        $dropSql = DatabaseManager::buildDropDatabaseStatement(DataSourceType::POSTGRESQL, 'assegai_blog');
+
+        self::assertSame('CREATE DATABASE "assegai_blog"', $createSql);
+        self::assertSame('DROP DATABASE IF EXISTS "assegai_blog"', $dropSql);
+    }
+
     public function testRejectsUnsafeDatabaseNames(): void
     {
         $this->expectException(DataSourceException::class);

@@ -19,9 +19,6 @@
         "ext-pdo": "*",
         "ext-curl": "*",
         "ext-intl": "*",
-        "ext-pdo_mysql": "*",
-        "ext-pdo_pgsql": "*",
-        "ext-pdo_sqlite": "*",
         "assegaiphp/util": "^0.4.4",
         "psr/log": "^3.0",
         "symfony/console": "^7.1",
@@ -29,7 +26,10 @@
     },
     "suggest": {
         "assegaiphp/core": "Optional: enables framework-aware config and repository integration inside Assegai applications.",
-        "assegaiphp/console": "Optional: enables Assegai CLI installers and ORM command discovery."
+        "assegaiphp/console": "Optional: enables Assegai CLI installers and ORM command discovery.",
+        "ext-pdo_mysql": "Enable this if your app uses MySQL or MariaDB connections.",
+        "ext-pdo_pgsql": "Enable this if your app uses PostgreSQL connections.",
+        "ext-pdo_sqlite": "Enable this if your app uses SQLite connections."
     },
     "require-dev": {
         "codeception/codeception": "^5.0",
@@ -42,6 +42,7 @@
         "test": "vendor/bin/phpunit -c phpunit.xml",
         "test:unit": "vendor/bin/phpunit -c phpunit.xml",
         "test:mysql": "vendor/bin/phpunit -c phpunit.mysql.xml",
+        "test:pgsql": "vendor/bin/phpunit -c phpunit.pgsql.xml",
         "test:sqlite": "php -d register_argc_argv=On vendor/bin/codecept run SQLite",
         "test:legacy-unit": "php -d register_argc_argv=On vendor/bin/codecept run Unit"
     },

@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Management;
 
 use Assegai\Orm\Support\OrmRuntime;
+use Assegai\Orm\DataSource\DBFactory;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\SQLCharacterSet;
 use Assegai\Orm\Enumerations\DataSourceType;
@@ -84,20 +85,25 @@ final class DatabaseManager
       $databaseName,
       $dataSource->getOptions()->charSet
     );
+    $client = $this->getManagementClient($dataSource, $databaseName);
 
     try
     {
-      $result = $dataSource->getClient()->exec($statement);
+      $result = $client->exec($statement);
 
       if ($result === false)
       {
         throw new DataSourceException("Failed to create database: $databaseName" .
-          PHP_EOL . print_r($dataSource->getClient()->errorInfo(), true));
+          PHP_EOL . print_r($client->errorInfo(), true));
       }
     }
     catch (PDOException $exception)
     {
       throw new DataSourceException($exception->getMessage());
+    }
+    finally
+    {
+      $this->closeTemporaryManagementClient($dataSource, $client);
     }
   }
 
@@ -134,21 +140,32 @@ final class DatabaseManager
       return;
     }
 
+    $client = $this->getManagementClient($dataSource, $databaseName);
+
     try
     {
-      $result = $dataSource->getClient()->exec(
+      if ($dataSource->type === DataSourceType::POSTGRESQL)
+      {
+        $this->terminatePostgreSqlConnections($client, $databaseName);
+      }
+
+      $result = $client->exec(
         self::buildDropDatabaseStatement($dataSource->type, $databaseName)
       );
 
       if ($result === false)
       {
         throw new DataSourceException("Failed to drop database: $databaseName" .
-          PHP_EOL . print_r($dataSource->getClient()->errorInfo(), true));
+          PHP_EOL . print_r($client->errorInfo(), true));
       }
     }
     catch (PDOException $exception)
     {
       throw new DataSourceException($exception->getMessage());
+    }
+    finally
+    {
+      $this->closeTemporaryManagementClient($dataSource, $client);
     }
   }
 
@@ -175,6 +192,8 @@ final class DatabaseManager
    */
   public function exists(DataSource $dataSource, string $databaseName, bool $logErrors = true): bool
   {
+    $client = null;
+
     try
     {
       if ($dataSource->type === DataSourceType::SQLITE)
@@ -189,12 +208,14 @@ final class DatabaseManager
         return file_exists($path);
       }
 
+      $client = $this->getManagementClient($dataSource, $databaseName);
+
       $query = match ($dataSource->type) {
         DataSourceType::POSTGRESQL => 'SELECT datname FROM pg_database WHERE datname = ?',
         default => 'SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?',
       };
 
-      $statement = $dataSource->getClient()->prepare($query);
+      $statement = $client->prepare($query);
       $statement->execute([$databaseName]);
       $result = $statement->fetch(PDO::FETCH_ASSOC);
 
@@ -208,6 +229,13 @@ final class DatabaseManager
       }
 
       return false;
+    }
+    finally
+    {
+      if ($client instanceof PDO)
+      {
+        $this->closeTemporaryManagementClient($dataSource, $client);
+      }
     }
   }
 
@@ -245,9 +273,44 @@ final class DatabaseManager
 
     return match ($type) {
       DataSourceType::MSSQL,
-      DataSourceType::POSTGRESQL => "DROP DATABASE $quotedDatabaseName",
+      DataSourceType::POSTGRESQL => "DROP DATABASE IF EXISTS $quotedDatabaseName",
       default => "DROP DATABASE IF EXISTS $quotedDatabaseName",
     };
+  }
+
+  private function getManagementClient(DataSource $dataSource, string $databaseName): PDO
+  {
+    if ($dataSource->type !== DataSourceType::POSTGRESQL)
+    {
+      return $dataSource->getClient();
+    }
+
+    $options = $dataSource->getOptions();
+    $maintenanceDatabase = $databaseName === 'postgres' ? 'template1' : 'postgres';
+    $client = new PDO(
+      DBFactory::buildPostgreSqlDsn($options->host, $options->port, $maintenanceDatabase),
+      $options->username ?? 'postgres',
+      $options->password ?? '',
+    );
+    DBFactory::applyConnectionAttributes($client, SqlDialectHelper::fromDataSourceType(DataSourceType::POSTGRESQL));
+
+    return $client;
+  }
+
+  private function closeTemporaryManagementClient(DataSource $dataSource, ?PDO &$client): void
+  {
+    if ($dataSource->type === DataSourceType::POSTGRESQL)
+    {
+      $client = null;
+    }
+  }
+
+  private function terminatePostgreSqlConnections(PDO $client, string $databaseName): void
+  {
+    $statement = $client->prepare(
+      'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :database AND pid <> pg_backend_pid()'
+    );
+    $statement->execute(['database' => $databaseName]);
   }
 
   private static function quoteDatabaseIdentifier(DataSourceType $type, string $databaseName): string

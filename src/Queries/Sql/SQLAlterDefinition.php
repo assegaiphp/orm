@@ -24,7 +24,9 @@ final readonly class SQLAlterDefinition
    */
   public function database(string $databaseName): SQLAlterDatabaseOption
   {
-    $this->query->setQueryString(queryString: "ALTER DATABASE `$databaseName`");
+    $this->query->setQueryString(
+      queryString: 'ALTER DATABASE ' . $this->query->quoteIdentifier($databaseName)
+    );
     return new SQLAlterDatabaseOption( query: $this->query );
   }
 
@@ -36,7 +38,9 @@ final readonly class SQLAlterDefinition
    */
   public function table(string $tableName): SQLAlterTableOption
   {
-    $this->query->setQueryString(queryString: "ALTER TABLE `$tableName`");
+    $this->query->setQueryString(
+      queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
+    );
     return new SQLAlterTableOption( query: $this->query );
   }
 }

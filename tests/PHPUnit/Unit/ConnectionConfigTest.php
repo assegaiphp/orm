@@ -44,6 +44,16 @@ final class ConnectionConfigTest extends TestCase
         self::assertSame(SQLCharacterSet::UTF8MB4, $options->charSet);
     }
 
+    public function testReportsRequiredDriverMetadataPerDialect(): void
+    {
+        self::assertSame('pdo_mysql', DBFactory::getRequiredPdoExtension(SQLDialect::MYSQL));
+        self::assertSame('mysql', DBFactory::getRequiredPdoDriverName(SQLDialect::MYSQL));
+        self::assertSame('pdo_pgsql', DBFactory::getRequiredPdoExtension(SQLDialect::POSTGRESQL));
+        self::assertSame('pgsql', DBFactory::getRequiredPdoDriverName(SQLDialect::POSTGRESQL));
+        self::assertSame('pdo_sqlite', DBFactory::getRequiredPdoExtension(SQLDialect::SQLITE));
+        self::assertSame('sqlite', DBFactory::getRequiredPdoDriverName(SQLDialect::SQLITE));
+    }
+
     public function testCachesSqliteConnectionsAcrossFactoryCalls(): void
     {
         $path = sys_get_temp_dir() . '/assegai-sqlite-factory-' . uniqid('', true) . '.sqlite';

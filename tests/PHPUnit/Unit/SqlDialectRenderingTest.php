@@ -55,6 +55,17 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('UPDATE "users" SET "name"=?', $query->queryString());
     }
 
+    public function testPostgreSqlUpdateBuilderIgnoresMysqlOnlyModifiers(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL);
+
+        $query
+            ->update('users', lowPriority: true, ignore: true)
+            ->set(['name' => 'Ada']);
+
+        self::assertSame('UPDATE "users" SET "name"=?', $query->queryString());
+    }
+
     public function testPostgreSqlMultipleInsertUsesPortableValuesSyntax(): void
     {
         $query = $this->createQuery(SQLDialect::POSTGRESQL);
@@ -86,6 +97,41 @@ final class SqlDialectRenderingTest extends TestCase
             'SELECT "users"."name" AS "user_name" FROM "users" AS "u"',
             $query->queryString()
         );
+    }
+
+    public function testPostgreSqlRenameTableUsesAlterTableSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL);
+
+        $query->rename()->table('users', 'customers');
+
+        self::assertSame('ALTER TABLE "users" RENAME TO "customers"', $query->queryString());
+    }
+
+    public function testPostgreSqlAlterBuilderQuotesIdentifiers(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL);
+
+        $query->alter()->table('users');
+
+        self::assertSame('ALTER TABLE "users"', $query->queryString());
+    }
+
+    public function testInsertReturningRowsAreAvailableToPostgreSqlQueries(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL);
+        $query->getConnection()->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
+
+        $result = $query
+            ->insertInto('users')
+            ->singleRow(['name'])
+            ->values(['Ada']);
+        $query->appendQueryString('RETURNING "id", "name"');
+        $executed = $query->execute();
+
+        self::assertTrue($executed->isOK());
+        self::assertSame([['id' => 1, 'name' => 'Ada']], $executed->getData());
+        self::assertSame(1, $query->lastInsertId());
     }
 
     private function createQuery(SQLDialect $dialect): SQLQuery

@@ -179,9 +179,9 @@ class Schema implements ISchema
       return null;
     }
 
-    if ($options->dialect === SQLDialect::SQLITE)
+    if (in_array($options->dialect, [SQLDialect::SQLITE, SQLDialect::POSTGRESQL], true))
     {
-      return self::commitSqliteSchemaChanges($db, $entityReflection, $entityInstance, $options, $tableFields);
+      return self::commitRebuiltSchemaChanges($db, $entityReflection, $entityInstance, $options, $tableFields);
     }
 
     $changes = self::compileChanges($entityReflection, $tableFields, $options->dialect);
@@ -604,13 +604,13 @@ class Schema implements ISchema
     return false;
   }
 
-  private static function commitSqliteSchemaChanges(PDO|IDataObject $connection, ReflectionClass $entityReflection, object $entityInstance, SchemaOptions $options, array $tableFields): bool
+  private static function commitRebuiltSchemaChanges(PDO|IDataObject $connection, ReflectionClass $entityReflection, object $entityInstance, SchemaOptions $options, array $tableFields): bool
   {
     $entityInspector = EntityInspector::getInstance();
     $tableName = $entityInspector->getTableName($entityInstance);
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::SQLITE);
+    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, $options->dialect);
     $temporaryTableName = self::generateTemporaryTableName($tableName);
-    $quotedTemporaryTableName = SqlDialectHelper::quoteIdentifier($temporaryTableName, SQLDialect::SQLITE);
+    $quotedTemporaryTableName = SqlDialectHelper::quoteIdentifier($temporaryTableName, $options->dialect);
     $createTableOptions = new SchemaOptions(
       dbName: $options->dbName,
       dialect: $options->dialect,
@@ -624,37 +624,49 @@ class Schema implements ISchema
       engine: $options->engine,
     );
     $createTableSql = self::getDDLStatementFromEntity($entityInstance, $createTableOptions);
-    $temporaryCreateTableSql = self::replaceSqliteCreateTableName($createTableSql, $quotedTemporaryTableName);
+    $temporaryCreateTableSql = self::replaceCreateTableName($createTableSql, $quotedTemporaryTableName);
     $targetColumns = self::getEntityColumnNames($entityReflection);
     $currentColumns = array_map(fn(SQLTableDescription $field) => $field->Field, $tableFields);
     $sharedColumns = array_values(array_intersect($currentColumns, $targetColumns));
+    $requiresForeignKeyToggle = $options->dialect === SQLDialect::SQLITE;
 
     try
     {
-      self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = OFF');
+      if ($requiresForeignKeyToggle)
+      {
+        self::executeDialectStatement($connection, 'PRAGMA foreign_keys = OFF', $options->dialect);
+      }
+
       $connection->beginTransaction();
-      self::executeSqliteStatement($connection, $temporaryCreateTableSql);
+      self::executeDialectStatement($connection, $temporaryCreateTableSql, $options->dialect);
 
       if (!empty($sharedColumns))
       {
         $quotedColumns = implode(', ', array_map(
-          fn(string $columnName) => SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::SQLITE),
+          fn(string $columnName) => SqlDialectHelper::quoteIdentifier($columnName, $options->dialect),
           $sharedColumns,
         ));
 
-        self::executeSqliteStatement(
+        self::executeDialectStatement(
           $connection,
-          "INSERT INTO $quotedTemporaryTableName ($quotedColumns) SELECT $quotedColumns FROM $quotedTableName"
+          "INSERT INTO $quotedTemporaryTableName ($quotedColumns) SELECT $quotedColumns FROM $quotedTableName",
+          $options->dialect
         );
       }
 
-      self::executeSqliteStatement($connection, "DROP TABLE $quotedTableName");
-      self::executeSqliteStatement(
+      self::executeDialectStatement($connection, "DROP TABLE $quotedTableName", $options->dialect);
+      self::executeDialectStatement(
         $connection,
-        'ALTER TABLE ' . $quotedTemporaryTableName . ' RENAME TO ' . SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::SQLITE)
+        'ALTER TABLE ' . $quotedTemporaryTableName . ' RENAME TO ' . SqlDialectHelper::quoteIdentifier($tableName, $options->dialect),
+        $options->dialect
       );
+      self::synchronizeRebuiltTableState($connection, $tableName, $options->dialect);
       $connection->commit();
-      self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = ON');
+
+      if ($requiresForeignKeyToggle)
+      {
+        self::executeDialectStatement($connection, 'PRAGMA foreign_keys = ON', $options->dialect);
+      }
     }
     catch (PDOException $e)
     {
@@ -665,7 +677,10 @@ class Schema implements ISchema
 
       try
       {
-        self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = ON');
+        if ($requiresForeignKeyToggle)
+        {
+          self::executeDialectStatement($connection, 'PRAGMA foreign_keys = ON', $options->dialect);
+        }
       }
       catch (ORMException)
       {
@@ -683,7 +698,10 @@ class Schema implements ISchema
 
       try
       {
-        self::executeSqliteStatement($connection, 'PRAGMA foreign_keys = ON');
+        if ($requiresForeignKeyToggle)
+        {
+          self::executeDialectStatement($connection, 'PRAGMA foreign_keys = ON', $options->dialect);
+        }
       }
       catch (ORMException)
       {
@@ -715,7 +733,7 @@ class Schema implements ISchema
     return $columnNames;
   }
 
-  private static function replaceSqliteCreateTableName(string $query, string $quotedTemporaryTableName): string
+  private static function replaceCreateTableName(string $query, string $quotedTemporaryTableName): string
   {
     $updatedQuery = preg_replace(
       '/^(CREATE(?:\s+TEMPORARY)?\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+)([`\"]?[A-Za-z0-9_]+[`\"]?)/i',
@@ -726,7 +744,7 @@ class Schema implements ISchema
 
     if (!is_string($updatedQuery))
     {
-      throw new ORMException('Failed to rewrite the SQLite CREATE TABLE statement for schema alteration.');
+      throw new ORMException('Failed to rewrite the CREATE TABLE statement for schema alteration.');
     }
 
     return $updatedQuery;
@@ -737,12 +755,77 @@ class Schema implements ISchema
     return '__assegai_tmp_' . $tableName . '_' . str_replace('.', '', uniqid('', true));
   }
 
-  private static function executeSqliteStatement(PDO|IDataObject $connection, string $query): void
+  private static function executeDialectStatement(PDO|IDataObject $connection, string $query, SQLDialect $dialect): void
   {
     if (false === $connection->exec($query))
     {
       $errorMessage = json_encode($connection->errorInfo());
-      throw new ORMException($errorMessage ?: "Failed to execute SQLite statement: $query");
+      $label = strtolower($dialect->value);
+      throw new ORMException($errorMessage ?: "Failed to execute {$label} statement: $query");
+    }
+  }
+
+  private static function synchronizeRebuiltTableState(PDO|IDataObject $connection, string $tableName, SQLDialect $dialect): void
+  {
+    if ($dialect !== SQLDialect::POSTGRESQL) {
+      return;
+    }
+
+    self::synchronizePostgreSqlSequences($connection, $tableName);
+  }
+
+  private static function synchronizePostgreSqlSequences(PDO|IDataObject $connection, string $tableName): void
+  {
+    $tableLiteral = $connection->quote($tableName);
+    $sql = <<<SQL
+SELECT
+  a.attname AS column_name,
+  pg_get_serial_sequence(format('%I.%I', current_schema(), c.relname), a.attname) AS sequence_name
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+WHERE c.relkind = 'r'
+  AND n.nspname = current_schema()
+  AND c.relname = $tableLiteral
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+  AND (
+    a.attidentity IN ('a', 'd')
+    OR pg_get_expr(ad.adbin, ad.adrelid) LIKE 'nextval(%'
+  )
+ORDER BY a.attnum
+SQL;
+
+    $statement = $connection->query($sql);
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to inspect PostgreSQL sequences for '$tableName'.");
+    }
+
+    /** @var array<int, array{column_name?: mixed, sequence_name?: mixed}> $rows */
+    $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as $row) {
+      $columnName = is_string($row['column_name'] ?? null) ? $row['column_name'] : null;
+      $sequenceName = is_string($row['sequence_name'] ?? null) ? $row['sequence_name'] : null;
+
+      if ($columnName === null || $sequenceName === null || $sequenceName === '') {
+        continue;
+      }
+
+      $quotedSequenceName = $connection->quote($sequenceName);
+      $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+      $quotedColumnName = SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::POSTGRESQL);
+      $syncSql = <<<SQL
+SELECT setval(
+  $quotedSequenceName,
+  COALESCE((SELECT MAX($quotedColumnName) FROM $quotedTableName), 1),
+  (SELECT MAX($quotedColumnName) IS NOT NULL FROM $quotedTableName)
+)
+SQL;
+
+      self::executeDialectStatement($connection, $syncSql, SQLDialect::POSTGRESQL);
     }
   }
   /**
@@ -847,6 +930,7 @@ class Schema implements ISchema
   {
     return match ($dialect) {
       SQLDialect::SQLITE => self::getSQLiteTableDefinitionSql($connection, $tableName),
+      SQLDialect::POSTGRESQL => self::getPostgreSqlTableDefinitionSql($connection, $tableName),
       default => self::getMySqlTableDefinitionSql($connection, $tableName),
     };
   }
@@ -877,6 +961,23 @@ class Schema implements ISchema
     return is_string($result) ? $result : null;
   }
 
+  private static function getPostgreSqlTableDefinitionSql(PDO $connection, string $tableName): ?string
+  {
+    $tableFields = self::getPostgreSqlTableDescriptions($connection, $tableName);
+
+    if (empty($tableFields)) {
+      return null;
+    }
+
+    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+    $definitions = array_map(
+      fn(SQLTableDescription $field): string => '  ' . self::buildPostgreSqlColumnDefinition($field),
+      $tableFields,
+    );
+
+    return sprintf("CREATE TABLE %s (\n%s\n)", $quotedTableName, implode(",\n", $definitions));
+  }
+
   private static function getMySqlTableDescriptions(PDO $connection, string $tableName): array
   {
     $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::MYSQL);
@@ -894,15 +995,41 @@ class Schema implements ISchema
     $quotedTableName = $connection->quote($tableName);
     $sql = <<<SQL
 SELECT
-  column_name AS "Field",
-  data_type AS "Type",
-  CASE WHEN is_nullable = 'YES' THEN 'YES' ELSE 'NO' END AS "Null",
-  CASE WHEN column_default LIKE 'nextval(%' THEN 'PRI' ELSE '' END AS "Key",
-  column_default AS "Default",
-  CASE WHEN column_default LIKE 'nextval(%' THEN 'auto_increment' ELSE '' END AS "Extra"
-FROM information_schema.columns
-WHERE table_name = $quotedTableName
-ORDER BY ordinal_position
+  a.attname AS "Field",
+  pg_catalog.format_type(a.atttypid, a.atttypmod) AS "Type",
+  CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS "Null",
+  CASE
+    WHEN EXISTS (
+      SELECT 1
+      FROM pg_constraint con
+      WHERE con.conrelid = c.oid
+        AND con.contype = 'p'
+        AND a.attnum = ANY(con.conkey)
+    ) THEN 'PRI'
+    WHEN EXISTS (
+      SELECT 1
+      FROM pg_constraint con
+      WHERE con.conrelid = c.oid
+        AND con.contype = 'u'
+        AND a.attnum = ANY(con.conkey)
+    ) THEN 'UNI'
+    ELSE ''
+  END AS "Key",
+  pg_get_expr(ad.adbin, ad.adrelid) AS "Default",
+  CASE
+    WHEN a.attidentity IN ('a', 'd') OR pg_get_expr(ad.adbin, ad.adrelid) LIKE 'nextval(%' THEN 'auto_increment'
+    ELSE ''
+  END AS "Extra"
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+WHERE c.relkind = 'r'
+  AND n.nspname = current_schema()
+  AND c.relname = $quotedTableName
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY a.attnum
 SQL;
 
     $statement = $connection->query($sql);
@@ -912,6 +1039,30 @@ SQL;
     }
 
     return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
+  }
+
+  private static function buildPostgreSqlColumnDefinition(SQLTableDescription $field): string
+  {
+    $columnName = SqlDialectHelper::quoteIdentifier((string) $field->Field, SQLDialect::POSTGRESQL);
+    $definition = $columnName . ' ' . (string) $field->Type;
+
+    if (($field->Null ?? 'YES') === 'NO') {
+      $definition .= ' NOT NULL';
+    }
+
+    if (is_string($field->Default) && $field->Default !== '') {
+      $definition .= ' DEFAULT ' . $field->Default;
+    } elseif (($field->Extra ?? '') === 'auto_increment') {
+      $definition .= ' GENERATED BY DEFAULT AS IDENTITY';
+    }
+
+    if (($field->Key ?? '') === 'PRI') {
+      $definition .= ' PRIMARY KEY';
+    } elseif (($field->Key ?? '') === 'UNI') {
+      $definition .= ' UNIQUE';
+    }
+
+    return $definition;
   }
 
   private static function getSQLiteTableDescriptions(PDO $connection, string $tableName): array
