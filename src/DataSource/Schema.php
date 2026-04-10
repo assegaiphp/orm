@@ -544,7 +544,7 @@ class Schema implements ISchema
       }
 
       $tableField = $tableFieldMap[$columnName];
-      if (self::shouldModifyField($tableField, $columnAttribute))
+      if (self::shouldModifyField($tableField, $columnAttribute, $dialect))
       {
         $changes->change(new DDLChangeStatement($tableField->Field, $columnAttribute->getSqlDefinition($dialect)));
       }
@@ -585,11 +585,22 @@ class Schema implements ISchema
    * @param Column $columnAttribute
    * @return bool Returns true if the columnAttribute contains difference from the $tableField, false otherwise
    */
-  private static function shouldModifyField(SQLTableDescription $tableField, Column $columnAttribute): bool
+  private static function shouldModifyField(
+    SQLTableDescription $tableField,
+    Column $columnAttribute,
+    SQLDialect $dialect = SQLDialect::MYSQL,
+  ): bool
   {
     if ($tableField->Default !== $columnAttribute->default)
     {
-      return true;
+      if (
+        !($dialect === SQLDialect::POSTGRESQL
+        && ($tableField->Extra ?? '') === 'auto_increment'
+        && $columnAttribute->autoIncrement
+        && ($columnAttribute->default === null || $columnAttribute->default === ''))
+      ) {
+        return true;
+      }
     }
 
     if (
@@ -608,7 +619,7 @@ class Schema implements ISchema
       return true;
     }
 
-    if ($tableField->Type !== $columnAttribute->getFieldType())
+    if (!self::fieldTypesMatch($tableField, $columnAttribute, $dialect))
     {
       return true;
     }
@@ -619,6 +630,32 @@ class Schema implements ISchema
     }
 
     return false;
+  }
+
+  private static function fieldTypesMatch(SQLTableDescription $tableField, Column $columnAttribute, SQLDialect $dialect): bool
+  {
+    if ($dialect !== SQLDialect::POSTGRESQL)
+    {
+      return $tableField->Type === $columnAttribute->getFieldType();
+    }
+
+    $currentType = self::normalizePostgreSqlType((string) $tableField->Type);
+    $targetType = self::normalizePostgreSqlType($columnAttribute->getSqlDefinition(SQLDialect::POSTGRESQL)->getTypeExpression());
+
+    return $currentType === $targetType;
+  }
+
+  private static function normalizePostgreSqlType(string $type): string
+  {
+    $normalized = strtolower(trim($type));
+    $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+    $normalized = str_replace('character varying', 'varchar', $normalized);
+    $normalized = str_replace('timestamp without time zone', 'timestamp', $normalized);
+    $normalized = str_replace('timestamp with time zone', 'timestamptz', $normalized);
+    $normalized = str_replace('double precision', 'double precision', $normalized);
+    $normalized = preg_replace('/\(\s*\)/', '', $normalized) ?? $normalized;
+
+    return $normalized;
   }
 
   private static function commitRebuiltSchemaChanges(PDO|IDataObject $connection, ReflectionClass $entityReflection, object $entityInstance, SchemaOptions $options, array $tableFields): bool
@@ -829,18 +866,23 @@ class Schema implements ISchema
     $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
     $quotedColumnName = SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::POSTGRESQL);
 
-    self::executeDialectStatement(
-      $connection,
-      sprintf(
-        'ALTER TABLE %s ALTER COLUMN %s TYPE %s',
-        $quotedTableName,
-        $quotedColumnName,
-        $columnDefinition->getTypeExpression(),
-      ),
-      SQLDialect::POSTGRESQL,
-    );
+    if (!self::postgreSqlFieldMatchesColumnDefinition($currentField, $columnDefinition)) {
+      self::executeDialectStatement(
+        $connection,
+        sprintf(
+          'ALTER TABLE %s ALTER COLUMN %s TYPE %s',
+          $quotedTableName,
+          $quotedColumnName,
+          $columnDefinition->getTypeExpression(),
+        ),
+        SQLDialect::POSTGRESQL,
+      );
+    }
 
     $defaultExpression = $columnDefinition->getDefaultExpression();
+    if ($columnDefinition->isAutoIncrement()) {
+      $defaultExpression = self::resolvePostgreSqlAutoIncrementDefault($connection, $tableName, $columnName, $currentField);
+    }
 
     if ($defaultExpression === null)
     {
@@ -886,6 +928,50 @@ class Schema implements ISchema
     }
 
     self::synchronizePostgreSqlColumnConstraints($connection, $tableName, $columnName, $currentField, $columnDefinition);
+  }
+
+  private static function postgreSqlFieldMatchesColumnDefinition(
+    ?SQLTableDescription $currentField,
+    \Assegai\Orm\Queries\Sql\SQLColumnDefinition $columnDefinition,
+  ): bool {
+    if (!$currentField instanceof SQLTableDescription) {
+      return false;
+    }
+
+    return self::normalizePostgreSqlType((string) $currentField->Type)
+      === self::normalizePostgreSqlType($columnDefinition->getTypeExpression());
+  }
+
+  private static function resolvePostgreSqlAutoIncrementDefault(
+    PDO|IDataObject $connection,
+    string $tableName,
+    string $columnName,
+    ?SQLTableDescription $currentField,
+  ): ?string {
+    if (is_string($currentField?->Default) && $currentField->Default !== '')
+    {
+      return $currentField->Default;
+    }
+
+    $tableLiteral = $connection->quote($tableName);
+    $columnLiteral = $connection->quote($columnName);
+    $statement = $connection->query(
+      "SELECT pg_get_serial_sequence($tableLiteral, $columnLiteral)"
+    );
+
+    if (!$statement || !$statement->execute())
+    {
+      throw new ORMException("Failed to resolve PostgreSQL serial sequence for '$tableName.$columnName'.");
+    }
+
+    $sequenceName = $statement->fetchColumn();
+
+    if (!is_string($sequenceName) || $sequenceName === '')
+    {
+      return null;
+    }
+
+    return sprintf('nextval(%s::regclass)', $connection->quote($sequenceName));
   }
 
   private static function synchronizePostgreSqlColumnConstraints(
