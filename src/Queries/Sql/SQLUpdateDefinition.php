@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
+
 /**
  * Class SQLUpdateDefinition
  *
@@ -23,18 +25,18 @@ final readonly class SQLUpdateDefinition
     private bool     $ignore =  false
   )
   {
-    $queryString = "UPDATE ";
+    $queryString = 'UPDATE ';
 
-    if ($this->lowPriority) {
-      $queryString .= "LOW_PRIORITY ";
+    if ($this->lowPriority && in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
+      $queryString .= 'LOW_PRIORITY ';
     }
 
-    if ($this->ignore) {
-      $queryString .= "IGNORE ";
+    if ($this->ignore && in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
+      $queryString .= 'IGNORE ';
     }
 
     $queryString = trim($queryString);
-    $this->query->setQueryString(queryString: "$queryString `$this->tableName`");
+    $this->query->setQueryString(queryString: $queryString . ' ' . $this->query->quoteIdentifier($this->tableName));
   }
 
   /**

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ecf74bc9776140c5f63aaceadd8aad99",
+    "content-hash": "fba3632427b9d32cda6c15d58d7a09d8",
     "packages": [
         {
             "name": "assegaiphp/util",
@@ -4863,10 +4863,7 @@
         "php": ">=8.3",
         "ext-pdo": "*",
         "ext-curl": "*",
-        "ext-intl": "*",
-        "ext-pdo_mysql": "*",
-        "ext-pdo_pgsql": "*",
-        "ext-pdo_sqlite": "*"
+        "ext-intl": "*"
     },
     "platform-dev": {},
     "platform-overrides": {

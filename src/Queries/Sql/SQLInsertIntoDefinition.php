@@ -13,7 +13,7 @@ final readonly class SQLInsertIntoDefinition
     private string   $tableName
   )
   {
-    $queryString = "INSERT INTO `$this->tableName` ";
+    $queryString = 'INSERT INTO ' . $this->query->quoteIdentifier($this->tableName) . ' ';
 
     $this->query->setQueryString($queryString);
   }

@@ -22,12 +22,12 @@ final class SQLTableReference
     private readonly SQLQuery $query,
     private readonly array|string $tableReferences
   ) {
-    $queryString = "FROM ";
+    $queryString = 'FROM ';
     $separate = ', ';
 
     if (is_string($tableReferences))
     {
-      $queryString .= "`$tableReferences`";
+      $queryString .= $this->query->quoteIdentifier($tableReferences);
     }
     else
     {
@@ -35,12 +35,11 @@ final class SQLTableReference
       {
         if (is_numeric($alias))
         {
-          # We don't have an alias
-          $queryString .= "`{$reference}`{$separate}";
+          $queryString .= $this->query->quoteIdentifier((string)$reference) . $separate;
         }
         else
         {
-          $queryString .= "`{$reference}` AS {$alias}{$separate}";
+          $queryString .= $this->query->quoteIdentifier((string)$reference) . ' AS ' . $this->query->quoteIdentifier((string)$alias) . $separate;
         }
       }
       $queryString = trim($queryString, $separate);

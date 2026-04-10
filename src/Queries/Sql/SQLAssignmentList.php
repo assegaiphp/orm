@@ -23,16 +23,18 @@ final class SQLAssignmentList
     $separator = ', ';
     foreach ($assignmentList as $key => $value)
     {
-      if (in_array($key, $this->query->passwordHashFields()))
+      $identifier = $this->query->quoteIdentifier((string)$key);
+
+      if (in_array($key, $this->query->passwordHashFields(), true))
       {
         $value = password_hash($value, $this->query->passwordHashAlgorithm());
       }
       if (is_string($value) && $value === 'CURRENT_TIMESTAMP') {
-        $queryString .= "`$key`={$value}{$separator}";
+        $queryString .= $identifier . "={$value}{$separator}";
         continue;
       }
 
-      $queryString .= "`$key`=" . $this->query->addParam($value) . $separator;
+      $queryString .= $identifier . '=' . $this->query->addParam($value) . $separator;
     }
     $queryString = trim($queryString, $separator);
     $this->query->appendQueryString( tail: $queryString );

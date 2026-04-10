@@ -17,6 +17,13 @@
 An object-relational mapper for modern PHP applications. You can use it on its own, or plug it into
 [AssegaiPHP](https://github.com/assegaiphp) when you want repository injection and framework conventions.
 
+## Contribution workflow
+
+For commit and pull request conventions in this repo, see:
+
+- [docs/commit-and-pr-guidelines.md](./docs/commit-and-pr-guidelines.md)
+
+
 ## Installation
 
 ```bash
@@ -37,6 +44,15 @@ For standalone PHP projects that are not using Assegai, install the package dire
 ```bash
 $ composer require assegaiphp/orm
 ```
+
+Then enable only the PDO driver you actually plan to use:
+
+- `pdo_mysql` for MySQL or MariaDB
+- `pdo_pgsql` for PostgreSQL
+- `pdo_sqlite` for SQLite
+
+AssegaiORM no longer forces all three database extensions at install time. If you choose a driver without enabling its
+matching PDO extension, the ORM will tell you exactly which extension is missing when you try to connect.
 
 ## Guide map
 

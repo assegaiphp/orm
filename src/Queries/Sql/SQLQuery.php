@@ -2,8 +2,11 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Support\OrmRuntime;
+use Assegai\Orm\Util\SqlIdentifier;
+use Assegai\Orm\Util\SqlDialectHelper;
 use DateTimeInterface;
 use PDO;
 use PDOException;
@@ -39,6 +42,10 @@ final class SQLQuery
      * @var int|null The number of columns affected by the query.
      */
     private ?int $columnCount = null;
+    /**
+     * @var SQLDialect The SQL dialect used for rendering queries.
+     */
+    private readonly SQLDialect $dialect;
 
     /**
      * Constructs a new SQLQuery instance.
@@ -49,6 +56,7 @@ final class SQLQuery
      * @param array $fetchClassParams The parameters to pass to the fetch class.
      * @param array $passwordHashFields The fields to hash.
      * @param string $passwordHashAlgorithm The algorithm to use for hashing.
+     * @param SQLDialect|null $dialect The SQL dialect to render queries for.
      */
     public function __construct(
         private readonly PDO    $db,
@@ -56,9 +64,11 @@ final class SQLQuery
         private readonly int    $fetchMode = PDO::FETCH_ASSOC,
         private readonly array  $fetchClassParams = [],
         private readonly array  $passwordHashFields = ['password'],
-        private string          $passwordHashAlgorithm = ''
+        private string          $passwordHashAlgorithm = '',
+        ?SQLDialect             $dialect = null
     )
     {
+        $this->dialect = $dialect ?? SqlDialectHelper::fromPdo($db);
         if (empty($this->passwordHashAlgorithm)) {
             $this->passwordHashAlgorithm = OrmRuntime::defaultPasswordHashAlgorithm();
 
@@ -79,6 +89,9 @@ final class SQLQuery
         $this->queryString = '';
         $this->type = '';
         $this->params = [];
+        $this->lastInsertId = null;
+        $this->rowCount = null;
+        $this->columnCount = null;
     }
 
     /**
@@ -129,6 +142,27 @@ final class SQLQuery
     public function queryString(): string
     {
         return $this->queryString;
+    }
+
+    /**
+     * Returns the SQL dialect used for query rendering.
+     *
+     * @return SQLDialect
+     */
+    public function getDialect(): SQLDialect
+    {
+        return $this->dialect;
+    }
+
+    /**
+     * Quotes an SQL identifier for the current query dialect.
+     *
+     * @param string $identifier
+     * @return string
+     */
+    public function quoteIdentifier(string $identifier): string
+    {
+        return SqlIdentifier::quote($identifier, $this->dialect);
     }
 
     /**
@@ -351,17 +385,17 @@ final class SQLQuery
 
                 $data = match ($this->type()) {
                     SQLQueryType::SELECT => $statement->fetchAll(mode: $this->fetchMode),
-                    default => []
+                    default => $this->queryReturnsRows()
+                        ? $statement->fetchAll(mode: PDO::FETCH_ASSOC)
+                        : []
                 };
 
                 if ($this->type() === SQLQueryType::INSERT) {
-                    $this->lastInsertId = $this->db->lastInsertId();
-                    if ($this->lastInsertId && isset($data['id'])) {
-                        $data['id'] = $this->lastInsertId;
-                    }
+                    $this->lastInsertId = $this->resolveLastInsertId($data);
                 }
 
                 $this->rowCount = $statement->rowCount();
+                $this->columnCount = $statement->columnCount();
 
                 return new SQLQueryResult(data: $data, errors: [], raw: $this->queryString, affected: $statement->rowCount());
             }
@@ -429,5 +463,61 @@ final class SQLQuery
     public function debug(): never
     {
         exit($this . PHP_EOL);
+    }
+
+    private function queryReturnsRows(): bool
+    {
+        return str_contains(strtoupper($this->queryString), 'RETURNING ');
+    }
+
+    private function resolveLastInsertId(array $data): ?int
+    {
+        $lastInsertId = $this->safeLastInsertId();
+
+        if ($lastInsertId !== null && $lastInsertId > 0) {
+            return $lastInsertId;
+        }
+
+        return $this->resolveLastInsertIdFromReturningData($data);
+    }
+
+    private function safeLastInsertId(): ?int
+    {
+        try {
+            $lastInsertId = $this->db->lastInsertId();
+        } catch (PDOException) {
+            return null;
+        }
+
+        if (!is_numeric($lastInsertId)) {
+            return null;
+        }
+
+        $lastInsertId = (int) $lastInsertId;
+
+        return $lastInsertId > 0 ? $lastInsertId : null;
+    }
+
+    private function resolveLastInsertIdFromReturningData(array $data): ?int
+    {
+        $firstRow = $data[0] ?? null;
+
+        if (!is_array($firstRow)) {
+            return null;
+        }
+
+        foreach (['id', 'Id'] as $key) {
+            if (isset($firstRow[$key]) && is_numeric($firstRow[$key])) {
+                return (int) $firstRow[$key];
+            }
+        }
+
+        foreach ($firstRow as $value) {
+            if (is_numeric($value)) {
+                return (int) $value;
+            }
+        }
+
+        return null;
     }
 }

@@ -2,6 +2,9 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Util\SqlIdentifier;
+use InvalidArgumentException;
+
 final class SQLSelectDefinition
 {
   /**
@@ -9,7 +12,7 @@ final class SQLSelectDefinition
    */
   public function __construct(private readonly SQLQuery $query)
   {
-    $queryString = "SELECT ";
+    $queryString = 'SELECT ';
     $this->query->setQueryString(queryString: $queryString);
   }
 
@@ -32,7 +35,7 @@ final class SQLSelectDefinition
    */
   public function count(array $columns = []): SQLSelectExpression
   {
-    $queryString = "COUNT(" . $this->getColumnListString(columns: $columns) . ') as total';
+    $queryString = 'COUNT(' . $this->getColumnListString(columns: $columns) . ') as total';
 
     $this->query->appendQueryString($queryString);
 
@@ -45,7 +48,7 @@ final class SQLSelectDefinition
    */
   public function avg(array $columns = []): SQLSelectExpression
   {
-    $queryString = "AVG(" . $this->getColumnListString(columns: $columns) . ')';
+    $queryString = 'AVG(' . $this->getColumnListString(columns: $columns) . ')';
 
     $this->query->appendQueryString($queryString);
 
@@ -58,7 +61,7 @@ final class SQLSelectDefinition
    */
   public function sum(array $columns = []): SQLSelectExpression
   {
-    $queryString = "SUM(" . $this->getColumnListString(columns: $columns) . ')';
+    $queryString = 'SUM(' . $this->getColumnListString(columns: $columns) . ')';
 
     $this->query->appendQueryString($queryString);
 
@@ -80,13 +83,29 @@ final class SQLSelectDefinition
     $separator = ', ';
 
     if (empty($columns)) {
-      $columnListString .= "*";
+      $columnListString .= '*';
     } else {
       foreach ($columns as $key => $value) {
-        $columnListString .= is_numeric($key) ? "{$value}{$separator}" : "$value as `{$key}`{$separator}";
+        $expression = $this->formatColumnExpression((string)$value);
+        $columnListString .= is_numeric($key)
+          ? "{$expression}{$separator}"
+          : $expression . ' AS ' . $this->query->quoteIdentifier((string)$key) . $separator;
       }
     }
 
     return trim($columnListString, $separator);
+  }
+
+  private function formatColumnExpression(string $expression): string
+  {
+    if ($expression === '*') {
+      return '*';
+    }
+
+    try {
+      return SqlIdentifier::quote($expression, $this->query->getDialect());
+    } catch (InvalidArgumentException) {
+      return $expression;
+    }
   }
 }

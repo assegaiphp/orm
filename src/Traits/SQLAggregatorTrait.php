@@ -37,12 +37,16 @@ trait SQLAggregatorTrait
    */
   public function orderBy(array $keyParts): static
   {
-    $bufferKeyPart = [];
+    $bufferKeyPart = $keyParts;
 
     if (property_exists($this, 'query')) {
       if (array_is_associative($keyParts)) {
         $callback = function ($key, $value) {
-          return new SQLKeyPart($key, $value === 'ASC');
+          return new SQLKeyPart(
+            key: $key,
+            ascending: strtoupper((string) $value) === 'ASC',
+            dialect: $this->query->getDialect()
+          );
         };
         $bufferKeyPart = array_map($callback, array_keys($keyParts), $keyParts);
       }
@@ -64,7 +68,7 @@ trait SQLAggregatorTrait
   {
     if (property_exists($this, 'query')) {
       $queryString = "GROUP BY " . implode(', ', array_map(
-        fn(string $columnName): string => SqlIdentifier::quote($columnName),
+        fn(string $columnName): string => SqlIdentifier::quote($columnName, $this->query->getDialect()),
         $columnNames
       ));
       $this->query->appendQueryString($queryString);

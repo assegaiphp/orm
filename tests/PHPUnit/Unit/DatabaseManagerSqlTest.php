@@ -9,6 +9,8 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Management\DatabaseManager;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionProperty;
 
 final class DatabaseManagerSqlTest extends TestCase
 {
@@ -31,6 +33,15 @@ final class DatabaseManagerSqlTest extends TestCase
         $sql = DatabaseManager::buildDropDatabaseStatement(DataSourceType::MYSQL, 'assegai_blog');
 
         self::assertSame('DROP DATABASE IF EXISTS `assegai_blog`', $sql);
+    }
+
+    public function testBuildsPostgreSqlDatabaseStatementsSafely(): void
+    {
+        $createSql = DatabaseManager::buildCreateDatabaseStatement(DataSourceType::POSTGRESQL, 'assegai_blog');
+        $dropSql = DatabaseManager::buildDropDatabaseStatement(DataSourceType::POSTGRESQL, 'assegai_blog');
+
+        self::assertSame('CREATE DATABASE "assegai_blog"', $createSql);
+        self::assertSame('DROP DATABASE IF EXISTS "assegai_blog"', $dropSql);
     }
 
     public function testRejectsUnsafeDatabaseNames(): void
@@ -73,5 +84,70 @@ final class DatabaseManagerSqlTest extends TestCase
         } finally {
             @unlink($path);
         }
+    }
+
+    public function testPostgreSqlSetupWrapsManagementConnectionFailures(): void
+    {
+        if (!extension_loaded('pdo_pgsql')) {
+            self::markTestSkipped('pdo_pgsql is required for PostgreSQL management tests.');
+        }
+
+        $manager = DatabaseManager::getInstance();
+        $dataSource = $this->createDetachedDataSource(new DataSourceOptions(
+            entities: [],
+            name: 'assegai_blog',
+            type: DataSourceType::POSTGRESQL,
+            host: '127.0.0.1',
+            port: 1,
+            username: 'postgres',
+            password: 'postgres',
+        ));
+
+        $this->expectException(DataSourceException::class);
+        $this->expectExceptionMessage('Data Source error:');
+
+        $manager->setup($dataSource, 'assegai_blog');
+    }
+
+    public function testPostgreSqlDropWrapsManagementConnectionFailures(): void
+    {
+        if (!extension_loaded('pdo_pgsql')) {
+            self::markTestSkipped('pdo_pgsql is required for PostgreSQL management tests.');
+        }
+
+        $manager = DatabaseManager::getInstance();
+        $dataSource = $this->createDetachedDataSource(new DataSourceOptions(
+            entities: [],
+            name: 'assegai_blog',
+            type: DataSourceType::POSTGRESQL,
+            host: '127.0.0.1',
+            port: 1,
+            username: 'postgres',
+            password: 'postgres',
+        ));
+
+        $this->expectException(DataSourceException::class);
+        $this->expectExceptionMessage('Data Source error:');
+
+        $manager->drop($dataSource, 'assegai_blog');
+    }
+
+    private function createDetachedDataSource(DataSourceOptions $options): DataSource
+    {
+        $reflection = new ReflectionClass(DataSource::class);
+        /** @var DataSource $dataSource */
+        $dataSource = $reflection->newInstanceWithoutConstructor();
+
+        $this->setProperty($dataSource, 'options', $options);
+        $this->setProperty($dataSource, 'type', $options->type);
+        $this->setProperty($dataSource, 'entities', $options->entities);
+
+        return $dataSource;
+    }
+
+    private function setProperty(object $object, string $propertyName, mixed $value): void
+    {
+        $property = new ReflectionProperty($object, $propertyName);
+        $property->setValue($object, $value);
     }
 }

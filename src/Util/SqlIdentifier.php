@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Util;
 
+use Assegai\Orm\Enumerations\SQLDialect;
 use InvalidArgumentException;
 
 final class SqlIdentifier
@@ -10,9 +11,10 @@ final class SqlIdentifier
    * Quotes a column or table identifier after validating each segment.
    *
    * @param string $identifier
+   * @param SQLDialect $dialect
    * @return string
    */
-  public static function quote(string $identifier): string
+  public static function quote(string $identifier, SQLDialect $dialect = SQLDialect::MYSQL): string
   {
     $identifier = trim($identifier);
 
@@ -20,7 +22,7 @@ final class SqlIdentifier
       return '*';
     }
 
-    $segments = explode('.', str_replace('`', '', $identifier));
+    $segments = explode('.', str_replace(['`', '"'], '', $identifier));
     $quotedSegments = [];
 
     foreach ($segments as $index => $segment) {
@@ -39,7 +41,7 @@ final class SqlIdentifier
         throw new InvalidArgumentException("Unsafe SQL identifier: $identifier");
       }
 
-      $quotedSegments[] = "`$segment`";
+      $quotedSegments[] = SqlDialectHelper::quoteIdentifier($segment, $dialect);
     }
 
     return implode('.', $quotedSegments);

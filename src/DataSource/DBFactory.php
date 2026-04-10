@@ -72,6 +72,7 @@ final class DBFactory
     public static function getMySQLConnection(string $dbName): PDO
     {
         $type = 'mysql';
+        self::ensureDriverIsAvailable(SQLDialect::MYSQL);
 
         if (empty($dbName)) {
             throw new DataSourceConnectionException();
@@ -124,8 +125,19 @@ final class DBFactory
         $databases = OrmRuntime::databaseConfigs();
 
         if (!isset($databases[$type]) || !isset($databases[$type][$dbName])) {
-            throw new DataSourceConnectionException();
+            throw new DataSourceConnectionException(self::getDataSourceTypeForConnectionPool($type));
         }
+    }
+
+    private static function getDataSourceTypeForConnectionPool(string $type): DataSourceType
+    {
+        return match ($type) {
+            'mariadb' => DataSourceType::MARIADB,
+            'pgsql' => DataSourceType::POSTGRESQL,
+            'sqlite' => DataSourceType::SQLITE,
+            'mongodb' => DataSourceType::MONGODB,
+            default => DataSourceType::MYSQL,
+        };
     }
 
     public static function buildMySqlDsn(
@@ -217,6 +229,7 @@ final class DBFactory
     public static function getPostgresSQLConnection(string $dbName): PDO
     {
         $type = 'pgsql';
+        self::ensureDriverIsAvailable(SQLDialect::POSTGRESQL);
 
         if (empty($dbName)) {
             throw new DataSourceConnectionException();
@@ -263,6 +276,7 @@ final class DBFactory
     public static function getSQLiteConnection(string $dbName): PDO
     {
         $type = 'sqlite';
+        self::ensureDriverIsAvailable(SQLDialect::SQLITE);
 
         if (empty($dbName)) {
             throw new DataSourceConnectionException();
@@ -374,6 +388,50 @@ final class DBFactory
 
         self::$connections[$type][$cacheKey] = null;
         unset(self::$connections[$type][$cacheKey]);
+    }
+
+    public static function getRequiredPdoExtension(SQLDialect $dialect): ?string
+    {
+        return match ($dialect) {
+            SQLDialect::MYSQL, SQLDialect::MARIADB => 'pdo_mysql',
+            SQLDialect::POSTGRESQL => 'pdo_pgsql',
+            SQLDialect::SQLITE => 'pdo_sqlite',
+            default => null,
+        };
+    }
+
+    public static function getRequiredPdoDriverName(SQLDialect $dialect): ?string
+    {
+        return match ($dialect) {
+            SQLDialect::MYSQL, SQLDialect::MARIADB => 'mysql',
+            SQLDialect::POSTGRESQL => 'pgsql',
+            SQLDialect::SQLITE => 'sqlite',
+            default => null,
+        };
+    }
+
+    private static function ensureDriverIsAvailable(SQLDialect $dialect): void
+    {
+        $extension = self::getRequiredPdoExtension($dialect);
+        $driver = self::getRequiredPdoDriverName($dialect);
+
+        if ($extension === null || $driver === null) {
+            return;
+        }
+
+        if (!extension_loaded($extension) || !in_array($driver, PDO::getAvailableDrivers(), true)) {
+            $type = match ($dialect) {
+                SQLDialect::MARIADB => DataSourceType::MARIADB,
+                SQLDialect::POSTGRESQL => DataSourceType::POSTGRESQL,
+                SQLDialect::SQLITE => DataSourceType::SQLITE,
+                default => DataSourceType::MYSQL,
+            };
+
+            throw new DataSourceConnectionException(
+                $type,
+                sprintf('Missing required PDO driver. Install or enable the %s extension to use %s.', $extension, $type->value),
+            );
+        }
     }
 
     /**

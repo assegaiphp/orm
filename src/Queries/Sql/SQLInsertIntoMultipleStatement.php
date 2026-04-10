@@ -21,17 +21,16 @@ final class SQLInsertIntoMultipleStatement
     private readonly array $columns
   )
   {
-    $queryString = "";
+    $queryString = '';
     $columns = array_map(function(string $column): string {
       $parts = explode('.', $column);
       return end($parts);
     }, array_values($columns));
-    
-    if (!empty($columns))
-    {
-      $quotedColumns = array_map(fn(string $column): string => "`$column`", $columns);
-      $queryString = "(" . implode(', ', $quotedColumns) . ") ";
-      $this->hashableIndexes = array_keys( array_intersect( $columns, $this->query->passwordHashFields() ) );
+
+    if (!empty($columns)) {
+      $quotedColumns = array_map(fn(string $column): string => $this->query->quoteIdentifier($column), $columns);
+      $queryString = '(' . implode(', ', $quotedColumns) . ') ';
+      $this->hashableIndexes = array_keys(array_intersect($columns, $this->query->passwordHashFields()));
     }
 
     $this->query->appendQueryString($queryString);
@@ -43,31 +42,29 @@ final class SQLInsertIntoMultipleStatement
    */
   public function rows(array $rowsList): SQLInsertIntoMultipleStatement
   {
-    $queryString = "VALUES ";
+    $rowGroups = [];
     $separator = ', ';
 
-    foreach ($rowsList as $row)
-    {
-      $queryString .= "ROW(";
-      foreach ($row as $index => $value)
-      {
-        if (in_array($index, $this->hashableIndexes))
-        {
+    foreach ($rowsList as $row) {
+      $rowQuery = '';
+
+      foreach ($row as $index => $value) {
+        if (in_array($index, $this->hashableIndexes, true)) {
           $value = password_hash($value, $this->query->passwordHashAlgorithm());
         }
 
         if (is_string($value) && in_array($value, ['CURRENT_TIMESTAMP', 'NULL'], true)) {
-          $queryString .= "{$value}{$separator}";
+          $rowQuery .= $value . $separator;
           continue;
         }
 
-        $queryString .= $this->query->addParam($value) . $separator;
+        $rowQuery .= $this->query->addParam($value) . $separator;
       }
-      $queryString = trim($queryString, $separator);
-      $queryString .= ")$separator";
+
+      $rowGroups[] = '(' . trim($rowQuery, $separator) . ')';
     }
-    $queryString = trim($queryString, $separator);
-    $this->query->appendQueryString(tail: $queryString);
+
+    $this->query->appendQueryString(tail: 'VALUES ' . implode($separator, $rowGroups));
     return $this;
   }
 }
