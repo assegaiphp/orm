@@ -125,8 +125,19 @@ final class DBFactory
         $databases = OrmRuntime::databaseConfigs();
 
         if (!isset($databases[$type]) || !isset($databases[$type][$dbName])) {
-            throw new DataSourceConnectionException();
+            throw new DataSourceConnectionException(self::getDataSourceTypeForConnectionPool($type));
         }
+    }
+
+    private static function getDataSourceTypeForConnectionPool(string $type): DataSourceType
+    {
+        return match ($type) {
+            'mariadb' => DataSourceType::MARIADB,
+            'pgsql' => DataSourceType::POSTGRESQL,
+            'sqlite' => DataSourceType::SQLITE,
+            'mongodb' => DataSourceType::MONGODB,
+            default => DataSourceType::MYSQL,
+        };
     }
 
     public static function buildMySqlDsn(

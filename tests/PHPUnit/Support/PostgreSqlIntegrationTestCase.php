@@ -9,6 +9,7 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
 use Assegai\Orm\Management\EntityManager;
+use Assegai\Orm\Support\OrmRuntime;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Unit\mocks\AlteredMockEntity;
@@ -33,6 +34,20 @@ abstract class PostgreSqlIntegrationTestCase extends TestCase
             dialect: SQLDialect::POSTGRESQL,
             checkIfExists: true,
         );
+        OrmRuntime::mergeConfig([
+            'databases' => [
+                'pgsql' => [
+                    $this->databaseName => [
+                        'host' => $config['PG_DB_HOST'],
+                        'port' => (int) $config['PG_DB_PORT'],
+                        'username' => $config['PG_DB_USER'],
+                        'password' => $config['PG_DB_PASS'],
+                        'database' => $this->databaseName,
+                        'name' => $this->databaseName,
+                    ],
+                ],
+            ],
+        ]);
 
         try {
             $this->dataSource = new DataSource(new DataSourceOptions(
