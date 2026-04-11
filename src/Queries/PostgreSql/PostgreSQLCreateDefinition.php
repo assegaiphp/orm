@@ -3,13 +3,13 @@
 namespace Assegai\Orm\Queries\PostgreSql;
 
 use Assegai\Orm\Queries\Sql\SQLQuery;
-use Assegai\Orm\Queries\Sql\SQLCreateDefinitionInterface;
+use Assegai\Orm\Queries\Sql\SQLDatabaseCreateDefinitionInterface;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
 
 /**
  * PostgreSQL-specific CREATE entry point.
  */
-class PostgreSQLCreateDefinition implements SQLCreateDefinitionInterface
+class PostgreSQLCreateDefinition implements SQLDatabaseCreateDefinitionInterface
 {
   /**
    * Creates a PostgreSQL CREATE definition bound to the supplied query root.

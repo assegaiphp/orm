@@ -49,6 +49,20 @@ class PostgreSQLQuery extends SQLQuery
   }
 
   /**
+   * Describe a PostgreSQL table using PostgreSQL-specific metadata syntax.
+   *
+   * @param string $subject The table or view name to describe.
+   * @return PostgreSQLDescribeStatement Returns the PostgreSQL describe statement builder.
+   */
+  public function describe(string $subject): PostgreSQLDescribeStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::DESCRIBE);
+
+    return new PostgreSQLDescribeStatement(query: $this, subject: $subject);
+  }
+
+  /**
    * Begin an INSERT INTO statement.
    *
    * @param string $tableName The target table name.
@@ -88,6 +102,20 @@ class PostgreSQLQuery extends SQLQuery
     $this->setQueryType(SQLQueryType::DELETE);
 
     return new PostgreSQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  /**
+   * Truncate a table using PostgreSQL-specific syntax.
+   *
+   * @param string $tableName The table to truncate.
+   * @return PostgreSQLTruncateStatement Returns the PostgreSQL truncate statement builder.
+   */
+  public function truncateTable(string $tableName): PostgreSQLTruncateStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::TRUNCATE);
+
+    return new PostgreSQLTruncateStatement(query: $this, tableName: $tableName);
   }
 
   /**

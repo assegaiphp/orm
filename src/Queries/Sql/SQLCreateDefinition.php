@@ -5,7 +5,7 @@ namespace Assegai\Orm\Queries\Sql;
 /**
  * Shared CREATE entry point for generic SQL query builders.
  */
-class SQLCreateDefinition implements SQLCreateDefinitionInterface
+class SQLCreateDefinition implements SQLDatabaseCreateDefinitionInterface
 {
   /**
    * Creates a shared CREATE definition bound to the supplied query root.

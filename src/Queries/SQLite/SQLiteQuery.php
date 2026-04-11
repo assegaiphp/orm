@@ -49,6 +49,20 @@ class SQLiteQuery extends SQLQuery
   }
 
   /**
+   * Describe a SQLite table using SQLite-specific metadata syntax.
+   *
+   * @param string $subject The table or view name to describe.
+   * @return SQLiteDescribeStatement Returns the SQLite describe statement builder.
+   */
+  public function describe(string $subject): SQLiteDescribeStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::DESCRIBE);
+
+    return new SQLiteDescribeStatement(query: $this, subject: $subject);
+  }
+
+  /**
    * Begin an INSERT INTO statement.
    *
    * @param string $tableName The target table name.
@@ -88,6 +102,20 @@ class SQLiteQuery extends SQLQuery
     $this->setQueryType(SQLQueryType::DELETE);
 
     return new SQLiteDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  /**
+   * Remove all rows from a SQLite table using the closest supported syntax.
+   *
+   * @param string $tableName The table to clear.
+   * @return SQLiteTruncateStatement Returns the SQLite truncate statement builder.
+   */
+  public function truncateTable(string $tableName): SQLiteTruncateStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::TRUNCATE);
+
+    return new SQLiteTruncateStatement(query: $this, tableName: $tableName);
   }
 
   /**

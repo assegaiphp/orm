@@ -3,11 +3,11 @@
 namespace Assegai\Orm\Queries\Sql;
 
 /**
- * Base fluent builder for ALTER statements.
+ * Base fluent builder for ALTER TABLE statements shared across the SQL family.
  *
- * This builder provides the shared SQL family entrypoints for altering
- * databases and tables, while allowing dialect-specific subclasses to return
- * typed alter-table builders.
+ * Dialect-specific subclasses may extend this builder with additional fluent
+ * entrypoints when their backend supports them, such as MySQL-family database
+ * alteration helpers.
  */
 class SQLAlterDefinition
 {
@@ -18,21 +18,6 @@ class SQLAlterDefinition
    */
   public function __construct(protected readonly SQLQuery $query)
   {
-  }
-
-  /**
-   * Begin an ALTER DATABASE statement.
-   *
-   * @param string $databaseName The database being altered.
-   * @return SQLAlterDatabaseOption Returns the database alter option builder.
-   */
-  public function database(string $databaseName): SQLAlterDatabaseOption
-  {
-    $this->query->setQueryString(
-      queryString: 'ALTER DATABASE ' . $this->query->quoteIdentifier($databaseName)
-    );
-
-    return new SQLAlterDatabaseOption(query: $this->query);
   }
 
   /**

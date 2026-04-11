@@ -49,6 +49,34 @@ class MariaDbQuery extends MySQLQuery
   }
 
   /**
+   * Switch the active database on a MariaDB connection.
+   *
+   * @param string $dbName The database name to switch to.
+   * @return MariaDbUseStatement Returns the MariaDB USE statement builder.
+   */
+  public function use(string $dbName): MariaDbUseStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::USE);
+
+    return new MariaDbUseStatement(query: $this, dbName: $dbName);
+  }
+
+  /**
+   * Describe a MariaDB table using MariaDB-specific metadata syntax.
+   *
+   * @param string $subject The table or view name to describe.
+   * @return MariaDbDescribeStatement Returns the MariaDB describe statement builder.
+   */
+  public function describe(string $subject): MariaDbDescribeStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::DESCRIBE);
+
+    return new MariaDbDescribeStatement(query: $this, subject: $subject);
+  }
+
+  /**
    * Begin a DELETE FROM statement.
    *
    * @param string $tableName The target table name.
@@ -61,6 +89,20 @@ class MariaDbQuery extends MySQLQuery
     $this->setQueryType(SQLQueryType::DELETE);
 
     return new MariaDbDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  /**
+   * Truncate a table using MariaDB-specific syntax.
+   *
+   * @param string $tableName The table to truncate.
+   * @return MariaDbTruncateStatement Returns the MariaDB truncate statement builder.
+   */
+  public function truncateTable(string $tableName): MariaDbTruncateStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::TRUNCATE);
+
+    return new MariaDbTruncateStatement(query: $this, tableName: $tableName);
   }
 
   /**

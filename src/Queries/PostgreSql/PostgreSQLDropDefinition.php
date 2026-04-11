@@ -2,13 +2,13 @@
 
 namespace Assegai\Orm\Queries\PostgreSql;
 
-use Assegai\Orm\Queries\Sql\SQLDropDefinitionInterface;
+use Assegai\Orm\Queries\Sql\SQLDatabaseDropDefinitionInterface;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 
 /**
  * PostgreSQL-specific DROP entry point.
  */
-class PostgreSQLDropDefinition implements SQLDropDefinitionInterface
+class PostgreSQLDropDefinition implements SQLDatabaseDropDefinitionInterface
 {
   /**
    * Creates a PostgreSQL DROP definition bound to the supplied query root.

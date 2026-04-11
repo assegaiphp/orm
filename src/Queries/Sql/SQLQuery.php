@@ -411,16 +411,6 @@ class SQLQuery
         return new SQLRenameStatement(query: $this);
     }
 
-    /**
-     * @param string $dbName
-     * @return SQLUseStatement
-     */
-    public function use(string $dbName): SQLUseStatement
-    {
-        $this->init();
-        $this->type = SQLQueryType::USE;
-        return new SQLUseStatement(query: $this, dbName: $dbName);
-    }
 
     /**
      * @param string $subject

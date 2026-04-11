@@ -5,7 +5,7 @@ namespace Assegai\Orm\Queries\Sql;
 /**
  * Shared DROP entry point for generic SQL query builders.
  */
-class SQLDropDefinition implements SQLDropDefinitionInterface
+class SQLDropDefinition implements SQLDatabaseDropDefinitionInterface
 {
   /**
    * Creates a shared DROP definition bound to the supplied query root.

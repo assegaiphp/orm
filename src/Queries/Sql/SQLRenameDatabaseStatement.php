@@ -2,30 +2,14 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-final class SQLRenameDatabaseStatement
+use Assegai\Orm\Queries\MySql\MySQLRenameDatabaseStatement;
+
+/**
+ * Backward-compatible wrapper for the old shared rename-database helper.
+ *
+ * @deprecated Use Assegai\Orm\Queries\MySql\MySQLRenameDatabaseStatement or
+ *             Assegai\Orm\Queries\MariaDb\MariaDbRenameDatabaseStatement instead.
+ */
+class SQLRenameDatabaseStatement extends MySQLRenameDatabaseStatement
 {
-  private string $queryString = '';
-
-  /**
-   * @param SQLQuery $query
-   * @param string $oldDbName
-   * @param string $newDbName
-   */
-  public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string   $oldDbName,
-    private readonly string   $newDbName,
-  )
-  {
-    $this->queryString = "CREATE DATABASE `$newDbName` / DROP DATABASE `$oldDbName`";
-    $this->query->setQueryString($this->queryString);
-  }
-
-  /**
-   * @return SQLQueryResult
-   */
-  public function execute(): SQLQueryResult
-  {
-    return $this->query->execute();
-  }
 }

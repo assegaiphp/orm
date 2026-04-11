@@ -49,6 +49,34 @@ class MySQLQuery extends SQLQuery
   }
 
   /**
+   * Switch the active database on a MySQL connection.
+   *
+   * @param string $dbName The database name to switch to.
+   * @return MySQLUseStatement Returns the MySQL USE statement builder.
+   */
+  public function use(string $dbName): MySQLUseStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::USE);
+
+    return new MySQLUseStatement(query: $this, dbName: $dbName);
+  }
+
+  /**
+   * Describe a MySQL table using MySQL-specific metadata syntax.
+   *
+   * @param string $subject The table or view name to describe.
+   * @return MySQLDescribeStatement Returns the MySQL describe statement builder.
+   */
+  public function describe(string $subject): MySQLDescribeStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::DESCRIBE);
+
+    return new MySQLDescribeStatement(query: $this, subject: $subject);
+  }
+
+  /**
    * Begin an INSERT INTO statement.
    *
    * @param string $tableName The target table name.
@@ -88,6 +116,20 @@ class MySQLQuery extends SQLQuery
     $this->setQueryType(SQLQueryType::DELETE);
 
     return new MySQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  /**
+   * Truncate a table using MySQL-specific syntax.
+   *
+   * @param string $tableName The table to truncate.
+   * @return MySQLTruncateStatement Returns the MySQL truncate statement builder.
+   */
+  public function truncateTable(string $tableName): MySQLTruncateStatement
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::TRUNCATE);
+
+    return new MySQLTruncateStatement(query: $this, tableName: $tableName);
   }
 
   /**

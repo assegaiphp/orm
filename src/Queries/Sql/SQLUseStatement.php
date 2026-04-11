@@ -2,17 +2,14 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Orm\Traits\ExecutableTrait;
+use Assegai\Orm\Queries\MySql\MySQLUseStatement;
 
-final class SQLUseStatement
+/**
+ * Backward-compatible wrapper for the old shared USE statement builder.
+ *
+ * @deprecated Use Assegai\Orm\Queries\MySql\MySQLUseStatement or
+ *             Assegai\Orm\Queries\MariaDb\MariaDbUseStatement instead.
+ */
+class SQLUseStatement extends MySQLUseStatement
 {
-  use ExecutableTrait;
-
-  public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string $dbName
-  )
-  {
-    $this->query->appendQueryString("USE $this->dbName");
-  }
 }
