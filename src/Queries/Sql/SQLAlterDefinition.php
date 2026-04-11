@@ -3,44 +3,50 @@
 namespace Assegai\Orm\Queries\Sql;
 
 /**
- * The SQLAlterDefinition class provides methods that allow for the alteration of a database or a table.
+ * Base fluent builder for ALTER statements.
+ *
+ * This builder provides the shared SQL family entrypoints for altering
+ * databases and tables, while allowing dialect-specific subclasses to return
+ * typed alter-table builders.
  */
-final readonly class SQLAlterDefinition
+class SQLAlterDefinition
 {
   /**
-   * Constructs an instance of the SQLAlterDefinition.
+   * Create a new ALTER builder.
    *
-   * @param SQLQuery $query The SQLQuery instance used to construct queries.
+   * @param SQLQuery $query The query instance being built.
    */
-  public function __construct(private SQLQuery $query)
+  public function __construct(protected readonly SQLQuery $query)
   {
   }
 
   /**
-   * Returns an instance of SQLAlterDatabaseOption to alter the given database.
+   * Begin an ALTER DATABASE statement.
    *
-   * @param string $databaseName The name of the database to alter.
-   * @return SQLAlterDatabaseOption
+   * @param string $databaseName The database being altered.
+   * @return SQLAlterDatabaseOption Returns the database alter option builder.
    */
   public function database(string $databaseName): SQLAlterDatabaseOption
   {
     $this->query->setQueryString(
       queryString: 'ALTER DATABASE ' . $this->query->quoteIdentifier($databaseName)
     );
-    return new SQLAlterDatabaseOption( query: $this->query );
+
+    return new SQLAlterDatabaseOption(query: $this->query);
   }
 
   /**
-   * Returns an instance of SQLAlterTableOption to alter the given table.
+   * Begin an ALTER TABLE statement.
    *
-   * @param string $tableName The name of the table to alter.
-   * @return SQLAlterTableOption
+   * @param string $tableName The table being altered.
+   * @return SQLAlterTableOption Returns the base alter-table option builder.
    */
   public function table(string $tableName): SQLAlterTableOption
   {
     $this->query->setQueryString(
       queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
     );
-    return new SQLAlterTableOption( query: $this->query );
+
+    return new SQLAlterTableOption(query: $this->query);
   }
 }

@@ -27,7 +27,7 @@ final class SqlDialectHelper
   public static function quoteIdentifier(string $identifier, SQLDialect $dialect): string
   {
     $quote = match ($dialect) {
-      SQLDialect::POSTGRESQL => '"',
+      SQLDialect::POSTGRESQL, SQLDialect::SQLITE => '"',
       default => '`',
     };
 

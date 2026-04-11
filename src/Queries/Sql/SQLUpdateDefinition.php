@@ -3,27 +3,29 @@
 namespace Assegai\Orm\Queries\Sql;
 
 /**
- * Class SQLUpdateDefinition
- *
- * @package Assegai\Orm\Queries\Sql
+ * Base fluent builder for UPDATE statements shared across SQL dialects.
  */
 class SQLUpdateDefinition
 {
   /**
-   * @param SQLQuery $query The SQL query object.
-   * @param string $tableName The name of the table to update.
+   * Create a new UPDATE statement builder.
+   *
+   * @param SQLQuery $query The query instance being built.
+   * @param string $tableName The target table name.
    */
   public function __construct(
     protected SQLQuery $query,
-    protected string   $tableName,
+    protected string $tableName,
   )
   {
     $this->query->setQueryString('UPDATE ' . $this->query->quoteIdentifier($this->tableName));
   }
 
   /**
-   * @param array $assignmentList
-   * @return SQLAssignmentList
+   * Start building the SET clause for the UPDATE statement.
+   *
+   * @param array $assignmentList The column/value assignments to apply.
+   * @return SQLAssignmentList Returns the assignment-list builder for continued fluent chaining.
    */
   public function set(array $assignmentList): SQLAssignmentList
   {

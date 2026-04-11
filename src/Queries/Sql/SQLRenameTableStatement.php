@@ -2,36 +2,56 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Orm\Enumerations\SQLDialect;
-
-final class SQLRenameTableStatement
+/**
+ * Base fluent builder for table rename statements.
+ */
+class SQLRenameTableStatement
 {
-  private string $queryString = '';
+  protected string $queryString = '';
 
   /**
-   * @param SQLQuery $query
-   * @param string $oldTableName
-   * @param string $newTableName
+   * Create a new table rename statement.
+   *
+   * @param SQLQuery $query The query instance being built.
+   * @param string $oldTableName The current table name.
+   * @param string $newTableName The new table name.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string   $oldTableName,
-    private readonly string   $newTableName,
-  )
-  {
-    $quotedOldTableName = $this->query->quoteIdentifier($oldTableName);
-    $quotedNewTableName = $this->query->quoteIdentifier($newTableName);
-
-    $this->queryString = match ($this->query->getDialect()) {
-      SQLDialect::POSTGRESQL,
-      SQLDialect::SQLITE => "ALTER TABLE $quotedOldTableName RENAME TO $quotedNewTableName",
-      default => "RENAME TABLE $quotedOldTableName TO $quotedNewTableName",
-    };
+    protected readonly SQLQuery $query,
+    protected readonly string $oldTableName,
+    protected readonly string $newTableName,
+  ) {
+    $this->queryString = $this->buildRenameTableQuery();
     $this->query->setQueryString($this->queryString);
   }
 
   /**
-   * @return SQLQueryResult
+   * Build the SQL string for the rename operation.
+   *
+   * @return string Returns the SQL query string for the rename operation.
+   */
+  protected function buildRenameTableQuery(): string
+  {
+    $quotedOldTableName = $this->query->quoteIdentifier($this->oldTableName);
+    $quotedNewTableName = $this->query->quoteIdentifier($this->newTableName);
+
+    return "RENAME TABLE $quotedOldTableName TO $quotedNewTableName";
+  }
+
+  /**
+   * Return the compiled rename statement SQL.
+   *
+   * @return string Returns the compiled SQL string.
+   */
+  public function queryString(): string
+  {
+    return $this->queryString;
+  }
+
+  /**
+   * Execute the rename statement.
+   *
+   * @return SQLQueryResult Returns the query execution result.
    */
   public function execute(): SQLQueryResult
   {

@@ -383,9 +383,9 @@ class SQLQuery
     }
 
     /**
-     * @return SQLCreateDefinition
+     * @return SQLCreateDefinitionInterface Returns a CREATE builder for the active SQL-family root.
      */
-    public function create(): SQLCreateDefinition
+    public function create(): SQLCreateDefinitionInterface
     {
         $this->init();
         $this->type = SQLQueryType::CREATE;
@@ -393,9 +393,9 @@ class SQLQuery
     }
 
     /**
-     * @return SQLDropDefinition
+     * @return SQLDropDefinitionInterface Returns a DROP builder for the active SQL-family root.
      */
-    public function drop(): SQLDropDefinition
+    public function drop(): SQLDropDefinitionInterface
     {
         $this->init();
         $this->type = SQLQueryType::DROP;

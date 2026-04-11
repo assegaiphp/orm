@@ -2,27 +2,33 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-final class SQLRenameStatement
+/**
+ * Base fluent builder for RENAME statements.
+ *
+ * Dialect-specific subclasses can return typed rename-table builders while the
+ * shared SQL family still exposes a consistent rename entrypoint.
+ */
+class SQLRenameStatement
 {
   /**
-   * @param SQLQuery $query
+   * Create a new RENAME statement builder.
+   *
+   * @param SQLQuery $query The query instance being built.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-  ) { }
-
-  // public function database(string $from, string $to): SQLRenameDatabaseStatement
-  // {
-  //   return new SQLRenameDatabaseStatement( query: $this->query, oldDbName: $from, newDbName: $to );
-  // }
+    protected readonly SQLQuery $query,
+  ) {
+  }
 
   /**
-   * @param string $from
-   * @param string $to
-   * @return SQLRenameTableStatement
+   * Begin a table rename operation.
+   *
+   * @param string $from The current table name.
+   * @param string $to The new table name.
+   * @return SQLRenameTableStatement Returns the base rename-table builder.
    */
   public function table(string $from, string $to): SQLRenameTableStatement
   {
-    return new SQLRenameTableStatement( query: $this->query, oldTableName: $from, newTableName: $to );
+    return new SQLRenameTableStatement(query: $this->query, oldTableName: $from, newTableName: $to);
   }
 }

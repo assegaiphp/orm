@@ -5,12 +5,12 @@ namespace Assegai\Orm\Queries\Sql;
 use Assegai\Orm\Util\SqlIdentifier;
 use InvalidArgumentException;
 
-final class SQLSelectDefinition
+class SQLSelectDefinition
 {
   /**
    * @param SQLQuery $query
    */
-  public function __construct(private readonly SQLQuery $query)
+  public function __construct(protected readonly SQLQuery $query)
   {
     $queryString = 'SELECT ';
     $this->query->setQueryString(queryString: $queryString);
@@ -77,7 +77,7 @@ final class SQLSelectDefinition
    * @return string Returns a list of comma-separated column names if the 
    * given array is not empty, otherwise returns `*`.
    */
-  private function getColumnListString(array $columns): string
+  protected function getColumnListString(array $columns): string
   {
     $columnListString = '';
     $separator = ', ';
@@ -96,7 +96,7 @@ final class SQLSelectDefinition
     return trim($columnListString, $separator);
   }
 
-  private function formatColumnExpression(string $expression): string
+  protected function formatColumnExpression(string $expression): string
   {
     if ($expression === '*') {
       return '*';
