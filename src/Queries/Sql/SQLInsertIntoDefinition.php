@@ -2,15 +2,15 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-final readonly class SQLInsertIntoDefinition
+class SQLInsertIntoDefinition
 {
   /**
    * @param SQLQuery $query
    * @param string $tableName
    */
   public function __construct(
-    private SQLQuery $query,
-    private string   $tableName
+    protected readonly SQLQuery $query,
+    protected readonly string   $tableName
   )
   {
     $queryString = 'INSERT INTO ' . $this->query->quoteIdentifier($this->tableName) . ' ';

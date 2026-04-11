@@ -2,23 +2,21 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Orm\Traits\DuplicateKeyUpdatableTrait;
 use Assegai\Orm\Traits\ExecutableTrait;
 
-final class SQLInsertIntoMultipleStatement
+class SQLInsertIntoMultipleStatement
 {
-  use DuplicateKeyUpdatableTrait;
   use ExecutableTrait;
 
-  private array $hashableIndexes = [];
+  protected array $hashableIndexes = [];
 
   /**
    * @param SQLQuery $query The SQLQuery object.
    * @param array $columns A parenthesized list of comma-separated column names for which the statment provides values.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly array $columns
+    protected readonly SQLQuery $query,
+    protected readonly array $columns
   )
   {
     $queryString = '';
@@ -38,9 +36,9 @@ final class SQLInsertIntoMultipleStatement
 
   /**
    * @param array $rowsList
-   * @return $this
+   * @return static
    */
-  public function rows(array $rowsList): SQLInsertIntoMultipleStatement
+  public function rows(array $rowsList): static
   {
     $rowGroups = [];
     $separator = ', ';

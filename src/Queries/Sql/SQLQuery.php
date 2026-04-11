@@ -16,7 +16,7 @@ use UnitEnum;
 /**
  * Class SQLQuery. Represents a SQL query.
  */
-final class SQLQuery
+class SQLQuery
 {
     /**
      * @var string The raw SQL query as a string.
@@ -78,6 +78,70 @@ final class SQLQuery
         }
         $this->init();
     }
+    /**
+     * Creates the appropriate root query builder for the given connection and dialect.
+     *
+     * @param PDO $db
+     * @param string $fetchClass
+     * @param int $fetchMode
+     * @param array $fetchClassParams
+     * @param array $passwordHashFields
+     * @param string $passwordHashAlgorithm
+     * @param SQLDialect|null $dialect
+     * @return self
+     */
+    public static function forConnection(
+        PDO $db,
+        string $fetchClass = stdClass::class,
+        int $fetchMode = PDO::FETCH_ASSOC,
+        array $fetchClassParams = [],
+        array $passwordHashFields = ['password'],
+        string $passwordHashAlgorithm = '',
+        ?SQLDialect $dialect = null,
+    ): self
+    {
+        $resolvedDialect = $dialect ?? SqlDialectHelper::fromPdo($db);
+
+        return match ($resolvedDialect) {
+            SQLDialect::POSTGRESQL => new \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            SQLDialect::SQLITE => new \Assegai\Orm\Queries\SQLite\SQLiteQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            SQLDialect::MARIADB => new \Assegai\Orm\Queries\MariaDb\MariaDbQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            default => new \Assegai\Orm\Queries\MySql\MySQLQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+        };
+    }
+
 
     /**
      * Initializes the query.
@@ -153,7 +217,110 @@ final class SQLQuery
     {
         return $this->dialect;
     }
+    /**
+     * Returns a query instance configured for the given SQL dialect.
+     *
+     * @param SQLDialect $dialect
+     * @return self
+     */
+    public function withDialect(SQLDialect $dialect): self
+    {
+        if ($this->dialect === $dialect) {
+            return $this;
+        }
 
+        return self::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: $dialect,
+        );
+    }
+
+    /**
+     * Returns a query configured for PostgreSQL rendering.
+     *
+     * @return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+     */
+    public function switchToPostgres(): \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+    {
+        return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::POSTGRESQL,
+        );
+    }
+
+    /**
+     * Returns a query configured for PostgreSQL rendering.
+     *
+     * @return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+     */
+    public function switchToPostgreSql(): \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+    {
+        return $this->switchToPostgres();
+    }
+
+    /**
+     * Returns a query configured for MySQL rendering.
+     *
+     * @return \Assegai\Orm\Queries\MySql\MySQLQuery
+     */
+    public function switchToMysql(): \Assegai\Orm\Queries\MySql\MySQLQuery
+    {
+        return \Assegai\Orm\Queries\MySql\MySQLQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::MYSQL,
+        );
+    }
+
+    /**
+     * Returns a query configured for MariaDB rendering.
+     *
+     * @return \Assegai\Orm\Queries\MariaDb\MariaDbQuery
+     */
+    public function switchToMariaDb(): \Assegai\Orm\Queries\MariaDb\MariaDbQuery
+    {
+        return \Assegai\Orm\Queries\MariaDb\MariaDbQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::MARIADB,
+        );
+    }
+
+    /**
+     * Returns a query configured for SQLite rendering.
+     *
+     * @return \Assegai\Orm\Queries\SQLite\SQLiteQuery
+     */
+    public function switchToSqlite(): \Assegai\Orm\Queries\SQLite\SQLiteQuery
+    {
+        return \Assegai\Orm\Queries\SQLite\SQLiteQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::SQLITE,
+        );
+    }
     /**
      * Quotes an SQL identifier for the current query dialect.
      *
@@ -173,6 +340,17 @@ final class SQLQuery
     {
         $this->queryString = $queryString;
     }
+    /**
+     * Marks the current query with the provided query type.
+     *
+     * @param string $type
+     * @return void
+     */
+    protected function setQueryType(string $type): void
+    {
+        $this->type = $type;
+    }
+
 
     /**
      * @param string $tail

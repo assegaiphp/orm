@@ -135,7 +135,7 @@ class EntityManager implements IEntityStoreOwner
   public function __construct(protected DataSource $connection, protected ?SQLQuery $query = null, protected ?EntityInspector $entityInspector = null, protected ?TypeResolver $typeResolver = null)
   {
     $this->logger = new Logger(new ConsoleOutput());
-    $this->query = $query ?? new SQLQuery(db: $connection->getClient());
+    $this->query = $query ?? SQLQuery::forConnection(db: $connection->getClient(), dialect: $connection->getDialect());
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
     if (!$this->entityInspector) {
@@ -1243,7 +1243,7 @@ class EntityManager implements IEntityStoreOwner
     );
     $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
 
-    $query = new SQLQuery($this->query->getConnection());
+    $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
     $statement = $query
       ->select()
       ->all(columns: $columns)
@@ -1298,7 +1298,7 @@ class EntityManager implements IEntityStoreOwner
     $entity = $this->create($entityClass);
     $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
     $tableName = $this->entityInspector->getTableName($entity);
-    $query = new SQLQuery($this->query->getConnection());
+    $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
     $statement = $query
       ->select()
       ->all(columns: $columns)

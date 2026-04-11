@@ -4,6 +4,10 @@ namespace Tests\PHPUnit\Unit;
 
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Management\Options\FindWhereOptions;
+use Assegai\Orm\Queries\MySql\MySQLInsertIntoStatement;
+use Assegai\Orm\Queries\MySql\MySQLQuery;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoStatement;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -34,6 +38,64 @@ final class SqlDialectRenderingTest extends TestCase
             ->limit(10, 20);
 
         self::assertSame('SELECT `users`.`name` FROM `users` LIMIT 20,10', $query->queryString());
+    }
+
+    public function testSwitchToPostgresReturnsDedicatedPostgreSqlQueryBuilder(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL);
+        $postgres = $query->switchToPostgres();
+
+        $postgres
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->limit(10, 20);
+
+        self::assertInstanceOf(PostgreSQLQuery::class, $postgres);
+        self::assertSame(SQLDialect::MYSQL, $query->getDialect());
+        self::assertSame(SQLDialect::POSTGRESQL, $postgres->getDialect());
+        self::assertSame('SELECT "users"."name" FROM "users" LIMIT 10 OFFSET 20', $postgres->queryString());
+    }
+
+    public function testSwitchToMysqlReturnsDedicatedMysqlQueryBuilder(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL);
+        $mysql = $query->switchToMysql();
+
+        $mysql
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->limit(10, 20);
+
+        self::assertInstanceOf(MySQLQuery::class, $mysql);
+        self::assertSame(SQLDialect::POSTGRESQL, $query->getDialect());
+        self::assertSame(SQLDialect::MYSQL, $mysql->getDialect());
+        self::assertSame('SELECT `users`.`name` FROM `users` LIMIT 20,10', $mysql->queryString());
+    }
+
+    public function testDialectSpecificInsertBuildersExposeOnlySupportedFluentMethods(): void
+    {
+        $mysqlInsert = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMysql()
+            ->insertInto('users')
+            ->singleRow(['name']);
+        $postgresInsert = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->insertInto('users')
+            ->singleRow(['name']);
+
+        self::assertInstanceOf(MySQLInsertIntoStatement::class, $mysqlInsert);
+        self::assertTrue(method_exists($mysqlInsert, 'onDuplicateKeyUpdate'));
+        self::assertInstanceOf(PostgreSQLInsertIntoStatement::class, $postgresInsert);
+        self::assertFalse(method_exists($postgresInsert, 'onDuplicateKeyUpdate'));
+    }
+
+    public function testSwitchToPostgreSqlAliasUsesPostgreSqlDialect(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToPostgreSql();
+
+        self::assertSame(SQLDialect::POSTGRESQL, $query->getDialect());
     }
 
     public function testFindWhereOptionsCompileUsesQueryDialect(): void
@@ -122,7 +184,7 @@ final class SqlDialectRenderingTest extends TestCase
         $query = $this->createQuery(SQLDialect::POSTGRESQL);
         $query->getConnection()->exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
 
-        $result = $query
+        $query
             ->insertInto('users')
             ->singleRow(['name'])
             ->values(['Ada']);
