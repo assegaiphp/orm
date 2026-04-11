@@ -415,10 +415,40 @@ class EntityManager implements IEntityStoreOwner
     }
 
     # Find the record by the resolved primary key and hydrate the entity
-    $identifierValue = $instance->{$primaryKeyField} ?? $this->lastInsertId();
-    $result = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: [$primaryKeyField => $identifierValue]));
+    $identifierCandidates = [];
+    $explicitIdentifierValue = $instance->{$primaryKeyField} ?? null;
+    $lastInsertId = $this->lastInsertId();
 
-    if ($result->isError()) {
+    if ($explicitIdentifierValue !== null && $explicitIdentifierValue !== '') {
+      $identifierCandidates[] = $explicitIdentifierValue;
+    }
+
+    if ($lastInsertId !== null && $lastInsertId !== '' && !in_array($lastInsertId, $identifierCandidates, true)) {
+      $identifierCandidates[] = $lastInsertId;
+    }
+
+    if (empty($identifierCandidates)) {
+      $identifierCandidates[] = $explicitIdentifierValue;
+    }
+
+    $identifierValue = $identifierCandidates[0] ?? null;
+    $result = null;
+
+    foreach ($identifierCandidates as $candidateIdentifierValue) {
+      $lookupResult = $this->findOne(
+        entityClass: $entityClass,
+        options: new FindOneOptions(where: [$primaryKeyField => $candidateIdentifierValue])
+      );
+
+      $result = $lookupResult;
+
+      if (!$lookupResult->isError() && !$lookupResult->isEmpty()) {
+        $identifierValue = $candidateIdentifierValue;
+        break;
+      }
+    }
+
+    if ($result?->isError()) {
       if (!headers_sent()) {
         http_response_code(500);
       }
@@ -431,6 +461,10 @@ class EntityManager implements IEntityStoreOwner
     $entity = is_array($result->getData()) && array_is_list($result->getData())
       ? ($result->getData()[0] ?? null)
       : $result->getData();
+
+    if (is_object($entity) && isset($entity->{$primaryKeyField}) && $entity->{$primaryKeyField} !== null && $entity->{$primaryKeyField} !== '') {
+      $identifierValue = $entity->{$primaryKeyField};
+    }
 
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
     $generatedMaps->{$primaryKeyField} = $identifierValue;
@@ -1997,20 +2031,25 @@ class EntityManager implements IEntityStoreOwner
 
     $this->validateEntityName(entityClass: $entityClass);
 
+    $entity = $this->create(
+      entityClass: $entityClass,
+      entityLike: is_array($entityOrEntities) ? $entityOrEntities : (object)$entityOrEntities,
+    );
+
     // TODO: Configure the upsert options
-    $primaryKey = $this->getPrimaryKeyMetadata($entityOrEntities);
+    $primaryKey = $this->getPrimaryKeyMetadata($entity);
     $primaryKeyField = $primaryKey['field'];
     $primaryColumn = $primaryKey['column'];
 
-    $columns = $this->entityInspector->getColumns(entity: $entityOrEntities);
-    $updateColumns = $this->entityInspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
-    $values = $this->entityInspector->getValues(entity: $entityOrEntities);
-    $tableName = $this->entityInspector->getTableName(entity: $entityOrEntities);
+    $columns = $this->entityInspector->getColumns(entity: $entity);
+    $updateColumns = $this->entityInspector->getColumns(entity: $entity, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
+    $values = $this->entityInspector->getValues(entity: $entity);
+    $tableName = $this->entityInspector->getTableName(entity: $entity);
 
     return match ($this->query->getDialect()) {
-      SQLDialect::SQLITE => $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
-      SQLDialect::POSTGRESQL => $this->executePostgreSqlUpsert($entityClass, $tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
-      default => $this->executeMySqlUpsert($entityClass, $tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      SQLDialect::SQLITE => $this->executeSqliteUpsert($tableName, $entity, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      SQLDialect::POSTGRESQL => $this->executePostgreSqlUpsert($entityClass, $tableName, $entity, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      default => $this->executeMySqlUpsert($entityClass, $tableName, $entity, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
     };
   }
 

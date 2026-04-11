@@ -450,11 +450,11 @@ class SQLQuery
      * @param bool $ignore
      * @return SQLUpdateDefinition
      */
-    public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): SQLUpdateDefinition
+    public function update(string $tableName): SQLUpdateDefinition
     {
         $this->init();
-        $this->type = SQLQueryType::UPDATE;
-        return new SQLUpdateDefinition(query: $this, tableName: $tableName, lowPriority: $lowPriority, ignore: $ignore);
+        $this->setQueryType(SQLQueryType::UPDATE);
+        return new SQLUpdateDefinition(query: $this, tableName: $tableName);
     }
 
     /**

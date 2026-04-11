@@ -147,6 +147,8 @@ final class DBFactory
         ?SQLCharacterSet $charSet = SQLCharacterSet::UTF8MB4
     ): string
     {
+        $host = self::normalizeMySqlHostForDsn($host, $port);
+
         $segments = [
             sprintf('mysql:host=%s', $host),
             sprintf('port=%d', $port),
@@ -158,6 +160,15 @@ final class DBFactory
         }
 
         return implode(';', $segments);
+    }
+
+    private static function normalizeMySqlHostForDsn(string $host, int $port): string
+    {
+        if (strcasecmp($host, 'localhost') === 0 && $port > 0) {
+            return '127.0.0.1';
+        }
+
+        return $host;
     }
 
     public static function applyConnectionAttributes(PDO $connection, SQLDialect $dialect): void

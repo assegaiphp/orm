@@ -25,7 +25,7 @@ final class SchemaMySqlIntegrationTest extends MySqlIntegrationTestCase
 
         self::assertNotNull($info);
         self::assertStringContainsString('CREATE TABLE `mocks`', $info->ddlStatement);
-        self::assertArrayHasKey('id', $info->tableFields);
+        self::assertContains('id', array_map(static fn($field) => $field->Field, $info->tableFields));
     }
 
     public function testRenameChangesTableName(): void

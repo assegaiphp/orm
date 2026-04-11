@@ -14,4 +14,17 @@ class MySQLQuery extends SQLQuery
 
     return new MySQLInsertIntoDefinition(query: $this, tableName: $tableName);
   }
+
+  public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): MySQLUpdateDefinition
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::UPDATE);
+
+    return new MySQLUpdateDefinition(
+      query: $this,
+      tableName: $tableName,
+      lowPriority: $lowPriority,
+      ignore: $ignore,
+    );
+  }
 }

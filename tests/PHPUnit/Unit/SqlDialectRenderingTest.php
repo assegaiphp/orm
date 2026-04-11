@@ -6,11 +6,16 @@ use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Queries\MySql\MySQLInsertIntoStatement;
 use Assegai\Orm\Queries\MySql\MySQLQuery;
+use Assegai\Orm\Queries\MySql\MySQLUpdateDefinition;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLUpdateDefinition;
+use Assegai\Orm\Queries\Sql\ColumnType;
+use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class SqlDialectRenderingTest extends TestCase
 {
@@ -91,11 +96,34 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertFalse(method_exists($postgresInsert, 'onDuplicateKeyUpdate'));
     }
 
+    public function testDialectSpecificUpdateBuildersExposeOnlySupportedApiShapes(): void
+    {
+        $mysqlQuery = $this->createQuery(SQLDialect::MYSQL)->switchToMysql();
+        $postgresQuery = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres();
+
+        $mysqlUpdate = $mysqlQuery->update('users', lowPriority: true, ignore: true);
+        $postgresUpdate = $postgresQuery->update('users');
+
+        self::assertInstanceOf(MySQLUpdateDefinition::class, $mysqlUpdate);
+        self::assertInstanceOf(PostgreSQLUpdateDefinition::class, $postgresUpdate);
+        self::assertSame(3, (new ReflectionMethod(MySQLQuery::class, 'update'))->getNumberOfParameters());
+        self::assertSame(1, (new ReflectionMethod(PostgreSQLQuery::class, 'update'))->getNumberOfParameters());
+        self::assertSame('UPDATE LOW_PRIORITY IGNORE `users`', $mysqlQuery->queryString());
+        self::assertSame('UPDATE "users"', $postgresQuery->queryString());
+    }
+
     public function testSwitchToPostgreSqlAliasUsesPostgreSqlDialect(): void
     {
         $query = $this->createQuery(SQLDialect::MYSQL)->switchToPostgreSql();
 
         self::assertSame(SQLDialect::POSTGRESQL, $query->getDialect());
+    }
+
+    public function testMysqlColumnDefinitionFallsBackToDefaultVarcharLengthWhenLengthIsEmpty(): void
+    {
+        $column = new SQLColumnDefinition('name', ColumnType::VARCHAR, '', nullable: false, dialect: SQLDialect::MYSQL);
+
+        self::assertSame('`name` VARCHAR(255) NOT NULL', $column->queryString());
     }
 
     public function testFindWhereOptionsCompileUsesQueryDialect(): void
@@ -112,17 +140,6 @@ final class SqlDialectRenderingTest extends TestCase
 
         $query
             ->update('users')
-            ->set(['name' => 'Ada']);
-
-        self::assertSame('UPDATE "users" SET "name"=?', $query->queryString());
-    }
-
-    public function testPostgreSqlUpdateBuilderIgnoresMysqlOnlyModifiers(): void
-    {
-        $query = $this->createQuery(SQLDialect::POSTGRESQL);
-
-        $query
-            ->update('users', lowPriority: true, ignore: true)
             ->set(['name' => 'Ada']);
 
         self::assertSame('UPDATE "users" SET "name"=?', $query->queryString());
@@ -198,6 +215,6 @@ final class SqlDialectRenderingTest extends TestCase
 
     private function createQuery(SQLDialect $dialect): SQLQuery
     {
-        return new SQLQuery(new PDO('sqlite::memory:'), dialect: $dialect);
+        return SQLQuery::forConnection(new PDO('sqlite::memory:'), dialect: $dialect);
     }
 }

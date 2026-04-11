@@ -14,4 +14,12 @@ class SQLiteQuery extends SQLQuery
 
     return new SQLiteInsertIntoDefinition(query: $this, tableName: $tableName);
   }
+
+  public function update(string $tableName): SQLiteUpdateDefinition
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::UPDATE);
+
+    return new SQLiteUpdateDefinition(query: $this, tableName: $tableName);
+  }
 }

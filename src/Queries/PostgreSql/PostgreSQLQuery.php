@@ -14,4 +14,12 @@ class PostgreSQLQuery extends SQLQuery
 
     return new PostgreSQLInsertIntoDefinition(query: $this, tableName: $tableName);
   }
+
+  public function update(string $tableName): PostgreSQLUpdateDefinition
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::UPDATE);
+
+    return new PostgreSQLUpdateDefinition(query: $this, tableName: $tableName);
+  }
 }

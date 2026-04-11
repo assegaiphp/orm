@@ -20,7 +20,14 @@ final class ConnectionConfigTest extends TestCase
     {
         $dsn = DBFactory::buildMySqlDsn('localhost', 3306, 'assegai', SQLCharacterSet::UTF8MB4);
 
-        self::assertSame('mysql:host=localhost;port=3306;dbname=assegai;charset=utf8mb4', $dsn);
+        self::assertSame('mysql:host=127.0.0.1;port=3306;dbname=assegai;charset=utf8mb4', $dsn);
+    }
+
+    public function testNormalizesLocalhostToTcpForPortBasedMySqlConnections(): void
+    {
+        $dsn = DBFactory::buildMySqlDsn('localhost', 3307, 'assegai', SQLCharacterSet::UTF8MB4);
+
+        self::assertSame('mysql:host=127.0.0.1;port=3307;dbname=assegai;charset=utf8mb4', $dsn);
     }
 
     public function testAppliesSafeDefaultMysqlPdoAttributes(): void

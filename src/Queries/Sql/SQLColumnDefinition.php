@@ -226,12 +226,18 @@ class SQLColumnDefinition implements Stringable
 
   private function getNormalizedLengthOrValues(): null|string|int|array
   {
-    if (!is_null($this->lengthOrValues)) {
+    if (is_string($this->lengthOrValues)) {
+      $trimmedLength = trim($this->lengthOrValues);
+
+      if ($trimmedLength !== '') {
+        return $trimmedLength;
+      }
+    } elseif (!is_null($this->lengthOrValues)) {
       return $this->lengthOrValues;
     }
 
     return match ($this->type) {
-      ColumnType::VARCHAR => '10',
+      ColumnType::VARCHAR => '255',
       ColumnType::DECIMAL => '16,2',
       default => null,
     };

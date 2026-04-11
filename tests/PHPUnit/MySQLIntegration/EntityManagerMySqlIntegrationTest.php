@@ -136,8 +136,7 @@ final class EntityManagerMySqlIntegrationTest extends MySqlIntegrationTestCase
         $upsertResult = $this->manager->upsert(
             MockEntity::class,
             $entity,
-            ['id'],
-            new UpsertOptions(skipUpdateIfNoValuesChanged: false),
+            new UpsertOptions(conflictPaths: ['id'], skipUpdateIfNoValuesChanged: false),
         );
 
         self::assertTrue($upsertResult->isOk());

@@ -11,6 +11,7 @@ use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\DataSourceConnectionException;
 use Assegai\Orm\Management\EntityManager;
+use Assegai\Orm\Support\OrmRuntime;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Unit\mocks\AlteredMockEntity;
@@ -33,6 +34,21 @@ abstract class MySqlIntegrationTestCase extends TestCase
             dialect: SQLDialect::MYSQL,
             checkIfExists: true,
         );
+        OrmRuntime::mergeConfig([
+            'databases' => [
+                'mysql' => [
+                    $this->databaseName => [
+                        'host' => $config['DB_HOST'],
+                        'port' => (int) $config['DB_PORT'],
+                        'username' => $config['DB_USER'],
+                        'password' => $config['DB_PASS'],
+                        'database' => $this->databaseName,
+                        'name' => $this->databaseName,
+                        'charset' => SQLCharacterSet::UTF8MB4->value,
+                    ],
+                ],
+            ],
+        ]);
 
         try {
             $this->dataSource = new DataSource(new DataSourceOptions(

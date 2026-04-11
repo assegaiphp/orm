@@ -16,7 +16,14 @@ class ConnectionConfigCest
   {
     $dsn = DBFactory::buildMySqlDsn('localhost', 3306, 'assegai', SQLCharacterSet::UTF8MB4);
 
-    $I->assertSame('mysql:host=localhost;port=3306;dbname=assegai;charset=utf8mb4', $dsn);
+    $I->assertSame('mysql:host=127.0.0.1;port=3306;dbname=assegai;charset=utf8mb4', $dsn);
+  }
+
+  public function normalizesLocalhostToTcpForPortBasedMySqlConnections(UnitTester $I): void
+  {
+    $dsn = DBFactory::buildMySqlDsn('localhost', 3307, 'assegai', SQLCharacterSet::UTF8MB4);
+
+    $I->assertSame('mysql:host=127.0.0.1;port=3307;dbname=assegai;charset=utf8mb4', $dsn);
   }
 
   public function appliesSafeDefaultMysqlPdoAttributes(UnitTester $I): void
