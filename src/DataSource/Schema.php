@@ -453,9 +453,10 @@ class Schema implements ISchema
       /** @var ReflectionAttribute $columnAttribute */
       /** @var Column $columnAttributeInstance */
       $columnAttributeInstance = $columnAttribute->newInstance();
+      $resolvedColumnName = $columnAttributeInstance->name ?: strtosnake($reflectionProperty->getName());
       if (!$columnAttributeInstance->name)
       {
-        $createDefinitions .= SqlDialectHelper::quoteIdentifier($reflectionProperty->getName(), $options->dialect) . ' ';
+        $createDefinitions .= SqlDialectHelper::quoteIdentifier($resolvedColumnName, $options->dialect) . ' ';
       }
       $createDefinitions .= $columnAttributeInstance->getSqlDefinition($options->dialect) . ',' . PHP_EOL;
     }
@@ -512,7 +513,7 @@ class Schema implements ISchema
       if ($columnInspector->propertyHasColumnAttribute($propertyReflection))
       {
         $columnAttribute = $columnInspector->getMetaDataFromReflection($propertyReflection);
-        $columnName = $columnAttribute->name ?: $propertyReflection->getName();
+        $columnName = $columnAttribute->name ?: strtosnake($propertyReflection->getName());
         $entityColumnAttributes[$columnName] = $columnAttribute;
         $entityFieldNames[] = $columnName;
       }
@@ -1101,7 +1102,7 @@ SQL
       }
 
       $column = $columnInspector->getMetaDataFromReflection($propertyReflection);
-      $columnNames[] = $column->name ?: $propertyReflection->getName();
+      $columnNames[] = $column->name ?: strtosnake($propertyReflection->getName());
     }
 
     return $columnNames;

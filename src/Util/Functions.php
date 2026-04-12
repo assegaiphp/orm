@@ -127,7 +127,12 @@ if (!function_exists('strtosnake')) {
    */
   function strtosnake(string $string): string
   {
-    return mb_strtolower(preg_replace('/[\s\-\W]+/', '_', $string));
+    $normalized = preg_replace('/([A-Z]+)([A-Z][a-z])/', '$1_$2', $string);
+    $normalized = preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $normalized ?? $string);
+    $normalized = preg_replace('/[\s\-\W]+/', '_', $normalized ?? $string);
+    $normalized = preg_replace('/_+/', '_', $normalized ?? $string);
+
+    return trim(mb_strtolower($normalized ?? $string), '_');
   }
 }
 

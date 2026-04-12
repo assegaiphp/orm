@@ -239,12 +239,12 @@ final class EntityInspector
         $attributeInstance = $attribute->newInstance();
 
         if ($attributeInstance instanceof Column) {
+          $resolvedColumnName = $attributeInstance->name ?: $this->getColumnName($propertyName);
+
           if ($attributeInstance->alias) {
-            $columns[$attributeInstance->alias] = "$tableName.$attributeInstance->name";
-          } else if ($attributeInstance->name) {
-            $columns[$propertyName] = "$tableName.$attributeInstance->name";
+            $columns[$attributeInstance->alias] = "$tableName.$resolvedColumnName";
           } else {
-            $columns[] = "$tableName.$propertyName";
+            $columns[$propertyName] = "$tableName.$resolvedColumnName";
           }
 
           # Set the ColumnType
@@ -387,15 +387,9 @@ final class EntityInspector
    */
   private function getColumnName(string|array $name): string
   {
-    $output = $name;
-    if (is_array($output)) {
-      $output = implode(' ', $output);
-    }
+    $output = is_array($name) ? implode(' ', $name) : $name;
 
-    $output = strtolower($output);
-    $output = ucwords(preg_replace('/[\W+]/', ' ', $output));
-    $output = str_replace(' ', '', $output);
-    return lcfirst($output);
+    return strtosnake($output);
   }
 
   /**
@@ -424,14 +418,13 @@ final class EntityInspector
 
         foreach ($columnAttributes as $columnAttribute) {
           $attributeInstance = $columnAttribute->newInstance();
+          $resolvedColumnName = $attributeInstance->name ?: $this->getColumnName($propertyName);
 
           if ($attributeInstance instanceof Column) {
             if ($attributeInstance->alias) {
-              $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $attributeInstance->name;
-            } else if ($attributeInstance->name) {
-              $columns[$propertyName] = "$tableName." . $attributeInstance->name;
+              $columns["{$tableName}_" . $attributeInstance->alias] = "$tableName." . $resolvedColumnName;
             } else {
-              $columns["{$tableName}_" . $propertyName] = "$tableName." . $propertyName;
+              $columns[$propertyName] = "$tableName." . $resolvedColumnName;
             }
           }
         }

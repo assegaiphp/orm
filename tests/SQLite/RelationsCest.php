@@ -54,14 +54,14 @@ class RelationsCest
     $db->exec('CREATE TABLE relation_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, profileId INTEGER)');
     $db->exec('CREATE TABLE relation_authors (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
     $db->exec('CREATE TABLE relation_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL)');
-    $db->exec('CREATE TABLE relation_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, authorId INTEGER)');
+    $db->exec('CREATE TABLE relation_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, author_id INTEGER)');
     $db->exec('CREATE TABLE relation_posts_tags (post_id INTEGER NOT NULL, tag_id INTEGER NOT NULL)');
 
     $db->exec("INSERT INTO relation_profiles (id, bio) VALUES (1, 'Builder'), (2, 'Explorer')");
     $db->exec("INSERT INTO relation_users (id, name, profileId) VALUES (1, 'Alice', 1), (2, 'Bob', 2)");
     $db->exec("INSERT INTO relation_authors (id, name) VALUES (1, 'John'), (2, 'Mary')");
     $db->exec("INSERT INTO relation_tags (id, label) VALUES (1, 'php'), (2, 'orm'), (3, 'nest')");
-    $db->exec("INSERT INTO relation_posts (id, title, authorId) VALUES (1, 'Hello ORM', 1), (2, 'Deep Dive', 1), (3, 'Other Post', 2)");
+    $db->exec("INSERT INTO relation_posts (id, title, author_id) VALUES (1, 'Hello ORM', 1), (2, 'Deep Dive', 1), (3, 'Other Post', 2)");
     $db->exec('INSERT INTO relation_posts_tags (post_id, tag_id) VALUES (1, 1), (1, 2), (2, 2), (2, 3)');
   }
 
@@ -184,10 +184,10 @@ class RelationsCest
     $I->assertTrue($result->isOk());
 
     $row = $this->dataSource->getClient()
-      ->query("SELECT title, authorId FROM relation_posts WHERE title = 'Inserted With Author'")
+      ->query("SELECT title, author_id FROM relation_posts WHERE title = 'Inserted With Author'")
       ->fetch();
 
     $I->assertSame('Inserted With Author', $row['title']);
-    $I->assertSame(1, (int)$row['authorId']);
+    $I->assertSame(1, (int)$row['author_id']);
   }
 }

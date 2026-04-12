@@ -1743,7 +1743,7 @@ class EntityManager implements IEntityStoreOwner
 
               $columnName = $relationProperties[$columnName]->joinColumn->effectiveColumnName;
             } else {
-              $columnName = $columnMap[$columnName];
+              $columnName = $this->getUnqualifiedColumnName($columnMap[$columnName]);
             }
           }
 
@@ -1863,20 +1863,37 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * Returns the column name for a given property. If no column name is specified, returns the property name.
+   * Removes the table prefix from a column reference when a SQL assignment target must be unqualified.
    *
-   * @param object $entity The entity to get the column name for.
-   * @param string $prop The property to get the column name for.
-   * @return string Returns the column name for the given property.
+   * @param string $columnReference The column reference to normalize.
+   * @return string The unqualified column name.
+   */
+  private function getUnqualifiedColumnName(string $columnReference): string
+  {
+    if (!str_contains($columnReference, '.')) {
+      return $columnReference;
+    }
+
+    return substr($columnReference, strrpos($columnReference, '.') + 1);
+  }
+
+  /**
+   * Resolves the storage column name for a given entity property.
+   *
+   * Regular column-backed properties default to snake_case when no explicit column name is supplied.
+   * Relation properties continue to return the PHP property name so relation metadata can decide which
+   * join column to use later in the update and condition-building paths.
+   *
+   * @param object $entity The entity that owns the property.
+   * @param string $prop The property name to resolve.
+   * @return string The resolved storage column name or the original relation property name.
    */
   private function getColumnNameFromProperty(object $entity, string $prop): string
   {
     if (!property_exists($entity, $prop)) {
-      # Check if this is a relation property
-
-      # Get all entities with
       return $prop;
     }
+
     $propertyReflection = new ReflectionProperty($entity, $prop);
     $attributes = $propertyReflection->getAttributes();
 
@@ -1899,7 +1916,7 @@ class EntityManager implements IEntityStoreOwner
 
     /** @var Column $column */
     $column = $columnAttribute->newInstance();
-    return empty($column->name) ? $prop : $column->name;
+    return empty($column->name) ? strtosnake($prop) : $column->name;
   }
 
   /**
