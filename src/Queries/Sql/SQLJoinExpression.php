@@ -4,7 +4,13 @@ namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Enumerations\JoinType;
 
-final class SQLJoinExpression
+/**
+ * Base JOIN-expression builder shared across SQL-family dialects.
+ *
+ * The class is intentionally extensible so dialect-specific subclasses can
+ * keep the fluent chain typed after `join(...)->on(...)` or `join(...)->using(...)`.
+ */
+class SQLJoinExpression
 {
   /**
    * @param SQLQuery $query
@@ -12,9 +18,9 @@ final class SQLJoinExpression
    * @param JoinType|null $joinType
    */
   public function __construct(
-    private readonly SQLQuery     $query,
-    private readonly array|string $joinTableReferences,
-    private ?JoinType             $joinType = null
+    protected readonly SQLQuery     $query,
+    protected readonly array|string $joinTableReferences,
+    protected ?JoinType             $joinType = null
   ) {
     if (is_null($this->joinType))
     {
@@ -39,7 +45,7 @@ final class SQLJoinExpression
    */
   public function on(string $searchCondition): SQLJoinSpecification
   {
-    return new SQLJoinSpecification(query: $this->query, conditionOrList: $searchCondition);
+    return $this->createJoinSpecification(conditionOrList: $searchCondition);
   }
 
   /**
@@ -48,7 +54,22 @@ final class SQLJoinExpression
    */
   public function using(array $joinColumnList): SQLJoinSpecification
   {
-    return new SQLJoinSpecification(query: $this->query, conditionOrList: $joinColumnList, isUsing: true);
+    return $this->createJoinSpecification(conditionOrList: $joinColumnList, isUsing: true);
+  }
+
+  /**
+   * Create the join specification builder used by this join expression.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed join specification builders.
+   *
+   * @param string|array $conditionOrList The join condition or USING column list.
+   * @param bool $isUsing Whether the specification should compile as USING.
+   * @return SQLJoinSpecification Returns the join specification builder.
+   */
+  protected function createJoinSpecification(string|array $conditionOrList, bool $isUsing = false): SQLJoinSpecification
+  {
+    return new SQLJoinSpecification(query: $this->query, conditionOrList: $conditionOrList, isUsing: $isUsing);
   }
 
   private function formatJoinTableReferences(array|string $tableReferences): string

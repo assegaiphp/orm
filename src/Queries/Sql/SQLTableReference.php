@@ -2,6 +2,7 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\JoinType;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Traits\ExecutableTrait;
@@ -109,5 +110,20 @@ class SQLTableReference
       query: $this->query,
       condition: $condition
     );
+  }
+
+  /**
+   * Create the join expression builder used by joinable methods on this table reference.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed join-expression builders.
+   *
+   * @param array|string $tableReferences The table name, table list, or alias map.
+   * @param JoinType $joinType The join type to apply.
+   * @return SQLJoinExpression Returns the join-expression builder.
+   */
+  protected function createJoinExpression(array|string $tableReferences, JoinType $joinType): SQLJoinExpression
+  {
+    return new SQLJoinExpression(query: $this->query, joinTableReferences: $tableReferences, joinType: $joinType);
   }
 }

@@ -9,6 +9,8 @@ use Assegai\Orm\Queries\MariaDb\MariaDbAlterDatabaseOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbAlterTableOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbDeleteFromStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbDescribeStatement;
+use Assegai\Orm\Queries\MariaDb\MariaDbJoinExpression;
+use Assegai\Orm\Queries\MariaDb\MariaDbJoinSpecification;
 use Assegai\Orm\Queries\MariaDb\MariaDbTruncateStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbUseStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbQuery;
@@ -27,6 +29,8 @@ use Assegai\Orm\Queries\MySql\MySQLHavingClause;
 use Assegai\Orm\Queries\MySql\MySQLAlterTableOption;
 use Assegai\Orm\Queries\MySql\MySQLDeleteFromStatement;
 use Assegai\Orm\Queries\MySql\MySQLDescribeStatement;
+use Assegai\Orm\Queries\MySql\MySQLJoinExpression;
+use Assegai\Orm\Queries\MySql\MySQLJoinSpecification;
 use Assegai\Orm\Queries\MySql\MySQLTruncateStatement;
 use Assegai\Orm\Queries\MySql\MySQLUseStatement;
 use Assegai\Orm\Queries\MySql\MySQLInsertIntoStatement;
@@ -39,6 +43,8 @@ use Assegai\Orm\Queries\MySql\MySQLUpdateDefinition;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLAlterTableOption;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLDeleteFromStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLDescribeStatement;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLJoinExpression;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLJoinSpecification;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLTruncateStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery;
@@ -53,6 +59,8 @@ use Assegai\Orm\Queries\PostgreSql\PostgreSQLUpdateDefinition;
 use Assegai\Orm\Queries\SQLite\SQLiteAlterTableOption;
 use Assegai\Orm\Queries\SQLite\SQLiteDeleteFromStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteDescribeStatement;
+use Assegai\Orm\Queries\SQLite\SQLiteJoinExpression;
+use Assegai\Orm\Queries\SQLite\SQLiteJoinSpecification;
 use Assegai\Orm\Queries\SQLite\SQLiteTruncateStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameTableStatement;
@@ -229,6 +237,60 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(PostgreSQLHavingClause::class, $postgresTableReference->having('COUNT(*) > 1'));
         self::assertInstanceOf(SQLiteHavingClause::class, $sqliteTableReference->having('COUNT(*) > 1'));
         self::assertInstanceOf(MariaDbHavingClause::class, $mariaDbTableReference->having('COUNT(*) > 1'));
+    }
+
+    public function testDialectSpecificJoinChainsStayTypedAfterJoinOnWhereAndNestedJoin(): void
+    {
+        $mysqlTableReference = $this->createQuery(SQLDialect::POSTGRESQL)
+            ->switchToMysql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $postgresTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $sqliteTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToSqlite()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $mariaDbTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+
+        $mysqlJoinExpression = $mysqlTableReference->join('profiles');
+        $postgresJoinExpression = $postgresTableReference->join('profiles');
+        $sqliteJoinExpression = $sqliteTableReference->join('profiles');
+        $mariaDbJoinExpression = $mariaDbTableReference->join('profiles');
+
+        self::assertInstanceOf(MySQLJoinExpression::class, $mysqlJoinExpression);
+        self::assertInstanceOf(PostgreSQLJoinExpression::class, $postgresJoinExpression);
+        self::assertInstanceOf(SQLiteJoinExpression::class, $sqliteJoinExpression);
+        self::assertInstanceOf(MariaDbJoinExpression::class, $mariaDbJoinExpression);
+
+        $mysqlJoinSpecification = $mysqlJoinExpression->on('`users`.`profile_id` = `profiles`.`id`');
+        $postgresJoinSpecification = $postgresJoinExpression->on('"users"."profile_id" = "profiles"."id"');
+        $sqliteJoinSpecification = $sqliteJoinExpression->on('"users"."profile_id" = "profiles"."id"');
+        $mariaDbJoinSpecification = $mariaDbJoinExpression->on('`users`.`profile_id` = `profiles`.`id`');
+
+        self::assertInstanceOf(MySQLJoinSpecification::class, $mysqlJoinSpecification);
+        self::assertInstanceOf(PostgreSQLJoinSpecification::class, $postgresJoinSpecification);
+        self::assertInstanceOf(SQLiteJoinSpecification::class, $sqliteJoinSpecification);
+        self::assertInstanceOf(MariaDbJoinSpecification::class, $mariaDbJoinSpecification);
+
+        self::assertInstanceOf(MySQLWhereClause::class, $mysqlJoinSpecification->where('`profiles`.`active` = 1'));
+        self::assertInstanceOf(PostgreSQLWhereClause::class, $postgresJoinSpecification->where('"profiles"."active" = true'));
+        self::assertInstanceOf(SQLiteWhereClause::class, $sqliteJoinSpecification->where('"profiles"."active" = 1'));
+        self::assertInstanceOf(MariaDbWhereClause::class, $mariaDbJoinSpecification->where('`profiles`.`active` = 1'));
+
+        self::assertInstanceOf(MySQLJoinExpression::class, $mysqlJoinSpecification->leftJoin('teams'));
+        self::assertInstanceOf(PostgreSQLJoinExpression::class, $postgresJoinSpecification->leftJoin('teams'));
+        self::assertInstanceOf(SQLiteJoinExpression::class, $sqliteJoinSpecification->leftJoin('teams'));
+        self::assertInstanceOf(MariaDbJoinExpression::class, $mariaDbJoinSpecification->leftJoin('teams'));
     }
 
     public function testMySqlSelectHighPriorityCompilesOnlyOnMySqlBuilder(): void
