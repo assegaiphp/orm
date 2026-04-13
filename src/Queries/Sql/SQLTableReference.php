@@ -8,19 +8,27 @@ use Assegai\Orm\Traits\ExecutableTrait;
 use Assegai\Orm\Traits\JoinableTrait;
 use Assegai\Orm\Traits\SQLAggregatorTrait;
 
-final class SQLTableReference
+/**
+ * Base FROM-clause builder shared across SQL-family dialects.
+ *
+ * The class is intentionally extensible so dialect-specific subclasses can
+ * keep the fluent chain typed without duplicating the shared FROM rendering.
+ */
+class SQLTableReference
 {
   use ExecutableTrait;
   use SQLAggregatorTrait;
   use JoinableTrait;
 
   /**
-   * @param SQLQuery $query
-   * @param array|string $tableReferences
+   * Create a new shared table reference builder.
+   *
+   * @param SQLQuery $query The query being built.
+   * @param array|string $tableReferences The table name, table list, or alias map.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly array|string $tableReferences
+    protected readonly SQLQuery $query,
+    protected readonly array|string $tableReferences
   ) {
     $queryString = 'FROM ';
     $separate = ', ';
@@ -48,8 +56,10 @@ final class SQLTableReference
   }
 
   /**
-   * @param string|array|FindOptions|FindWhereOptions $condition
-   * @return SQLWhereClause
+   * Add a WHERE clause to the current query.
+   *
+   * @param string|array|FindOptions|FindWhereOptions $condition The condition to compile and append.
+   * @return SQLWhereClause Returns the shared WHERE clause builder.
    */
   public function where(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
   {
@@ -60,8 +70,10 @@ final class SQLTableReference
   }
 
   /**
-   * @param string $condition
-   * @return SQLHavingClause
+   * Add a HAVING clause to the current query.
+   *
+   * @param string $condition The HAVING condition to append.
+   * @return SQLHavingClause Returns the shared HAVING clause builder.
    */
   public function having(string $condition): SQLHavingClause
   {

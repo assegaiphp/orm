@@ -15,7 +15,11 @@ use Assegai\Orm\Queries\MariaDb\MariaDbQuery;
 use Assegai\Orm\Queries\MariaDb\MariaDbRenameStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbRenameTableStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbSelectDefinition;
+use Assegai\Orm\Queries\MariaDb\MariaDbSelectExpression;
+use Assegai\Orm\Queries\MariaDb\MariaDbTableReference;
 use Assegai\Orm\Queries\MySql\MySQLAlterDatabaseOption;
+use Assegai\Orm\Queries\MySql\MySQLSelectExpression;
+use Assegai\Orm\Queries\MySql\MySQLTableReference;
 use Assegai\Orm\Queries\MySql\MySQLAlterTableOption;
 use Assegai\Orm\Queries\MySql\MySQLDeleteFromStatement;
 use Assegai\Orm\Queries\MySql\MySQLDescribeStatement;
@@ -37,6 +41,8 @@ use Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLRenameStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLRenameTableStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLSelectDefinition;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLSelectExpression;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLTableReference;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLUpdateDefinition;
 use Assegai\Orm\Queries\SQLite\SQLiteAlterTableOption;
 use Assegai\Orm\Queries\SQLite\SQLiteDeleteFromStatement;
@@ -45,6 +51,8 @@ use Assegai\Orm\Queries\SQLite\SQLiteTruncateStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameTableStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteSelectDefinition;
+use Assegai\Orm\Queries\SQLite\SQLiteSelectExpression;
+use Assegai\Orm\Queries\SQLite\SQLiteTableReference;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
 use Assegai\Orm\Queries\Sql\SQLDatabaseCreateDefinitionInterface;
@@ -134,6 +142,51 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertFalse(method_exists($sqliteSelect, 'highPriority'));
         self::assertInstanceOf(MariaDbSelectDefinition::class, $mariaDbSelect);
         self::assertTrue(method_exists($mariaDbSelect, 'highPriority'));
+    }
+
+
+    public function testDialectSpecificSelectChainsStayTypedAfterAllAndFrom(): void
+    {
+        $mysqlExpression = $this->createQuery(SQLDialect::POSTGRESQL)
+            ->switchToMysql()
+            ->select()
+            ->all(['users.name']);
+        $postgresExpression = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->select()
+            ->all(['users.name']);
+        $sqliteExpression = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToSqlite()
+            ->select()
+            ->all(['users.name']);
+        $mariaDbExpression = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->select()
+            ->all(['users.name']);
+
+        self::assertInstanceOf(MySQLSelectExpression::class, $mysqlExpression);
+        self::assertInstanceOf(PostgreSQLSelectExpression::class, $postgresExpression);
+        self::assertInstanceOf(SQLiteSelectExpression::class, $sqliteExpression);
+        self::assertInstanceOf(MariaDbSelectExpression::class, $mariaDbExpression);
+
+        self::assertInstanceOf(MySQLTableReference::class, $mysqlExpression->from('users'));
+        self::assertInstanceOf(PostgreSQLTableReference::class, $postgresExpression->from('users'));
+        self::assertInstanceOf(SQLiteTableReference::class, $sqliteExpression->from('users'));
+        self::assertInstanceOf(MariaDbTableReference::class, $mariaDbExpression->from('users'));
+    }
+
+    public function testMariaDbHighPrioritySelectChainStaysTyped(): void
+    {
+        $mariaDbSelect = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->select()
+            ->highPriority();
+
+        self::assertInstanceOf(MariaDbSelectDefinition::class, $mariaDbSelect);
+
+        $mariaDbExpression = $mariaDbSelect->all(['users.name']);
+        self::assertInstanceOf(MariaDbSelectExpression::class, $mariaDbExpression);
+        self::assertInstanceOf(MariaDbTableReference::class, $mariaDbExpression->from('users'));
     }
 
     public function testMySqlSelectHighPriorityCompilesOnlyOnMySqlBuilder(): void

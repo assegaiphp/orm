@@ -24,4 +24,65 @@ class MySQLSelectDefinition extends SQLSelectDefinition
 
     return $this;
   }
+
+  /**
+   * Select all columns or the provided column list and keep the fluent chain
+   * on the MySQL expression path.
+   *
+   * @param array $columns The columns to include in the SELECT list.
+   * @return MySQLSelectExpression Returns the MySQL select expression builder.
+   */
+  public function all(array $columns = []): MySQLSelectExpression
+  {
+    return $this->createTypedExpression($this->getColumnListString(columns: $columns));
+  }
+
+  /**
+   * Select a COUNT aggregate and keep the fluent chain on the MySQL
+   * expression path.
+   *
+   * @param array $columns The columns to count.
+   * @return MySQLSelectExpression Returns the MySQL select expression builder.
+   */
+  public function count(array $columns = []): MySQLSelectExpression
+  {
+    return $this->createTypedExpression('COUNT(' . $this->getColumnListString(columns: $columns) . ') as total');
+  }
+
+  /**
+   * Select an AVG aggregate and keep the fluent chain on the MySQL
+   * expression path.
+   *
+   * @param array $columns The columns to average.
+   * @return MySQLSelectExpression Returns the MySQL select expression builder.
+   */
+  public function avg(array $columns = []): MySQLSelectExpression
+  {
+    return $this->createTypedExpression('AVG(' . $this->getColumnListString(columns: $columns) . ')');
+  }
+
+  /**
+   * Select a SUM aggregate and keep the fluent chain on the MySQL
+   * expression path.
+   *
+   * @param array $columns The columns to sum.
+   * @return MySQLSelectExpression Returns the MySQL select expression builder.
+   */
+  public function sum(array $columns = []): MySQLSelectExpression
+  {
+    return $this->createTypedExpression('SUM(' . $this->getColumnListString(columns: $columns) . ')');
+  }
+
+  /**
+   * Append the selection fragment and create the typed MySQL select expression.
+   *
+   * @param string $selection The rendered selection fragment.
+   * @return MySQLSelectExpression Returns the MySQL select expression builder.
+   */
+  protected function createTypedExpression(string $selection): MySQLSelectExpression
+  {
+    $this->query->appendQueryString($selection);
+
+    return new MySQLSelectExpression(query: $this->query);
+  }
 }
