@@ -11,6 +11,7 @@ use Assegai\Orm\Queries\MariaDb\MariaDbDeleteFromStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbDescribeStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbJoinExpression;
 use Assegai\Orm\Queries\MariaDb\MariaDbJoinSpecification;
+use Assegai\Orm\Queries\MariaDb\MariaDbLimitClause;
 use Assegai\Orm\Queries\MariaDb\MariaDbTruncateStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbUseStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbQuery;
@@ -31,6 +32,7 @@ use Assegai\Orm\Queries\MySql\MySQLDeleteFromStatement;
 use Assegai\Orm\Queries\MySql\MySQLDescribeStatement;
 use Assegai\Orm\Queries\MySql\MySQLJoinExpression;
 use Assegai\Orm\Queries\MySql\MySQLJoinSpecification;
+use Assegai\Orm\Queries\MySql\MySQLLimitClause;
 use Assegai\Orm\Queries\MySql\MySQLTruncateStatement;
 use Assegai\Orm\Queries\MySql\MySQLUseStatement;
 use Assegai\Orm\Queries\MySql\MySQLInsertIntoStatement;
@@ -45,6 +47,7 @@ use Assegai\Orm\Queries\PostgreSql\PostgreSQLDeleteFromStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLDescribeStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLJoinExpression;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLJoinSpecification;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLLimitClause;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLTruncateStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery;
@@ -61,6 +64,7 @@ use Assegai\Orm\Queries\SQLite\SQLiteDeleteFromStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteDescribeStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteJoinExpression;
 use Assegai\Orm\Queries\SQLite\SQLiteJoinSpecification;
+use Assegai\Orm\Queries\SQLite\SQLiteLimitClause;
 use Assegai\Orm\Queries\SQLite\SQLiteTruncateStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameTableStatement;
@@ -291,6 +295,65 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(PostgreSQLJoinExpression::class, $postgresJoinSpecification->leftJoin('teams'));
         self::assertInstanceOf(SQLiteJoinExpression::class, $sqliteJoinSpecification->leftJoin('teams'));
         self::assertInstanceOf(MariaDbJoinExpression::class, $mariaDbJoinSpecification->leftJoin('teams'));
+    }
+
+    public function testDialectSpecificLimitBuildersStayTypedAfterFromAndWhere(): void
+    {
+        $mysqlTableReference = $this->createQuery(SQLDialect::POSTGRESQL)
+            ->switchToMysql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $postgresTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $sqliteTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToSqlite()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $mariaDbTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+
+        self::assertInstanceOf(MySQLLimitClause::class, $mysqlTableReference->limit(10, 20));
+        self::assertInstanceOf(PostgreSQLLimitClause::class, $postgresTableReference->limit(10, 20));
+        self::assertInstanceOf(SQLiteLimitClause::class, $sqliteTableReference->limit(10, 20));
+        self::assertInstanceOf(MariaDbLimitClause::class, $mariaDbTableReference->limit(10, 20));
+
+        $mysqlWhereClause = $this->createQuery(SQLDialect::POSTGRESQL)
+            ->switchToMysql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->where('`users`.`active` = 1');
+        $postgresWhereClause = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->where('"users"."active" = true');
+        $sqliteWhereClause = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToSqlite()
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->where('"users"."active" = 1');
+        $mariaDbWhereClause = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->where('`users`.`active` = 1');
+
+        self::assertInstanceOf(MySQLLimitClause::class, $mysqlWhereClause->limit(5));
+        self::assertInstanceOf(PostgreSQLLimitClause::class, $postgresWhereClause->limit(5));
+        self::assertInstanceOf(SQLiteLimitClause::class, $sqliteWhereClause->limit(5));
+        self::assertInstanceOf(MariaDbLimitClause::class, $mariaDbWhereClause->limit(5));
     }
 
     public function testMySqlSelectHighPriorityCompilesOnlyOnMySqlBuilder(): void

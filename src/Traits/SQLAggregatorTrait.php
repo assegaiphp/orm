@@ -23,10 +23,25 @@ trait SQLAggregatorTrait
   public function limit(int $limit, ?int $offset = null): SQLLimitClause|static
   {
     if (property_exists($this, 'query')) {
-      return new SQLLimitClause(query: $this->query, limit: $limit, offset: $offset);
+      return $this->createLimitClause(limit: $limit, offset: $offset);
     }
 
     return $this;
+  }
+
+  /**
+   * Create the LIMIT-clause builder used by this query segment.
+   *
+   * Dialect-specific builders override this method to keep the fluent
+   * chain on their own typed LIMIT builders.
+   *
+   * @param int $limit The maximum number of rows to return.
+   * @param int|null $offset The number of rows to skip before returning results.
+   * @return SQLLimitClause Returns the LIMIT-clause builder.
+   */
+  protected function createLimitClause(int $limit, ?int $offset = null): SQLLimitClause
+  {
+    return new SQLLimitClause(query: $this->query, limit: $limit, offset: $offset);
   }
 
   /**

@@ -13,6 +13,18 @@ use Assegai\Orm\Queries\MySql\MySQLTableReference;
 class MariaDbTableReference extends MySQLTableReference
 {
   /**
+   * Add a LIMIT clause and keep the fluent chain on the MariaDB builder path.
+   *
+   * @param int $limit The maximum number of rows to return.
+   * @param int|null $offset The number of rows to skip before returning results.
+   * @return MariaDbLimitClause Returns the MariaDB LIMIT-clause builder.
+   */
+  public function limit(int $limit, ?int $offset = null): MariaDbLimitClause
+  {
+    return $this->createLimitClause(limit: $limit, offset: $offset);
+  }
+
+  /**
    * Add a JOIN clause and keep the fluent chain on the MariaDB builder path.
    *
    * @param array|string $tableReferences The table name, table list, or alias map.
@@ -121,5 +133,17 @@ class MariaDbTableReference extends MySQLTableReference
   protected function createJoinExpression(array|string $tableReferences, JoinType $joinType): MariaDbJoinExpression
   {
     return new MariaDbJoinExpression(query: $this->query, joinTableReferences: $tableReferences, joinType: $joinType);
+  }
+
+  /**
+   * Create the MariaDB LIMIT-clause builder.
+   *
+   * @param int $limit The maximum number of rows to return.
+   * @param int|null $offset The number of rows to skip before returning results.
+   * @return MariaDbLimitClause Returns the MariaDB LIMIT-clause builder.
+   */
+  protected function createLimitClause(int $limit, ?int $offset = null): MariaDbLimitClause
+  {
+    return new MariaDbLimitClause(query: $this->query, limit: $limit, offset: $offset);
   }
 }

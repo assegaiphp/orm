@@ -5,7 +5,13 @@ namespace Assegai\Orm\Queries\Sql;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Traits\ExecutableTrait;
 
-final class SQLLimitClause
+/**
+ * Base LIMIT-clause builder shared across SQL-family dialects.
+ *
+ * Dialect-specific subclasses keep the fluent chain typed after
+ * `from(...)->limit(...)` or `where(...)->limit(...)`.
+ */
+class SQLLimitClause
 {
   use ExecutableTrait;
 
@@ -15,9 +21,9 @@ final class SQLLimitClause
    * @param int|null $offset
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly int      $limit,
-    private readonly ?int     $offset = null,
+    protected readonly SQLQuery $query,
+    protected readonly int      $limit,
+    protected readonly ?int     $offset = null,
   )
   {
     $queryString = match (true) {

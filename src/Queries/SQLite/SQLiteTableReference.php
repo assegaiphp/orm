@@ -13,6 +13,18 @@ use Assegai\Orm\Queries\Sql\SQLTableReference;
 class SQLiteTableReference extends SQLTableReference
 {
   /**
+   * Add a LIMIT clause and keep the fluent chain on the SQLite builder path.
+   *
+   * @param int $limit The maximum number of rows to return.
+   * @param int|null $offset The number of rows to skip before returning results.
+   * @return SQLiteLimitClause Returns the SQLite LIMIT-clause builder.
+   */
+  public function limit(int $limit, ?int $offset = null): SQLiteLimitClause
+  {
+    return $this->createLimitClause(limit: $limit, offset: $offset);
+  }
+
+  /**
    * Add a JOIN clause and keep the fluent chain on the SQLite builder path.
    *
    * @param array|string $tableReferences The table name, table list, or alias map.
@@ -121,5 +133,17 @@ class SQLiteTableReference extends SQLTableReference
   protected function createJoinExpression(array|string $tableReferences, JoinType $joinType): SQLiteJoinExpression
   {
     return new SQLiteJoinExpression(query: $this->query, joinTableReferences: $tableReferences, joinType: $joinType);
+  }
+
+  /**
+   * Create the SQLite LIMIT-clause builder.
+   *
+   * @param int $limit The maximum number of rows to return.
+   * @param int|null $offset The number of rows to skip before returning results.
+   * @return SQLiteLimitClause Returns the SQLite LIMIT-clause builder.
+   */
+  protected function createLimitClause(int $limit, ?int $offset = null): SQLiteLimitClause
+  {
+    return new SQLiteLimitClause(query: $this->query, limit: $limit, offset: $offset);
   }
 }
