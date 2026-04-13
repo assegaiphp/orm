@@ -17,9 +17,13 @@ use Assegai\Orm\Queries\MariaDb\MariaDbRenameTableStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbSelectDefinition;
 use Assegai\Orm\Queries\MariaDb\MariaDbSelectExpression;
 use Assegai\Orm\Queries\MariaDb\MariaDbTableReference;
+use Assegai\Orm\Queries\MariaDb\MariaDbWhereClause;
+use Assegai\Orm\Queries\MariaDb\MariaDbHavingClause;
 use Assegai\Orm\Queries\MySql\MySQLAlterDatabaseOption;
 use Assegai\Orm\Queries\MySql\MySQLSelectExpression;
 use Assegai\Orm\Queries\MySql\MySQLTableReference;
+use Assegai\Orm\Queries\MySql\MySQLWhereClause;
+use Assegai\Orm\Queries\MySql\MySQLHavingClause;
 use Assegai\Orm\Queries\MySql\MySQLAlterTableOption;
 use Assegai\Orm\Queries\MySql\MySQLDeleteFromStatement;
 use Assegai\Orm\Queries\MySql\MySQLDescribeStatement;
@@ -43,6 +47,8 @@ use Assegai\Orm\Queries\PostgreSql\PostgreSQLRenameTableStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLSelectDefinition;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLSelectExpression;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLTableReference;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLWhereClause;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLHavingClause;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLUpdateDefinition;
 use Assegai\Orm\Queries\SQLite\SQLiteAlterTableOption;
 use Assegai\Orm\Queries\SQLite\SQLiteDeleteFromStatement;
@@ -53,6 +59,8 @@ use Assegai\Orm\Queries\SQLite\SQLiteRenameTableStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteSelectDefinition;
 use Assegai\Orm\Queries\SQLite\SQLiteSelectExpression;
 use Assegai\Orm\Queries\SQLite\SQLiteTableReference;
+use Assegai\Orm\Queries\SQLite\SQLiteWhereClause;
+use Assegai\Orm\Queries\SQLite\SQLiteHavingClause;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
 use Assegai\Orm\Queries\Sql\SQLDatabaseCreateDefinitionInterface;
@@ -187,6 +195,40 @@ final class SqlDialectRenderingTest extends TestCase
         $mariaDbExpression = $mariaDbSelect->all(['users.name']);
         self::assertInstanceOf(MariaDbSelectExpression::class, $mariaDbExpression);
         self::assertInstanceOf(MariaDbTableReference::class, $mariaDbExpression->from('users'));
+    }
+
+    public function testDialectSpecificTableReferenceChainsStayTypedAfterWhereAndHaving(): void
+    {
+        $mysqlTableReference = $this->createQuery(SQLDialect::POSTGRESQL)
+            ->switchToMysql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $postgresTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $sqliteTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToSqlite()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+        $mariaDbTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
+
+        self::assertInstanceOf(MySQLWhereClause::class, $mysqlTableReference->where('`users`.`active` = 1'));
+        self::assertInstanceOf(PostgreSQLWhereClause::class, $postgresTableReference->where('"users"."active" = true'));
+        self::assertInstanceOf(SQLiteWhereClause::class, $sqliteTableReference->where('"users"."active" = 1'));
+        self::assertInstanceOf(MariaDbWhereClause::class, $mariaDbTableReference->where('`users`.`active` = 1'));
+
+        self::assertInstanceOf(MySQLHavingClause::class, $mysqlTableReference->having('COUNT(*) > 1'));
+        self::assertInstanceOf(PostgreSQLHavingClause::class, $postgresTableReference->having('COUNT(*) > 1'));
+        self::assertInstanceOf(SQLiteHavingClause::class, $sqliteTableReference->having('COUNT(*) > 1'));
+        self::assertInstanceOf(MariaDbHavingClause::class, $mariaDbTableReference->having('COUNT(*) > 1'));
     }
 
     public function testMySqlSelectHighPriorityCompilesOnlyOnMySqlBuilder(): void

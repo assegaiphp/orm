@@ -63,10 +63,7 @@ class SQLTableReference
    */
   public function where(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
   {
-    return new SQLWhereClause(
-      query: $this->query,
-      condition: $condition
-    );
+    return $this->createWhereClause(condition: $condition);
   }
 
   /**
@@ -76,6 +73,37 @@ class SQLTableReference
    * @return SQLHavingClause Returns the shared HAVING clause builder.
    */
   public function having(string $condition): SQLHavingClause
+  {
+    return $this->createHavingClause(condition: $condition);
+  }
+
+  /**
+   * Create the WHERE clause builder used by this table reference.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed WHERE builders.
+   *
+   * @param string|array|FindOptions|FindWhereOptions $condition The condition to compile and append.
+   * @return SQLWhereClause Returns the WHERE clause builder.
+   */
+  protected function createWhereClause(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
+  {
+    return new SQLWhereClause(
+      query: $this->query,
+      condition: $condition
+    );
+  }
+
+  /**
+   * Create the HAVING clause builder used by this table reference.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed HAVING builders.
+   *
+   * @param string $condition The HAVING condition to append.
+   * @return SQLHavingClause Returns the HAVING clause builder.
+   */
+  protected function createHavingClause(string $condition): SQLHavingClause
   {
     return new SQLHavingClause(
       query: $this->query,

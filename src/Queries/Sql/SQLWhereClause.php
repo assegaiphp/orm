@@ -8,11 +8,14 @@ use Assegai\Orm\Traits\ExecutableTrait;
 use Assegai\Orm\Traits\SQLAggregatorTrait;
 
 /**
- * Class SQLWhereClause represents a WHERE clause in an SQL query.
+ * Base WHERE-clause builder shared across SQL-family dialects.
+ *
+ * The class is intentionally extensible so dialect-specific subclasses can
+ * keep the fluent chain typed after `from(...)->where(...)`.
  *
  * @package Assegai\Orm\Queries\Sql
  */
-final class SQLWhereClause
+class SQLWhereClause
 {
   use ExecutableTrait;
   use SQLAggregatorTrait;
@@ -22,8 +25,8 @@ final class SQLWhereClause
    * @param string $condition
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string|array|FindOptions|FindWhereOptions $condition
+    protected readonly SQLQuery $query,
+    protected readonly string|array|FindOptions|FindWhereOptions $condition
   )
   {
     $condition = $this->compileCondition($this->condition);
@@ -41,7 +44,7 @@ final class SQLWhereClause
    * @param string $condition
    * @return $this
    */
-  public function or(string $condition): SQLWhereClause
+  public function or(string $condition): static
   {
     $operator = $this->filterOperator('OR');
     $this->query->appendQueryString("$operator " . $this->filterConditionColumnNames($condition));
@@ -52,7 +55,7 @@ final class SQLWhereClause
    * @param string $condition
    * @return $this
    */
-  public function and(string $condition): SQLWhereClause
+  public function and(string $condition): static
   {
     $operator = $this->filterOperator('AND');
     $this->query->appendQueryString("$operator $condition");

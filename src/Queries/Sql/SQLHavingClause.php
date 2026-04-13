@@ -4,7 +4,13 @@ namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Traits\ExecutableTrait;
 
-final class SQLHavingClause
+/**
+ * Base HAVING-clause builder shared across SQL-family dialects.
+ *
+ * The class is intentionally extensible so dialect-specific subclasses can
+ * keep the fluent chain typed after `from(...)->having(...)`.
+ */
+class SQLHavingClause
 {
   use ExecutableTrait;
 
@@ -13,8 +19,8 @@ final class SQLHavingClause
    * @param string $condition
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string $condition
+    protected readonly SQLQuery $query,
+    protected readonly string $condition
   )
   {
     $this->query->appendQueryString("HAVING $condition");
@@ -24,7 +30,7 @@ final class SQLHavingClause
    * @param string $condition
    * @return $this
    */
-  public function or(string $condition): SQLHavingClause
+  public function or(string $condition): static
   {
     $this->query->appendQueryString("OR $condition");
     return $this;
@@ -34,7 +40,7 @@ final class SQLHavingClause
    * @param string $condition
    * @return $this
    */
-  public function and(string $condition): SQLHavingClause
+  public function and(string $condition): static
   {
     $this->query->appendQueryString("AND $condition");
     return $this;
