@@ -4,19 +4,24 @@ namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Traits\ExecutableTrait;
 
-final class SQLTableOptions
+/**
+ * Shared CREATE TABLE column-body builder.
+ */
+class SQLTableOptions
 {
   use ExecutableTrait;
 
   /**
-   * @param SQLQuery $query
-   * @param array $columns
-   * @param string $comment
+   * Appends the supplied column definitions to the owning CREATE TABLE statement.
+   *
+   * @param SQLQuery $query Receives the rendered CREATE TABLE body.
+   * @param array<int, mixed> $columns The column definitions to render.
+   * @param string $comment Reserved for dialect-specific table comments.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly array    $columns,
-    private readonly string $comment = ""
+    protected readonly SQLQuery $query,
+    protected readonly array $columns,
+    protected readonly string $comment = ""
   )
   {
     $primaryKeyAlreadySet = false;

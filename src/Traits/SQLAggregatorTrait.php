@@ -45,6 +45,22 @@ trait SQLAggregatorTrait
   }
 
   /**
+   * Create the ORDER BY key-part builder used by this query segment.
+   *
+   * @param string $key The identifier to sort by.
+   * @param bool|null $ascending The sort direction to append, or null to omit it.
+   * @return SQLKeyPart Returns the key-part builder for the active dialect.
+   */
+  protected function createKeyPart(string $key, ?bool $ascending = null): SQLKeyPart
+  {
+    return SQLKeyPart::forDialect(
+      key: $key,
+      ascending: $ascending,
+      dialect: $this->query->getDialect()
+    );
+  }
+
+  /**
    * Order the results by the specified column names.
    *
    * @param array<string, string>|SQLKeyPart[] $keyParts A list of **SQLKeyPart** objects.
@@ -57,10 +73,9 @@ trait SQLAggregatorTrait
     if (property_exists($this, 'query')) {
       if (array_is_associative($keyParts)) {
         $callback = function ($key, $value) {
-          return new SQLKeyPart(
+          return $this->createKeyPart(
             key: $key,
-            ascending: strtoupper((string) $value) === 'ASC',
-            dialect: $this->query->getDialect()
+            ascending: strtoupper((string) $value) === 'ASC'
           );
         };
         $bufferKeyPart = array_map($callback, array_keys($keyParts), $keyParts);

@@ -29,9 +29,20 @@ class SQLUpdateDefinition
    */
   public function set(array $assignmentList): SQLAssignmentList
   {
-    return new SQLAssignmentList(
-      query: $this->query,
-      assignmentList: $assignmentList
-    );
+    return $this->createAssignmentList(assignmentList: $assignmentList);
+  }
+
+  /**
+   * Create the assignment-list builder used by this UPDATE statement.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed SET-clause builders.
+   *
+   * @param array $assignmentList The column/value assignments to apply.
+   * @return SQLAssignmentList Returns the assignment-list builder.
+   */
+  protected function createAssignmentList(array $assignmentList): SQLAssignmentList
+  {
+    return new SQLAssignmentList(query: $this->query, assignmentList: $assignmentList);
   }
 }

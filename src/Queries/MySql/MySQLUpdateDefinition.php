@@ -37,4 +37,26 @@ class MySQLUpdateDefinition extends SQLUpdateDefinition
 
         $this->query->setQueryString(trim($queryString) . ' ' . $this->query->quoteIdentifier($this->tableName));
     }
+
+    /**
+     * Start building the SET clause and keep the fluent chain on the MySQL builder path.
+     *
+     * @param array $assignmentList The column/value assignments to apply.
+     * @return MySQLAssignmentList Returns the MySQL assignment-list builder.
+     */
+    public function set(array $assignmentList): MySQLAssignmentList
+    {
+        return $this->createAssignmentList(assignmentList: $assignmentList);
+    }
+
+    /**
+     * Create the MySQL assignment-list builder.
+     *
+     * @param array $assignmentList The column/value assignments to apply.
+     * @return MySQLAssignmentList Returns the MySQL assignment-list builder.
+     */
+    protected function createAssignmentList(array $assignmentList): MySQLAssignmentList
+    {
+        return new MySQLAssignmentList(query: $this->query, assignmentList: $assignmentList);
+    }
 }

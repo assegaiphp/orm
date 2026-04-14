@@ -45,7 +45,7 @@ class PostgreSQLAlterTableOption extends SQLAlterTableOption
    */
   public function setDefault(string $columnName, mixed $value): static
   {
-    $default = (new SQLColumnDefinition(name: $columnName, defaultValue: $value, dialect: $this->query->getDialect()))
+    $default = SQLColumnDefinition::forDialect(name: $columnName, defaultValue: $value, dialect: $this->query->getDialect())
       ->getDefaultExpression();
 
     if (!is_null($default)) {

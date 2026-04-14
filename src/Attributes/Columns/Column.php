@@ -257,7 +257,7 @@ class Column
       $sqlLengthOrValues = $this->normalizeEnumSqlValues($sqlLengthOrValues);
     }
 
-    return new SQLColumnDefinition(
+    return SQLColumnDefinition::forDialect(
       name: $this->name,
       type: $this->type,
       lengthOrValues: $sqlLengthOrValues,

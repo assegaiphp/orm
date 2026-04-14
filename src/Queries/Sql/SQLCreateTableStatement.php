@@ -58,6 +58,20 @@ class SQLCreateTableStatement
    */
   public function columns(array $columns): SQLTableOptions
   {
+    return $this->createTableOptions(columns: $columns);
+  }
+
+  /**
+   * Creates the table-options builder used by this CREATE TABLE statement.
+   *
+   * Dialect-specific CREATE TABLE builders override this method to keep the
+   * fluent path on their own table-options type.
+   *
+   * @param array<int, mixed> $columns The column definitions to render into the CREATE TABLE body.
+   * @return SQLTableOptions Returns the table-options builder for the active dialect.
+   */
+  protected function createTableOptions(array $columns): SQLTableOptions
+  {
     return new SQLTableOptions(query: $this->query, columns: $columns);
   }
 }

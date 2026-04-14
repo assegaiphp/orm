@@ -7,6 +7,10 @@ use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Queries\MariaDb\MariaDbAlterDatabaseOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbAlterTableOption;
+use Assegai\Orm\Queries\MariaDb\MariaDbAssignmentList;
+use Assegai\Orm\Queries\MariaDb\MariaDbColumnDefinition;
+use Assegai\Orm\Queries\MariaDb\MariaDbCreateTableStatement;
+use Assegai\Orm\Queries\MariaDb\MariaDbTableOptions;
 use Assegai\Orm\Queries\MariaDb\MariaDbDeleteFromStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbDescribeStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbJoinExpression;
@@ -20,9 +24,14 @@ use Assegai\Orm\Queries\MariaDb\MariaDbRenameTableStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbSelectDefinition;
 use Assegai\Orm\Queries\MariaDb\MariaDbSelectExpression;
 use Assegai\Orm\Queries\MariaDb\MariaDbTableReference;
+use Assegai\Orm\Queries\MariaDb\MariaDbUpdateDefinition;
 use Assegai\Orm\Queries\MariaDb\MariaDbWhereClause;
 use Assegai\Orm\Queries\MariaDb\MariaDbHavingClause;
 use Assegai\Orm\Queries\MySql\MySQLAlterDatabaseOption;
+use Assegai\Orm\Queries\MySql\MySQLAssignmentList;
+use Assegai\Orm\Queries\MySql\MySQLColumnDefinition;
+use Assegai\Orm\Queries\MySql\MySQLCreateTableStatement;
+use Assegai\Orm\Queries\MySql\MySQLTableOptions;
 use Assegai\Orm\Queries\MySql\MySQLSelectExpression;
 use Assegai\Orm\Queries\MySql\MySQLTableReference;
 use Assegai\Orm\Queries\MySql\MySQLWhereClause;
@@ -45,9 +54,13 @@ use Assegai\Orm\Queries\MySql\MySQLUpdateDefinition;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLAlterTableOption;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLDeleteFromStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLDescribeStatement;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLAssignmentList;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLColumnDefinition;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLCreateTableStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLJoinExpression;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLJoinSpecification;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLLimitClause;
+use Assegai\Orm\Queries\PostgreSql\PostgreSQLTableOptions;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLTruncateStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoStatement;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery;
@@ -62,9 +75,13 @@ use Assegai\Orm\Queries\PostgreSql\PostgreSQLUpdateDefinition;
 use Assegai\Orm\Queries\SQLite\SQLiteAlterTableOption;
 use Assegai\Orm\Queries\SQLite\SQLiteDeleteFromStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteDescribeStatement;
+use Assegai\Orm\Queries\SQLite\SQLiteAssignmentList;
+use Assegai\Orm\Queries\SQLite\SQLiteColumnDefinition;
+use Assegai\Orm\Queries\SQLite\SQLiteCreateTableStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteJoinExpression;
 use Assegai\Orm\Queries\SQLite\SQLiteJoinSpecification;
 use Assegai\Orm\Queries\SQLite\SQLiteLimitClause;
+use Assegai\Orm\Queries\SQLite\SQLiteTableOptions;
 use Assegai\Orm\Queries\SQLite\SQLiteTruncateStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameStatement;
 use Assegai\Orm\Queries\SQLite\SQLiteRenameTableStatement;
@@ -722,6 +739,36 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('CREATE TABLE IF NOT EXISTS "users"', $query->queryString());
     }
 
+    public function testDialectSpecificCreateTableColumnsBuildersStayTyped(): void
+    {
+        $mysqlTable = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql()->create()->table('users');
+        $postgresTable = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres()->create()->table('users');
+        $sqliteTable = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite()->create()->table('users');
+        $mariaDbTable = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb()->create()->table('users');
+
+        self::assertInstanceOf(MySQLCreateTableStatement::class, $mysqlTable);
+        self::assertInstanceOf(PostgreSQLCreateTableStatement::class, $postgresTable);
+        self::assertInstanceOf(SQLiteCreateTableStatement::class, $sqliteTable);
+        self::assertInstanceOf(MariaDbCreateTableStatement::class, $mariaDbTable);
+
+        self::assertInstanceOf(
+            MySQLTableOptions::class,
+            $mysqlTable->columns([new MySQLColumnDefinition('id', ColumnType::INT, nullable: false)])
+        );
+        self::assertInstanceOf(
+            PostgreSQLTableOptions::class,
+            $postgresTable->columns([new PostgreSQLColumnDefinition('id', ColumnType::INT, nullable: false)])
+        );
+        self::assertInstanceOf(
+            SQLiteTableOptions::class,
+            $sqliteTable->columns([new SQLiteColumnDefinition('id', ColumnType::INT, nullable: false)])
+        );
+        self::assertInstanceOf(
+            MariaDbTableOptions::class,
+            $mariaDbTable->columns([new MariaDbColumnDefinition('id', ColumnType::INT, nullable: false)])
+        );
+    }
+
     public function testDialectSpecificDropBuildersExposeTypedApiShapes(): void
     {
         $mysqlDrop = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql()->drop();
@@ -769,16 +816,56 @@ final class SqlDialectRenderingTest extends TestCase
     {
         $mysqlQuery = $this->createQuery(SQLDialect::MYSQL)->switchToMysql();
         $postgresQuery = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres();
+        $sqliteQuery = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite();
+        $mariaDbQuery = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
 
         $mysqlUpdate = $mysqlQuery->update('users', lowPriority: true, ignore: true);
         $postgresUpdate = $postgresQuery->update('users');
+        $sqliteUpdate = $sqliteQuery->update('users');
+        $mariaDbUpdate = $mariaDbQuery->update('users', lowPriority: true, ignore: true);
 
         self::assertInstanceOf(MySQLUpdateDefinition::class, $mysqlUpdate);
         self::assertInstanceOf(PostgreSQLUpdateDefinition::class, $postgresUpdate);
+        self::assertInstanceOf(\Assegai\Orm\Queries\SQLite\SQLiteUpdateDefinition::class, $sqliteUpdate);
+        self::assertInstanceOf(MariaDbUpdateDefinition::class, $mariaDbUpdate);
         self::assertSame(3, (new ReflectionMethod(MySQLQuery::class, 'update'))->getNumberOfParameters());
         self::assertSame(1, (new ReflectionMethod(PostgreSQLQuery::class, 'update'))->getNumberOfParameters());
+        self::assertSame(1, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'update'))->getNumberOfParameters());
+        self::assertSame(3, (new ReflectionMethod(MariaDbQuery::class, 'update'))->getNumberOfParameters());
         self::assertSame('UPDATE LOW_PRIORITY IGNORE `users`', $mysqlQuery->queryString());
         self::assertSame('UPDATE "users"', $postgresQuery->queryString());
+        self::assertSame('UPDATE "users"', $sqliteQuery->queryString());
+        self::assertSame('UPDATE LOW_PRIORITY IGNORE `users`', $mariaDbQuery->queryString());
+    }
+
+    public function testDialectSpecificUpdateSetChainsStayTyped(): void
+    {
+        $mysqlAssignmentList = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMysql()
+            ->update('users')
+            ->set(['name' => 'Ada']);
+        $postgresAssignmentList = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToPostgres()
+            ->update('users')
+            ->set(['name' => 'Ada']);
+        $sqliteAssignmentList = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToSqlite()
+            ->update('users')
+            ->set(['name' => 'Ada']);
+        $mariaDbAssignmentList = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->update('users')
+            ->set(['name' => 'Ada']);
+
+        self::assertInstanceOf(MySQLAssignmentList::class, $mysqlAssignmentList);
+        self::assertInstanceOf(PostgreSQLAssignmentList::class, $postgresAssignmentList);
+        self::assertInstanceOf(SQLiteAssignmentList::class, $sqliteAssignmentList);
+        self::assertInstanceOf(MariaDbAssignmentList::class, $mariaDbAssignmentList);
+
+        self::assertInstanceOf(MySQLWhereClause::class, $mysqlAssignmentList->where(['id' => 1]));
+        self::assertInstanceOf(PostgreSQLWhereClause::class, $postgresAssignmentList->where(['id' => 1]));
+        self::assertInstanceOf(SQLiteWhereClause::class, $sqliteAssignmentList->where(['id' => 1]));
+        self::assertInstanceOf(MariaDbWhereClause::class, $mariaDbAssignmentList->where(['id' => 1]));
     }
 
     public function testSwitchToPostgreSqlAliasUsesPostgreSqlDialect(): void
@@ -793,6 +880,28 @@ final class SqlDialectRenderingTest extends TestCase
         $column = new SQLColumnDefinition('name', ColumnType::VARCHAR, '', nullable: false, dialect: SQLDialect::MYSQL);
 
         self::assertSame('`name` VARCHAR(255) NOT NULL', $column->queryString());
+    }
+
+    public function testColumnDefinitionFactoryReturnsDialectSpecificBuilders(): void
+    {
+        $mysqlColumn = SQLColumnDefinition::forDialect('name', ColumnType::VARCHAR, 255, nullable: false, dialect: SQLDialect::MYSQL);
+        $postgresColumn = SQLColumnDefinition::forDialect('name', ColumnType::VARCHAR, 255, nullable: false, dialect: SQLDialect::POSTGRESQL);
+        $sqliteColumn = SQLColumnDefinition::forDialect('name', ColumnType::VARCHAR, 255, nullable: false, dialect: SQLDialect::SQLITE);
+        $mariaDbColumn = SQLColumnDefinition::forDialect('name', ColumnType::VARCHAR, 255, nullable: false, dialect: SQLDialect::MARIADB);
+
+        self::assertInstanceOf(MySQLColumnDefinition::class, $mysqlColumn);
+        self::assertInstanceOf(PostgreSQLColumnDefinition::class, $postgresColumn);
+        self::assertInstanceOf(SQLiteColumnDefinition::class, $sqliteColumn);
+        self::assertInstanceOf(MariaDbColumnDefinition::class, $mariaDbColumn);
+
+        self::assertSame('`name` VARCHAR(255) NOT NULL', $mysqlColumn->queryString());
+        self::assertSame('"name" VARCHAR(255) NOT NULL', $postgresColumn->queryString());
+        self::assertSame('`name` TEXT NOT NULL', $sqliteColumn->queryString());
+        self::assertSame('`name` VARCHAR(255) NOT NULL', $mariaDbColumn->queryString());
+        self::assertSame('VARCHAR', $mysqlColumn->getTypeExpression());
+        self::assertSame('VARCHAR(255)', $postgresColumn->getTypeExpression());
+        self::assertSame('TEXT', $sqliteColumn->getTypeExpression());
+        self::assertSame('VARCHAR', $mariaDbColumn->getTypeExpression());
     }
 
     public function testFindWhereOptionsCompileUsesQueryDialect(): void

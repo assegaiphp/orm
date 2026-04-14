@@ -129,4 +129,25 @@ class MariaDbQuery extends MySQLQuery
 
     return new MariaDbSelectDefinition(query: $this);
   }
+
+  /**
+   * Begin an UPDATE statement.
+   *
+   * @param string $tableName The target table name.
+   * @param bool $lowPriority Whether LOW_PRIORITY should be applied.
+   * @param bool $ignore Whether IGNORE should be applied.
+   * @return MariaDbUpdateDefinition Returns the MariaDB update builder.
+   */
+  public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): MariaDbUpdateDefinition
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::UPDATE);
+
+    return new MariaDbUpdateDefinition(
+      query: $this,
+      tableName: $tableName,
+      lowPriority: $lowPriority,
+      ignore: $ignore,
+    );
+  }
 }
