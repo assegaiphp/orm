@@ -3,22 +3,14 @@
 namespace Assegai\Orm\Queries\SQLite;
 
 use Assegai\Orm\Queries\Sql\SQLDropDefinitionInterface;
-use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Queries\Sql\SQLDropTableStatement;
+use Assegai\Orm\Queries\Sql\SQLTableDropDefinition;
 
 /**
  * SQLite-specific DROP entry point.
  */
-class SQLiteDropDefinition implements SQLDropDefinitionInterface
+class SQLiteDropDefinition extends SQLTableDropDefinition implements SQLDropDefinitionInterface
 {
-  /**
-   * Creates a SQLite DROP definition bound to the supplied query root.
-   *
-   * @param SQLQuery $query Receives the rendered DROP statement fragments.
-   */
-  public function __construct(private readonly SQLQuery $query)
-  {
-  }
-
   /**
    * Begins a SQLite DROP TABLE statement.
    *
@@ -26,6 +18,17 @@ class SQLiteDropDefinition implements SQLDropDefinitionInterface
    * @return SQLiteDropTableStatement Returns the SQLite DROP TABLE statement builder.
    */
   public function table(string $tableName): SQLiteDropTableStatement
+  {
+    return $this->createDropTableStatement(tableName: $tableName);
+  }
+
+  /**
+   * Creates the SQLite DROP TABLE statement builder.
+   *
+   * @param string $tableName The table name to drop.
+   * @return SQLiteDropTableStatement Returns the SQLite DROP TABLE statement builder.
+   */
+  protected function createDropTableStatement(string $tableName): SQLDropTableStatement
   {
     return new SQLiteDropTableStatement(query: $this->query, tableName: $tableName);
   }

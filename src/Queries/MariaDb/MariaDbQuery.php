@@ -77,6 +77,20 @@ class MariaDbQuery extends MySQLQuery
   }
 
   /**
+   * Begin an INSERT INTO statement.
+   *
+   * @param string $tableName The target table name.
+   * @return MariaDbInsertIntoDefinition Returns the MariaDB insert builder.
+   */
+  public function insertInto(string $tableName): MariaDbInsertIntoDefinition
+  {
+    $this->init();
+    $this->setQueryType(SQLQueryType::INSERT);
+
+    return new MariaDbInsertIntoDefinition(query: $this, tableName: $tableName);
+  }
+
+  /**
    * Begin a DELETE FROM statement.
    *
    * @param string $tableName The target table name.

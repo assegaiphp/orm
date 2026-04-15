@@ -30,7 +30,7 @@ class PostgreSQLCreateDatabaseStatement extends SQLCreateDatabaseStatement
     parent::__construct(
       query: $query,
       dbName: $dbName,
-      defaultCharacterSet: $encoding,
+      defaultCharacterSet: '',
       defaultCollation: '',
       defaultEncryption: false,
       checkIfNotExists: false,
@@ -38,16 +38,12 @@ class PostgreSQLCreateDatabaseStatement extends SQLCreateDatabaseStatement
   }
 
   /**
-   * Builds the PostgreSQL CREATE DATABASE statement.
+   * Builds the PostgreSQL-specific CREATE DATABASE options.
    *
-   * @return string Returns the CREATE DATABASE statement tailored for PostgreSQL.
+   * @return array<int, string> Returns the PostgreSQL option segments.
    */
-  protected function buildQueryString(): string
+  protected function buildOptionParts(): array
   {
-    $parts = [
-      'CREATE DATABASE',
-      SqlIdentifier::quote($this->dbName, $this->query->getDialect()),
-    ];
     $withOptions = [];
 
     if ($this->encoding !== '') {
@@ -62,11 +58,11 @@ class PostgreSQLCreateDatabaseStatement extends SQLCreateDatabaseStatement
       $withOptions[] = 'TEMPLATE ' . SqlIdentifier::quote($this->template, $this->query->getDialect());
     }
 
-    if (!empty($withOptions)) {
-      $parts[] = 'WITH ' . implode(' ', $withOptions);
+    if (empty($withOptions)) {
+      return [];
     }
 
-    return implode(' ', $parts);
+    return ['WITH ' . implode(' ', $withOptions)];
   }
 
   /**

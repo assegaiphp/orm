@@ -3,22 +3,14 @@
 namespace Assegai\Orm\Queries\PostgreSql;
 
 use Assegai\Orm\Queries\Sql\SQLDatabaseDropDefinitionInterface;
-use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Queries\Sql\SQLDropTableStatement;
+use Assegai\Orm\Queries\Sql\SQLTableDropDefinition;
 
 /**
  * PostgreSQL-specific DROP entry point.
  */
-class PostgreSQLDropDefinition implements SQLDatabaseDropDefinitionInterface
+class PostgreSQLDropDefinition extends SQLTableDropDefinition implements SQLDatabaseDropDefinitionInterface
 {
-  /**
-   * Creates a PostgreSQL DROP definition bound to the supplied query root.
-   *
-   * @param SQLQuery $query Receives the rendered DROP statement fragments.
-   */
-  public function __construct(private readonly SQLQuery $query)
-  {
-  }
-
   /**
    * Begins a PostgreSQL DROP DATABASE statement.
    *
@@ -48,6 +40,17 @@ class PostgreSQLDropDefinition implements SQLDatabaseDropDefinitionInterface
    * @return PostgreSQLDropTableStatement Returns the PostgreSQL DROP TABLE statement builder.
    */
   public function table(string $tableName): PostgreSQLDropTableStatement
+  {
+    return $this->createDropTableStatement(tableName: $tableName);
+  }
+
+  /**
+   * Creates the PostgreSQL DROP TABLE statement builder.
+   *
+   * @param string $tableName The table name to drop.
+   * @return PostgreSQLDropTableStatement Returns the PostgreSQL DROP TABLE statement builder.
+   */
+  protected function createDropTableStatement(string $tableName): SQLDropTableStatement
   {
     return new PostgreSQLDropTableStatement(query: $this->query, tableName: $tableName);
   }

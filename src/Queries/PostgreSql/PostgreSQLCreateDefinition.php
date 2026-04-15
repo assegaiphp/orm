@@ -2,24 +2,16 @@
 
 namespace Assegai\Orm\Queries\PostgreSql;
 
-use Assegai\Orm\Queries\Sql\SQLQuery;
+use Assegai\Orm\Queries\Sql\SQLCreateDatabaseStatement;
+use Assegai\Orm\Queries\Sql\SQLCreateTableStatement;
 use Assegai\Orm\Queries\Sql\SQLDatabaseCreateDefinitionInterface;
-use Assegai\Orm\Queries\Sql\SQLQueryResult;
+use Assegai\Orm\Queries\Sql\SQLTableCreateDefinition;
 
 /**
  * PostgreSQL-specific CREATE entry point.
  */
-class PostgreSQLCreateDefinition implements SQLDatabaseCreateDefinitionInterface
+class PostgreSQLCreateDefinition extends SQLTableCreateDefinition implements SQLDatabaseCreateDefinitionInterface
 {
-  /**
-   * Creates a PostgreSQL CREATE definition bound to the supplied query root.
-   *
-   * @param SQLQuery $query Receives the rendered CREATE statement fragments.
-   */
-  public function __construct(private readonly SQLQuery $query)
-  {
-  }
-
   /**
    * Begins a PostgreSQL CREATE TABLE statement.
    *
@@ -34,8 +26,7 @@ class PostgreSQLCreateDefinition implements SQLDatabaseCreateDefinitionInterface
     bool $checkIfNotExists = true,
   ): PostgreSQLCreateTableStatement
   {
-    return new PostgreSQLCreateTableStatement(
-      query: $this->query,
+    return $this->createTableStatement(
       tableName: $tableName,
       isTemporary: $isTemporary,
       checkIfNotExists: $checkIfNotExists,
@@ -68,13 +59,24 @@ class PostgreSQLCreateDefinition implements SQLDatabaseCreateDefinitionInterface
   }
 
   /**
-   * Executes the assembled CREATE query directly.
+   * Creates the PostgreSQL CREATE TABLE statement builder.
    *
-   * @return SQLQueryResult Returns the execution result produced by the underlying query root.
-   * @throws \Assegai\Orm\Exceptions\ORMException Thrown when the underlying query execution fails.
+   * @param string $tableName The table name to create.
+   * @param bool $isTemporary Indicates whether TEMPORARY should be emitted.
+   * @param bool $checkIfNotExists Indicates whether IF NOT EXISTS should be emitted.
+   * @return PostgreSQLCreateTableStatement Returns the PostgreSQL CREATE TABLE statement builder.
    */
-  public function execute(): SQLQueryResult
+  protected function createTableStatement(
+    string $tableName,
+    bool $isTemporary = false,
+    bool $checkIfNotExists = true,
+  ): SQLCreateTableStatement
   {
-    return $this->query->execute();
+    return new PostgreSQLCreateTableStatement(
+      query: $this->query,
+      tableName: $tableName,
+      isTemporary: $isTemporary,
+      checkIfNotExists: $checkIfNotExists,
+    );
   }
 }

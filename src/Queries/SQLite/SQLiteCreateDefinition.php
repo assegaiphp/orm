@@ -2,24 +2,15 @@
 
 namespace Assegai\Orm\Queries\SQLite;
 
-use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLCreateDefinitionInterface;
-use Assegai\Orm\Queries\Sql\SQLQueryResult;
+use Assegai\Orm\Queries\Sql\SQLCreateTableStatement;
+use Assegai\Orm\Queries\Sql\SQLTableCreateDefinition;
 
 /**
  * SQLite-specific CREATE entry point.
  */
-class SQLiteCreateDefinition implements SQLCreateDefinitionInterface
+class SQLiteCreateDefinition extends SQLTableCreateDefinition implements SQLCreateDefinitionInterface
 {
-  /**
-   * Creates a SQLite CREATE definition bound to the supplied query root.
-   *
-   * @param SQLQuery $query Receives the rendered CREATE statement fragments.
-   */
-  public function __construct(private readonly SQLQuery $query)
-  {
-  }
-
   /**
    * Begins a SQLite CREATE TABLE statement.
    *
@@ -34,8 +25,7 @@ class SQLiteCreateDefinition implements SQLCreateDefinitionInterface
     bool $checkIfNotExists = true,
   ): SQLiteCreateTableStatement
   {
-    return new SQLiteCreateTableStatement(
-      query: $this->query,
+    return $this->createTableStatement(
       tableName: $tableName,
       isTemporary: $isTemporary,
       checkIfNotExists: $checkIfNotExists,
@@ -43,13 +33,24 @@ class SQLiteCreateDefinition implements SQLCreateDefinitionInterface
   }
 
   /**
-   * Executes the assembled CREATE query directly.
+   * Creates the SQLite CREATE TABLE statement builder.
    *
-   * @return SQLQueryResult Returns the execution result produced by the underlying query root.
-   * @throws \Assegai\Orm\Exceptions\ORMException Thrown when the underlying query execution fails.
+   * @param string $tableName The table name to create.
+   * @param bool $isTemporary Indicates whether TEMPORARY should be emitted.
+   * @param bool $checkIfNotExists Indicates whether IF NOT EXISTS should be emitted.
+   * @return SQLiteCreateTableStatement Returns the SQLite CREATE TABLE statement builder.
    */
-  public function execute(): SQLQueryResult
+  protected function createTableStatement(
+    string $tableName,
+    bool $isTemporary = false,
+    bool $checkIfNotExists = true,
+  ): SQLCreateTableStatement
   {
-    return $this->query->execute();
+    return new SQLiteCreateTableStatement(
+      query: $this->query,
+      tableName: $tableName,
+      isTemporary: $isTemporary,
+      checkIfNotExists: $checkIfNotExists,
+    );
   }
 }

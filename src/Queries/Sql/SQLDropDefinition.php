@@ -3,19 +3,10 @@
 namespace Assegai\Orm\Queries\Sql;
 
 /**
- * Shared DROP entry point for generic SQL query builders.
+ * Shared DROP entry point for SQL dialects that also support dropping databases.
  */
-class SQLDropDefinition implements SQLDatabaseDropDefinitionInterface
+class SQLDropDefinition extends SQLTableDropDefinition implements SQLDatabaseDropDefinitionInterface
 {
-  /**
-   * Creates a shared DROP definition bound to the supplied query root.
-   *
-   * @param SQLQuery $query Receives the rendered DROP statement fragments.
-   */
-  public function __construct(protected readonly SQLQuery $query)
-  {
-  }
-
   /**
    * Begins a DROP DATABASE statement.
    *
@@ -24,17 +15,17 @@ class SQLDropDefinition implements SQLDatabaseDropDefinitionInterface
    */
   public function database(string $dbName): SQLDropDatabaseStatement
   {
-    return new SQLDropDatabaseStatement(query: $this->query, dbName: $dbName);
+    return $this->createDropDatabaseStatement(dbName: $dbName);
   }
 
   /**
-   * Begins a DROP TABLE statement.
+   * Creates the DROP DATABASE statement builder for the active SQL dialect.
    *
-   * @param string $tableName The table name to drop.
-   * @return SQLDropTableStatement Returns the shared DROP TABLE statement builder.
+   * @param string $dbName The database name to drop.
+   * @return SQLDropDatabaseStatement Returns the DROP DATABASE statement builder.
    */
-  public function table(string $tableName): SQLDropTableStatement
+  protected function createDropDatabaseStatement(string $dbName): SQLDropDatabaseStatement
   {
-    return new SQLDropTableStatement(query: $this->query, tableName: $tableName);
+    return new SQLDropDatabaseStatement(query: $this->query, dbName: $dbName);
   }
 }

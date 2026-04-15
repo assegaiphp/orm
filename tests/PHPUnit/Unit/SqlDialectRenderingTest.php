@@ -9,10 +9,15 @@ use Assegai\Orm\Queries\MariaDb\MariaDbAlterDatabaseOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbAlterTableOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbAssignmentList;
 use Assegai\Orm\Queries\MariaDb\MariaDbColumnDefinition;
+use Assegai\Orm\Queries\MariaDb\MariaDbCreateDatabaseStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbCreateTableStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbTableOptions;
 use Assegai\Orm\Queries\MariaDb\MariaDbDeleteFromStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbDescribeStatement;
+use Assegai\Orm\Queries\MariaDb\MariaDbDropDatabaseStatement;
+use Assegai\Orm\Queries\MariaDb\MariaDbDropTableStatement;
+use Assegai\Orm\Queries\MariaDb\MariaDbInsertIntoMultipleStatement;
+use Assegai\Orm\Queries\MariaDb\MariaDbInsertIntoStatement;
 use Assegai\Orm\Queries\MariaDb\MariaDbJoinExpression;
 use Assegai\Orm\Queries\MariaDb\MariaDbJoinSpecification;
 use Assegai\Orm\Queries\MariaDb\MariaDbLimitClause;
@@ -94,6 +99,8 @@ use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLColumnDefinition;
 use Assegai\Orm\Queries\Sql\SQLDatabaseCreateDefinitionInterface;
 use Assegai\Orm\Queries\Sql\SQLDatabaseDropDefinitionInterface;
+use Assegai\Orm\Queries\Sql\SQLTableCreateDefinition;
+use Assegai\Orm\Queries\Sql\SQLTableDropDefinition;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLRenameDatabaseStatement;
 use Assegai\Orm\Queries\Sql\SQLUseStatement;
@@ -648,6 +655,10 @@ final class SqlDialectRenderingTest extends TestCase
             ->switchToMysql()
             ->insertInto('users')
             ->singleRow(['name']);
+        $mariaDbInsert = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMariaDb()
+            ->insertInto('users')
+            ->singleRow(['name']);
         $postgresInsert = $this->createQuery(SQLDialect::MYSQL)
             ->switchToPostgres()
             ->insertInto('users')
@@ -655,6 +666,8 @@ final class SqlDialectRenderingTest extends TestCase
 
         self::assertInstanceOf(MySQLInsertIntoStatement::class, $mysqlInsert);
         self::assertTrue(method_exists($mysqlInsert, 'onDuplicateKeyUpdate'));
+        self::assertInstanceOf(MariaDbInsertIntoStatement::class, $mariaDbInsert);
+        self::assertTrue(method_exists($mariaDbInsert, 'onDuplicateKeyUpdate'));
         self::assertInstanceOf(PostgreSQLInsertIntoStatement::class, $postgresInsert);
         self::assertFalse(method_exists($postgresInsert, 'onDuplicateKeyUpdate'));
     }
@@ -669,9 +682,17 @@ final class SqlDialectRenderingTest extends TestCase
         $postgresDrop = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres()->drop();
         $sqliteDrop = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite()->drop();
 
+        self::assertInstanceOf(SQLTableCreateDefinition::class, $mysqlCreate);
+        self::assertInstanceOf(SQLTableCreateDefinition::class, $postgresCreate);
+        self::assertInstanceOf(SQLTableCreateDefinition::class, $sqliteCreate);
+
         self::assertInstanceOf(SQLDatabaseCreateDefinitionInterface::class, $mysqlCreate);
         self::assertInstanceOf(SQLDatabaseCreateDefinitionInterface::class, $postgresCreate);
         self::assertNotInstanceOf(SQLDatabaseCreateDefinitionInterface::class, $sqliteCreate);
+
+        self::assertInstanceOf(SQLTableDropDefinition::class, $mysqlDrop);
+        self::assertInstanceOf(SQLTableDropDefinition::class, $postgresDrop);
+        self::assertInstanceOf(SQLTableDropDefinition::class, $sqliteDrop);
 
         self::assertInstanceOf(SQLDatabaseDropDefinitionInterface::class, $mysqlDrop);
         self::assertInstanceOf(SQLDatabaseDropDefinitionInterface::class, $postgresDrop);
@@ -698,6 +719,8 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertFalse(method_exists($sqliteCreate, 'database'));
 
         self::assertInstanceOf(\Assegai\Orm\Queries\MariaDb\MariaDbCreateDefinition::class, $mariaDbCreate);
+        self::assertInstanceOf(MariaDbCreateTableStatement::class, $mariaDbCreate->table('users'));
+        self::assertInstanceOf(MariaDbCreateDatabaseStatement::class, $mariaDbCreate->database('app_db'));
     }
 
     public function testMySqlCreateDatabaseUsesMySqlSpecificOptions(): void
@@ -789,6 +812,8 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertFalse(method_exists($sqliteDrop, 'database'));
 
         self::assertInstanceOf(\Assegai\Orm\Queries\MariaDb\MariaDbDropDefinition::class, $mariaDbDrop);
+        self::assertInstanceOf(MariaDbDropTableStatement::class, $mariaDbDrop->table('users'));
+        self::assertInstanceOf(MariaDbDropDatabaseStatement::class, $mariaDbDrop->database('app_db'));
     }
 
     public function testPostgreSqlDropDatabaseSupportsForce(): void
@@ -937,6 +962,28 @@ final class SqlDialectRenderingTest extends TestCase
 
         self::assertSame(
             'INSERT INTO "users" ("name", "email") VALUES (?, ?), (?, ?)',
+            $query->queryString()
+        );
+    }
+
+    public function testMariaDbMultipleInsertStaysOnMariaDbBuilderPath(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $statement = $query
+            ->insertInto('users')
+            ->multipleRows(['name', 'email']);
+
+        self::assertInstanceOf(MariaDbInsertIntoMultipleStatement::class, $statement);
+        self::assertTrue(method_exists($statement, 'onDuplicateKeyUpdate'));
+
+        $statement->rows([
+            ['Ada', 'ada@example.com'],
+            ['Bob', 'bob@example.com'],
+        ]);
+
+        self::assertSame(
+            'INSERT INTO `users` (`name`, `email`) VALUES (?, ?), (?, ?)',
             $query->queryString()
         );
     }

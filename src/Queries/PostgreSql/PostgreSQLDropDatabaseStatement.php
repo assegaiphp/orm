@@ -27,18 +27,16 @@ class PostgreSQLDropDatabaseStatement extends SQLDropDatabaseStatement
   }
 
   /**
-   * Builds the PostgreSQL DROP DATABASE statement.
+   * Builds PostgreSQL trailing DROP DATABASE options.
    *
-   * @return string Returns the DROP DATABASE statement tailored for PostgreSQL.
+   * @return array<int, string> Returns the PostgreSQL trailing option segments.
    */
-  protected function buildQueryString(): string
+  protected function buildTrailingParts(): array
   {
-    $queryString = parent::buildQueryString();
-
-    if ($this->force) {
-      $queryString .= ' WITH (FORCE)';
+    if (!$this->force) {
+      return [];
     }
 
-    return $queryString;
+    return ['WITH (FORCE)'];
   }
 }

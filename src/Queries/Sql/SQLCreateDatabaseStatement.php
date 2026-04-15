@@ -40,13 +40,47 @@ class SQLCreateDatabaseStatement
    */
   protected function buildQueryString(): string
   {
+    $parts = $this->buildCreateDatabasePrefix();
+    $parts[] = $this->buildDatabaseName();
+    $parts = array_merge($parts, $this->buildOptionParts());
+
+    return implode(' ', array_filter($parts, static fn(string $part): bool => $part !== ''));
+  }
+
+  /**
+   * Builds the CREATE DATABASE prefix keywords.
+   *
+   * @return array<int, string> Returns the CREATE DATABASE prefix segments.
+   */
+  protected function buildCreateDatabasePrefix(): array
+  {
     $parts = ['CREATE DATABASE'];
 
     if ($this->checkIfNotExists) {
       $parts[] = 'IF NOT EXISTS';
     }
 
-    $parts[] = SqlIdentifier::quote($this->dbName, $this->query->getDialect());
+    return $parts;
+  }
+
+  /**
+   * Builds the quoted database identifier for the active dialect.
+   *
+   * @return string Returns the quoted database name segment.
+   */
+  protected function buildDatabaseName(): string
+  {
+    return SqlIdentifier::quote($this->dbName, $this->query->getDialect());
+  }
+
+  /**
+   * Builds the dialect-specific CREATE DATABASE options.
+   *
+   * @return array<int, string> Returns the option segments appended after the database name.
+   */
+  protected function buildOptionParts(): array
+  {
+    $parts = [];
 
     if ($this->defaultCharacterSet !== '') {
       $parts[] = 'CHARACTER SET ' . $this->defaultCharacterSet;
@@ -60,6 +94,6 @@ class SQLCreateDatabaseStatement
       $parts[] = "ENCRYPTION 'Y'";
     }
 
-    return implode(' ', $parts);
+    return $parts;
   }
 }
