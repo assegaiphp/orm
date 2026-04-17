@@ -189,6 +189,22 @@ final class SqlDialectRenderingTest extends TestCase
     }
 
 
+    public function testDialectSpecificSelectAggregateMethodsKeepTypedReturnSignatures(): void
+    {
+        foreach ([
+            [MySQLSelectDefinition::class, MySQLSelectExpression::class],
+            [PostgreSQLSelectDefinition::class, PostgreSQLSelectExpression::class],
+            [SQLiteSelectDefinition::class, SQLiteSelectExpression::class],
+            [MariaDbSelectDefinition::class, MariaDbSelectExpression::class],
+        ] as [$definitionClass, $expressionClass]) {
+            foreach (['all', 'count', 'avg', 'sum'] as $methodName) {
+                $returnType = (new ReflectionMethod($definitionClass, $methodName))->getReturnType();
+
+                self::assertNotNull($returnType);
+                self::assertSame($expressionClass, $returnType->getName());
+            }
+        }
+    }
     public function testDialectSpecificSelectChainsStayTypedAfterAllAndFrom(): void
     {
         $mysqlExpression = $this->createQuery(SQLDialect::POSTGRESQL)
@@ -666,10 +682,13 @@ final class SqlDialectRenderingTest extends TestCase
 
         self::assertInstanceOf(MySQLInsertIntoStatement::class, $mysqlInsert);
         self::assertTrue(method_exists($mysqlInsert, 'onDuplicateKeyUpdate'));
+        self::assertFalse(method_exists($mysqlInsert, 'returning'));
         self::assertInstanceOf(MariaDbInsertIntoStatement::class, $mariaDbInsert);
         self::assertTrue(method_exists($mariaDbInsert, 'onDuplicateKeyUpdate'));
+        self::assertFalse(method_exists($mariaDbInsert, 'returning'));
         self::assertInstanceOf(PostgreSQLInsertIntoStatement::class, $postgresInsert);
         self::assertFalse(method_exists($postgresInsert, 'onDuplicateKeyUpdate'));
+        self::assertTrue(method_exists($postgresInsert, 'returning'));
     }
 
     public function testDatabaseCapabilityInterfacesMatchDialectSupport(): void
@@ -976,6 +995,7 @@ final class SqlDialectRenderingTest extends TestCase
 
         self::assertInstanceOf(MariaDbInsertIntoMultipleStatement::class, $statement);
         self::assertTrue(method_exists($statement, 'onDuplicateKeyUpdate'));
+        self::assertFalse(method_exists($statement, 'returning'));
 
         $statement->rows([
             ['Ada', 'ada@example.com'],
@@ -984,6 +1004,31 @@ final class SqlDialectRenderingTest extends TestCase
 
         self::assertSame(
             'INSERT INTO `users` (`name`, `email`) VALUES (?, ?), (?, ?)',
+            $query->queryString()
+        );
+    }
+
+    public function testPostgreSqlMultipleInsertSupportsReturning(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL);
+
+        $statement = $query
+            ->insertInto('users')
+            ->multipleRows(['name', 'email']);
+
+        self::assertInstanceOf(\Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoMultipleStatement::class, $statement);
+        self::assertTrue(method_exists($statement, 'returning'));
+        self::assertFalse(method_exists($statement, 'onDuplicateKeyUpdate'));
+
+        $statement
+            ->rows([
+                ['Ada', 'ada@example.com'],
+                ['Bob', 'bob@example.com'],
+            ])
+            ->returning(['id', 'name']);
+
+        self::assertSame(
+            'INSERT INTO "users" ("name", "email") VALUES (?, ?), (?, ?) RETURNING "id", "name"',
             $query->queryString()
         );
     }
@@ -1091,8 +1136,8 @@ final class SqlDialectRenderingTest extends TestCase
         $query
             ->insertInto('users')
             ->singleRow(['name'])
-            ->values(['Ada']);
-        $query->appendQueryString('RETURNING "id", "name"');
+            ->values(['Ada'])
+            ->returning(['id', 'name']);
         $executed = $query->execute();
 
         self::assertTrue($executed->isOK());

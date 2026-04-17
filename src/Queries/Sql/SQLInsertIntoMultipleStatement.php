@@ -4,15 +4,25 @@ namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Traits\ExecutableTrait;
 
+/**
+ * Inserts multiple rows into an existing table.
+ */
 class SQLInsertIntoMultipleStatement
 {
   use ExecutableTrait;
 
+  /**
+   * Tracks insert values that must be hashed before they are persisted.
+   *
+   * @var array<int, int>
+   */
   protected array $hashableIndexes = [];
 
   /**
-   * @param SQLQuery $query The SQLQuery object.
-   * @param array $columns A parenthesized list of comma-separated column names for which the statment provides values.
+   * Creates a multi-row INSERT statement and appends its column list to the owning query.
+   *
+   * @param SQLQuery $query Receives the rendered INSERT fragments.
+   * @param array<int|string, string> $columns The target columns for the INSERT statement.
    */
   public function __construct(
     protected readonly SQLQuery $query,
@@ -35,8 +45,10 @@ class SQLInsertIntoMultipleStatement
   }
 
   /**
-   * @param array $rowsList
-   * @return static
+   * Appends a VALUES list for a multi-row INSERT.
+   *
+   * @param array<int, array<int|string, mixed>> $rowsList The rows to insert.
+   * @return static Returns the current insert builder for fluent chaining.
    */
   public function rows(array $rowsList): static
   {
@@ -64,5 +76,46 @@ class SQLInsertIntoMultipleStatement
 
     $this->query->appendQueryString(tail: 'VALUES ' . implode($separator, $rowGroups));
     return $this;
+  }
+
+  /**
+   * Converts a column selection list into SQL for dialect-specific insert clauses.
+   *
+   * @param array|string $columns The column names or expressions to format.
+   * @return string Returns the formatted column list.
+   */
+  protected function getColumnListString(array|string $columns): string
+  {
+    if (is_string($columns)) {
+      return $columns === '*'
+        ? '*'
+        : $this->formatColumnExpression($columns);
+    }
+
+    $parts = [];
+
+    foreach ($columns as $key => $value) {
+      $expression = $this->formatColumnExpression((string)$value);
+      $parts[] = is_numeric($key)
+        ? $expression
+        : $expression . ' AS ' . $this->query->quoteIdentifier((string)$key);
+    }
+
+    return implode(', ', $parts);
+  }
+
+  /**
+   * Converts a single column expression into the current dialect's identifier format.
+   *
+   * @param string $expression The column expression to format.
+   * @return string Returns the formatted column expression.
+   */
+  protected function formatColumnExpression(string $expression): string
+  {
+    if ($expression === '*') {
+      return '*';
+    }
+
+    return $this->query->quoteIdentifier(str_replace(['`', '"'], '', $expression));
   }
 }

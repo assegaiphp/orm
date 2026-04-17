@@ -5,10 +5,19 @@ namespace Assegai\Orm\Queries\Sql;
 use Assegai\Orm\Util\SqlIdentifier;
 use InvalidArgumentException;
 
+/**
+ * Base SELECT builder shared across SQL-family dialects.
+ *
+ * The shared builder owns the common selection and aggregate rendering while
+ * delegating expression creation to dialect-specific subclasses so the fluent
+ * path stays typed after `all(...)`, `count(...)`, `avg(...)`, and `sum(...)`.
+ */
 class SQLSelectDefinition
 {
   /**
-   * @param SQLQuery $query
+   * Create a new SELECT builder.
+   *
+   * @param SQLQuery $query The query instance being built.
    */
   public function __construct(protected readonly SQLQuery $query)
   {
@@ -17,64 +26,72 @@ class SQLSelectDefinition
   }
 
   /**
-   * @param array $columns
-   * @return SQLSelectExpression
+   * Select all columns or the provided column list.
+   *
+   * @param array $columns The columns to include in the SELECT list.
+   * @return SQLSelectExpression Returns the dialect-aware select expression builder.
    */
   public function all(array $columns = []): SQLSelectExpression
   {
-    $queryString = $this->getColumnListString(columns: $columns);
-
-    $this->query->appendQueryString($queryString);
-
-    return new SQLSelectExpression( query: $this->query );
+    return $this->createTypedExpression($this->getColumnListString(columns: $columns));
   }
 
   /**
-   * @param array $columns
-   * @return SQLSelectExpression
+   * Select a COUNT aggregate.
+   *
+   * @param array $columns The columns to count.
+   * @return SQLSelectExpression Returns the dialect-aware select expression builder.
    */
   public function count(array $columns = []): SQLSelectExpression
   {
-    $queryString = 'COUNT(' . $this->getColumnListString(columns: $columns) . ') as total';
-
-    $this->query->appendQueryString($queryString);
-
-    return new SQLSelectExpression( query: $this->query );
+    return $this->createTypedExpression('COUNT(' . $this->getColumnListString(columns: $columns) . ') as total');
   }
 
   /**
-   * @param array $columns
-   * @return SQLSelectExpression
+   * Select an AVG aggregate.
+   *
+   * @param array $columns The columns to average.
+   * @return SQLSelectExpression Returns the dialect-aware select expression builder.
    */
   public function avg(array $columns = []): SQLSelectExpression
   {
-    $queryString = 'AVG(' . $this->getColumnListString(columns: $columns) . ')';
-
-    $this->query->appendQueryString($queryString);
-
-    return new SQLSelectExpression( query: $this->query );
+    return $this->createTypedExpression('AVG(' . $this->getColumnListString(columns: $columns) . ')');
   }
 
   /**
-   * @param array $columns
-   * @return SQLSelectExpression
+   * Select a SUM aggregate.
+   *
+   * @param array $columns The columns to sum.
+   * @return SQLSelectExpression Returns the dialect-aware select expression builder.
    */
   public function sum(array $columns = []): SQLSelectExpression
   {
-    $queryString = 'SUM(' . $this->getColumnListString(columns: $columns) . ')';
+    return $this->createTypedExpression('SUM(' . $this->getColumnListString(columns: $columns) . ')');
+  }
 
-    $this->query->appendQueryString($queryString);
+  /**
+   * Append the selection fragment and create the expression builder for this dialect.
+   *
+   * Dialect-specific subclasses override this method when they need the fluent
+   * path to continue on their own expression builder.
+   *
+   * @param string $selection The rendered selection fragment.
+   * @return SQLSelectExpression Returns the select expression builder.
+   */
+  protected function createTypedExpression(string $selection): SQLSelectExpression
+  {
+    $this->query->appendQueryString($selection);
 
-    return new SQLSelectExpression( query: $this->query );
+    return new SQLSelectExpression(query: $this->query);
   }
 
   /**
    * Creates and returns a list of comma-separated column names from a given
    * array of strings.
-   * 
+   *
    * @param array<string> $columns The list of column names.
-   * 
-   * @return string Returns a list of comma-separated column names if the 
+   *
+   * @return string Returns a list of comma-separated column names if the
    * given array is not empty, otherwise returns `*`.
    */
   protected function getColumnListString(array $columns): string
@@ -96,6 +113,15 @@ class SQLSelectDefinition
     return trim($columnListString, $separator);
   }
 
+  /**
+   * Quote a selectable column expression when it is a plain identifier.
+   *
+   * Expressions that are not valid identifiers are returned unchanged so raw
+   * SQL fragments such as functions can still be used intentionally.
+   *
+   * @param string $expression The column expression to format.
+   * @return string Returns the quoted identifier or the original expression.
+   */
   protected function formatColumnExpression(string $expression): string
   {
     if ($expression === '*') {

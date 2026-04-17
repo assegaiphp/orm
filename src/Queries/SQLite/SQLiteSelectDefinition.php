@@ -21,7 +21,7 @@ class SQLiteSelectDefinition extends SQLSelectDefinition
    */
   public function all(array $columns = []): SQLiteSelectExpression
   {
-    return $this->createTypedExpression($this->getColumnListString(columns: $columns));
+    return parent::all($columns);
   }
 
   /**
@@ -33,7 +33,7 @@ class SQLiteSelectDefinition extends SQLSelectDefinition
    */
   public function count(array $columns = []): SQLiteSelectExpression
   {
-    return $this->createTypedExpression('COUNT(' . $this->getColumnListString(columns: $columns) . ') as total');
+    return parent::count($columns);
   }
 
   /**
@@ -45,7 +45,7 @@ class SQLiteSelectDefinition extends SQLSelectDefinition
    */
   public function avg(array $columns = []): SQLiteSelectExpression
   {
-    return $this->createTypedExpression('AVG(' . $this->getColumnListString(columns: $columns) . ')');
+    return parent::avg($columns);
   }
 
   /**
@@ -57,7 +57,7 @@ class SQLiteSelectDefinition extends SQLSelectDefinition
    */
   public function sum(array $columns = []): SQLiteSelectExpression
   {
-    return $this->createTypedExpression('SUM(' . $this->getColumnListString(columns: $columns) . ')');
+    return parent::sum($columns);
   }
 
   /**

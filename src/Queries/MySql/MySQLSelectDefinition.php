@@ -34,7 +34,7 @@ class MySQLSelectDefinition extends SQLSelectDefinition
    */
   public function all(array $columns = []): MySQLSelectExpression
   {
-    return $this->createTypedExpression($this->getColumnListString(columns: $columns));
+    return parent::all($columns);
   }
 
   /**
@@ -46,7 +46,7 @@ class MySQLSelectDefinition extends SQLSelectDefinition
    */
   public function count(array $columns = []): MySQLSelectExpression
   {
-    return $this->createTypedExpression('COUNT(' . $this->getColumnListString(columns: $columns) . ') as total');
+    return parent::count($columns);
   }
 
   /**
@@ -58,7 +58,7 @@ class MySQLSelectDefinition extends SQLSelectDefinition
    */
   public function avg(array $columns = []): MySQLSelectExpression
   {
-    return $this->createTypedExpression('AVG(' . $this->getColumnListString(columns: $columns) . ')');
+    return parent::avg($columns);
   }
 
   /**
@@ -70,7 +70,7 @@ class MySQLSelectDefinition extends SQLSelectDefinition
    */
   public function sum(array $columns = []): MySQLSelectExpression
   {
-    return $this->createTypedExpression('SUM(' . $this->getColumnListString(columns: $columns) . ')');
+    return parent::sum($columns);
   }
 
   /**
