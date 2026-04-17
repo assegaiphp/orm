@@ -21,6 +21,18 @@ class MariaDbRenameStatement extends MySQLRenameStatement
    */
   public function table(string $from, string $to): MariaDbRenameTableStatement
   {
+    return parent::table($from, $to);
+  }
+
+  /**
+   * Create the rename-table builder for this dialect.
+   *
+   * @param string $from The current table name.
+   * @param string $to The new table name.
+   * @return MariaDbRenameTableStatement Returns the MariaDB rename-table builder.
+   */
+  protected function createRenameTableStatement(string $from, string $to): MariaDbRenameTableStatement
+  {
     return new MariaDbRenameTableStatement(query: $this->query, oldTableName: $from, newTableName: $to);
   }
 }

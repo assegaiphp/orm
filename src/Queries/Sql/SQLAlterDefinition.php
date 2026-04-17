@@ -28,10 +28,34 @@ class SQLAlterDefinition
    */
   public function table(string $tableName): SQLAlterTableOption
   {
+    $this->beginAlterTable(tableName: $tableName);
+
+    return $this->createAlterTableOption();
+  }
+
+  /**
+   * Start the ALTER TABLE statement for the given table.
+   *
+   * @param string $tableName The table being altered.
+   * @return void
+   */
+  protected function beginAlterTable(string $tableName): void
+  {
     $this->query->setQueryString(
       queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
     );
+  }
 
+  /**
+   * Create the alter-table option builder for this dialect.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent path
+   * on their own typed alter-table option builders.
+   *
+   * @return SQLAlterTableOption Returns the alter-table option builder.
+   */
+  protected function createAlterTableOption(): SQLAlterTableOption
+  {
     return new SQLAlterTableOption(query: $this->query);
   }
 }

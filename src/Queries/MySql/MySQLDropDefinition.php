@@ -19,7 +19,7 @@ class MySQLDropDefinition extends SQLDropDefinition
    */
   public function database(string $dbName): MySQLDropDatabaseStatement
   {
-    return $this->createDropDatabaseStatement(dbName: $dbName);
+    return parent::database($dbName);
   }
 
   /**
@@ -30,7 +30,7 @@ class MySQLDropDefinition extends SQLDropDefinition
    */
   public function table(string $tableName): MySQLDropTableStatement
   {
-    return $this->createDropTableStatement(tableName: $tableName);
+    return parent::table($tableName);
   }
 
   /**

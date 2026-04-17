@@ -17,10 +17,16 @@ class PostgreSQLAlterDefinition extends SQLAlterDefinition
    */
   public function table(string $tableName): PostgreSQLAlterTableOption
   {
-    $this->query->setQueryString(
-      queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
-    );
+    return parent::table($tableName);
+  }
 
+  /**
+   * Create the alter-table option builder for this dialect.
+   *
+   * @return PostgreSQLAlterTableOption Returns the PostgreSQL alter-table option builder.
+   */
+  protected function createAlterTableOption(): PostgreSQLAlterTableOption
+  {
     return new PostgreSQLAlterTableOption(query: $this->query);
   }
 }

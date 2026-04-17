@@ -374,12 +374,28 @@ class SQLQuery
     }
 
     /**
+     * Reset the root query builder state and assign the query type when needed.
+     *
+     * @param string|null $type The query type to assign, if any.
+     * @return void
+     */
+    protected function beginRootQuery(?string $type = null): void
+    {
+        $this->init();
+
+        if ($type !== null) {
+            $this->setQueryType($type);
+        }
+    }
+
+    /**
      * @return SQLAlterDefinition
      */
     public function alter(): SQLAlterDefinition
     {
-        $this->init();
-        return new SQLAlterDefinition(query: $this);
+        $this->beginRootQuery();
+
+        return $this->createAlterDefinition();
     }
 
     /**
@@ -387,9 +403,9 @@ class SQLQuery
      */
     public function create(): SQLCreateDefinitionInterface
     {
-        $this->init();
-        $this->type = SQLQueryType::CREATE;
-        return new SQLCreateDefinition(query: $this);
+        $this->beginRootQuery(SQLQueryType::CREATE);
+
+        return $this->createCreateDefinition();
     }
 
     /**
@@ -397,9 +413,9 @@ class SQLQuery
      */
     public function drop(): SQLDropDefinitionInterface
     {
-        $this->init();
-        $this->type = SQLQueryType::DROP;
-        return new SQLDropDefinition(query: $this);
+        $this->beginRootQuery(SQLQueryType::DROP);
+
+        return $this->createDropDefinition();
     }
 
     /**
@@ -407,8 +423,9 @@ class SQLQuery
      */
     public function rename(): SQLRenameStatement
     {
-        $this->init();
-        return new SQLRenameStatement(query: $this);
+        $this->beginRootQuery();
+
+        return $this->createRenameStatement();
     }
 
 
@@ -418,9 +435,9 @@ class SQLQuery
      */
     public function describe(string $subject): SQLDescribeStatement
     {
-        $this->init();
-        $this->type = SQLQueryType::DESCRIBE;
-        return new SQLDescribeStatement(query: $this, subject: $subject);
+        $this->beginRootQuery(SQLQueryType::DESCRIBE);
+
+        return $this->createDescribeStatement($subject);
     }
 
     /**
@@ -429,9 +446,9 @@ class SQLQuery
      */
     public function insertInto(string $tableName): SQLInsertIntoDefinition
     {
-        $this->init();
-        $this->type = SQLQueryType::INSERT;
-        return new SQLInsertIntoDefinition(query: $this, tableName: $tableName);
+        $this->beginRootQuery(SQLQueryType::INSERT);
+
+        return $this->createInsertIntoDefinition($tableName);
     }
 
     /**
@@ -442,9 +459,9 @@ class SQLQuery
      */
     public function update(string $tableName): SQLUpdateDefinition
     {
-        $this->init();
-        $this->setQueryType(SQLQueryType::UPDATE);
-        return new SQLUpdateDefinition(query: $this, tableName: $tableName);
+        $this->beginRootQuery(SQLQueryType::UPDATE);
+
+        return $this->createUpdateDefinition($tableName);
     }
 
     /**
@@ -452,9 +469,9 @@ class SQLQuery
      */
     public function select(): SQLSelectDefinition
     {
-        $this->init();
-        $this->type = SQLQueryType::SELECT;
-        return new SQLSelectDefinition(query: $this);
+        $this->beginRootQuery(SQLQueryType::SELECT);
+
+        return $this->createSelectDefinition();
     }
 
     /**
@@ -464,9 +481,9 @@ class SQLQuery
      */
     public function deleteFrom(string $tableName, ?string $alias = null): SQLDeleteFromStatement
     {
-        $this->init();
-        $this->type = SQLQueryType::DELETE;
-        return new SQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+        $this->beginRootQuery(SQLQueryType::DELETE);
+
+        return $this->createDeleteFromStatement($tableName, $alias);
     }
 
     /**
@@ -475,8 +492,120 @@ class SQLQuery
      */
     public function truncateTable(string $tableName): SQLTruncateStatement
     {
-        $this->init();
-        $this->type = SQLQueryType::TRUNCATE;
+        $this->beginRootQuery(SQLQueryType::TRUNCATE);
+
+        return $this->createTruncateStatement($tableName);
+    }
+
+    /**
+     * Create the ALTER builder for this dialect root.
+     *
+     * @return SQLAlterDefinition Returns the alter builder.
+     */
+    protected function createAlterDefinition(): SQLAlterDefinition
+    {
+        return new SQLAlterDefinition(query: $this);
+    }
+
+    /**
+     * Create the CREATE builder for this dialect root.
+     *
+     * @return SQLCreateDefinitionInterface Returns the create builder.
+     */
+    protected function createCreateDefinition(): SQLCreateDefinitionInterface
+    {
+        return new SQLCreateDefinition(query: $this);
+    }
+
+    /**
+     * Create the DROP builder for this dialect root.
+     *
+     * @return SQLDropDefinitionInterface Returns the drop builder.
+     */
+    protected function createDropDefinition(): SQLDropDefinitionInterface
+    {
+        return new SQLDropDefinition(query: $this);
+    }
+
+    /**
+     * Create the RENAME builder for this dialect root.
+     *
+     * @return SQLRenameStatement Returns the rename builder.
+     */
+    protected function createRenameStatement(): SQLRenameStatement
+    {
+        return new SQLRenameStatement(query: $this);
+    }
+
+    /**
+     * Create the DESCRIBE builder for this dialect root.
+     *
+     * @param string $subject The table or view name to describe.
+     * @return SQLDescribeStatement Returns the describe builder.
+     */
+    protected function createDescribeStatement(string $subject): SQLDescribeStatement
+    {
+        return new SQLDescribeStatement(query: $this, subject: $subject);
+    }
+
+    /**
+     * Create the INSERT builder for this dialect root.
+     *
+     * @param string $tableName The target table name.
+     * @return SQLInsertIntoDefinition Returns the insert builder.
+     */
+    protected function createInsertIntoDefinition(string $tableName): SQLInsertIntoDefinition
+    {
+        return new SQLInsertIntoDefinition(query: $this, tableName: $tableName);
+    }
+
+    /**
+     * Create the UPDATE builder for this dialect root.
+     *
+     * @param string $tableName The target table name.
+     * @param bool $lowPriority Whether LOW_PRIORITY should be applied when supported.
+     * @param bool $ignore Whether IGNORE should be applied when supported.
+     * @return SQLUpdateDefinition Returns the update builder.
+     */
+    protected function createUpdateDefinition(
+        string $tableName,
+        bool $lowPriority = false,
+        bool $ignore = false,
+    ): SQLUpdateDefinition
+    {
+        return new SQLUpdateDefinition(query: $this, tableName: $tableName);
+    }
+
+    /**
+     * Create the SELECT builder for this dialect root.
+     *
+     * @return SQLSelectDefinition Returns the select builder.
+     */
+    protected function createSelectDefinition(): SQLSelectDefinition
+    {
+        return new SQLSelectDefinition(query: $this);
+    }
+
+    /**
+     * Create the DELETE builder for this dialect root.
+     *
+     * @param string $tableName The target table name.
+     * @param string|null $alias The optional table alias.
+     * @return SQLDeleteFromStatement Returns the delete builder.
+     */
+    protected function createDeleteFromStatement(string $tableName, ?string $alias = null): SQLDeleteFromStatement
+    {
+        return new SQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+    }
+
+    /**
+     * Create the TRUNCATE builder for this dialect root.
+     *
+     * @param string $tableName The table to truncate.
+     * @return SQLTruncateStatement Returns the truncate builder.
+     */
+    protected function createTruncateStatement(string $tableName): SQLTruncateStatement
+    {
         return new SQLTruncateStatement(query: $this, tableName: $tableName);
     }
 

@@ -19,7 +19,7 @@ class MariaDbDropDefinition extends MySQLDropDefinition
    */
   public function table(string $tableName): MariaDbDropTableStatement
   {
-    return $this->createDropTableStatement(tableName: $tableName);
+    return parent::table($tableName);
   }
 
   /**
@@ -30,7 +30,7 @@ class MariaDbDropDefinition extends MySQLDropDefinition
    */
   public function database(string $dbName): MariaDbDropDatabaseStatement
   {
-    return $this->createDropDatabaseStatement(dbName: $dbName);
+    return parent::database($dbName);
   }
 
   /**

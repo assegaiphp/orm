@@ -25,11 +25,7 @@ class SQLiteCreateDefinition extends SQLTableCreateDefinition implements SQLCrea
     bool $checkIfNotExists = true,
   ): SQLiteCreateTableStatement
   {
-    return $this->createTableStatement(
-      tableName: $tableName,
-      isTemporary: $isTemporary,
-      checkIfNotExists: $checkIfNotExists,
-    );
+    return parent::table($tableName, $isTemporary, $checkIfNotExists);
   }
 
   /**

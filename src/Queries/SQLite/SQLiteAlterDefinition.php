@@ -17,10 +17,16 @@ class SQLiteAlterDefinition extends SQLAlterDefinition
    */
   public function table(string $tableName): SQLiteAlterTableOption
   {
-    $this->query->setQueryString(
-      queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
-    );
+    return parent::table($tableName);
+  }
 
+  /**
+   * Create the alter-table option builder for this dialect.
+   *
+   * @return SQLiteAlterTableOption Returns the SQLite alter-table option builder.
+   */
+  protected function createAlterTableOption(): SQLiteAlterTableOption
+  {
     return new SQLiteAlterTableOption(query: $this->query);
   }
 }

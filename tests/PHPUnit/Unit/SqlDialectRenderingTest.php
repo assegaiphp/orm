@@ -188,6 +188,49 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertTrue(method_exists($mariaDbSelect, 'highPriority'));
     }
 
+    public function testDialectSpecificQueryRootsKeepTypedReturnSignaturesForSharedEntryPoints(): void
+    {
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLAlterDefinition::class, (new ReflectionMethod(MySQLQuery::class, 'alter'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLCreateDefinition::class, (new ReflectionMethod(MySQLQuery::class, 'create'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLDropDefinition::class, (new ReflectionMethod(MySQLQuery::class, 'drop'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLDescribeStatement::class, (new ReflectionMethod(MySQLQuery::class, 'describe'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLInsertIntoDefinition::class, (new ReflectionMethod(MySQLQuery::class, 'insertInto'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLSelectDefinition::class, (new ReflectionMethod(MySQLQuery::class, 'select'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLDeleteFromStatement::class, (new ReflectionMethod(MySQLQuery::class, 'deleteFrom'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLTruncateStatement::class, (new ReflectionMethod(MySQLQuery::class, 'truncateTable'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MySql\MySQLRenameStatement::class, (new ReflectionMethod(MySQLQuery::class, 'rename'))->getReturnType()?->getName());
+
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLAlterDefinition::class, (new ReflectionMethod(PostgreSQLQuery::class, 'alter'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLCreateDefinition::class, (new ReflectionMethod(PostgreSQLQuery::class, 'create'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLDropDefinition::class, (new ReflectionMethod(PostgreSQLQuery::class, 'drop'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLDescribeStatement::class, (new ReflectionMethod(PostgreSQLQuery::class, 'describe'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLInsertIntoDefinition::class, (new ReflectionMethod(PostgreSQLQuery::class, 'insertInto'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLSelectDefinition::class, (new ReflectionMethod(PostgreSQLQuery::class, 'select'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLDeleteFromStatement::class, (new ReflectionMethod(PostgreSQLQuery::class, 'deleteFrom'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLTruncateStatement::class, (new ReflectionMethod(PostgreSQLQuery::class, 'truncateTable'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\PostgreSql\PostgreSQLRenameStatement::class, (new ReflectionMethod(PostgreSQLQuery::class, 'rename'))->getReturnType()?->getName());
+
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteAlterDefinition::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'alter'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteCreateDefinition::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'create'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteDropDefinition::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'drop'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteDescribeStatement::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'describe'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteInsertIntoDefinition::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'insertInto'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteSelectDefinition::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'select'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteDeleteFromStatement::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'deleteFrom'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteTruncateStatement::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'truncateTable'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\SQLite\SQLiteRenameStatement::class, (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteQuery::class, 'rename'))->getReturnType()?->getName());
+
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbAlterDefinition::class, (new ReflectionMethod(MariaDbQuery::class, 'alter'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbCreateDefinition::class, (new ReflectionMethod(MariaDbQuery::class, 'create'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbDropDefinition::class, (new ReflectionMethod(MariaDbQuery::class, 'drop'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbDescribeStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'describe'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbInsertIntoDefinition::class, (new ReflectionMethod(MariaDbQuery::class, 'insertInto'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbSelectDefinition::class, (new ReflectionMethod(MariaDbQuery::class, 'select'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbDeleteFromStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'deleteFrom'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbTruncateStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'truncateTable'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbRenameStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'rename'))->getReturnType()?->getName());
+    }
+
 
     public function testDialectSpecificSelectAggregateMethodsKeepTypedReturnSignatures(): void
     {
@@ -504,6 +547,34 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertTrue(method_exists($mariaDbAlter, 'database'));
     }
 
+    public function testDialectSpecificAlterEntryPointsKeepTypedReturnSignatures(): void
+    {
+        self::assertSame(
+            MySQLAlterTableOption::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MySql\MySQLAlterDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            PostgreSQLAlterTableOption::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\PostgreSql\PostgreSQLAlterDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            SQLiteAlterTableOption::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteAlterDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbAlterTableOption::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MariaDb\MariaDbAlterDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MySQLAlterDatabaseOption::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MySql\MySQLAlterDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbAlterDatabaseOption::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MariaDb\MariaDbAlterDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+    }
+
 
     public function testMariaDbAlterDatabaseReturnsTypedMariaDbBuilder(): void
     {
@@ -596,6 +667,16 @@ final class SqlDialectRenderingTest extends TestCase
         $statement = $query->use('app_db');
 
         self::assertInstanceOf(MySQLUseStatement::class, $statement);
+        self::assertSame('USE `app_db`', $query->queryString());
+    }
+
+    public function testMariaDbUseQuotesDatabaseIdentifier(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $statement = $query->use('app_db');
+
+        self::assertInstanceOf(MariaDbUseStatement::class, $statement);
         self::assertSame('USE `app_db`', $query->queryString());
     }
 
@@ -742,6 +823,38 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(MariaDbCreateDatabaseStatement::class, $mariaDbCreate->database('app_db'));
     }
 
+    public function testDialectSpecificCreateEntryPointsKeepTypedReturnSignatures(): void
+    {
+        self::assertSame(
+            \Assegai\Orm\Queries\MySql\MySQLCreateTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MySql\MySQLCreateDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\MySql\MySQLCreateDatabaseStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MySql\MySQLCreateDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\PostgreSql\PostgreSQLCreateTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\PostgreSql\PostgreSQLCreateDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\PostgreSql\PostgreSQLCreateDatabaseStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\PostgreSql\PostgreSQLCreateDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\SQLite\SQLiteCreateTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteCreateDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbCreateTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MariaDb\MariaDbCreateDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbCreateDatabaseStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MariaDb\MariaDbCreateDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+    }
+
     public function testMySqlCreateDatabaseUsesMySqlSpecificOptions(): void
     {
         $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();
@@ -835,6 +948,38 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(MariaDbDropDatabaseStatement::class, $mariaDbDrop->database('app_db'));
     }
 
+    public function testDialectSpecificDropEntryPointsKeepTypedReturnSignatures(): void
+    {
+        self::assertSame(
+            \Assegai\Orm\Queries\MySql\MySQLDropTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MySql\MySQLDropDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\MySql\MySQLDropDatabaseStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MySql\MySQLDropDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\PostgreSql\PostgreSQLDropTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\PostgreSql\PostgreSQLDropDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\PostgreSql\PostgreSQLDropDatabaseStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\PostgreSql\PostgreSQLDropDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            \Assegai\Orm\Queries\SQLite\SQLiteDropTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\SQLite\SQLiteDropDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbDropTableStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MariaDb\MariaDbDropDefinition::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbDropDatabaseStatement::class,
+            (new ReflectionMethod(\Assegai\Orm\Queries\MariaDb\MariaDbDropDefinition::class, 'database'))->getReturnType()?->getName()
+        );
+    }
+
     public function testPostgreSqlDropDatabaseSupportsForce(): void
     {
         $query = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres();
@@ -880,6 +1025,14 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('UPDATE "users"', $postgresQuery->queryString());
         self::assertSame('UPDATE "users"', $sqliteQuery->queryString());
         self::assertSame('UPDATE LOW_PRIORITY IGNORE `users`', $mariaDbQuery->queryString());
+    }
+
+    public function testMysqlFamilyQueryRootsKeepTypedReturnSignaturesForFamilyOnlyEntryPoints(): void
+    {
+        self::assertSame(MySQLUseStatement::class, (new ReflectionMethod(MySQLQuery::class, 'use'))->getReturnType()?->getName());
+        self::assertSame(MySQLUpdateDefinition::class, (new ReflectionMethod(MySQLQuery::class, 'update'))->getReturnType()?->getName());
+        self::assertSame(MariaDbUseStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'use'))->getReturnType()?->getName());
+        self::assertSame(MariaDbUpdateDefinition::class, (new ReflectionMethod(MariaDbQuery::class, 'update'))->getReturnType()?->getName());
     }
 
     public function testDialectSpecificUpdateSetChainsStayTyped(): void
@@ -1100,6 +1253,26 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(SQLiteRenameTableStatement::class, $sqliteRename->table('users', 'customers'));
         self::assertInstanceOf(MariaDbRenameStatement::class, $mariaDbRename);
         self::assertInstanceOf(MariaDbRenameTableStatement::class, $mariaDbRename->table('users', 'customers'));
+    }
+
+    public function testDialectSpecificRenameEntryPointsKeepTypedReturnSignatures(): void
+    {
+        self::assertSame(
+            MySQLRenameTableStatement::class,
+            (new ReflectionMethod(MySQLRenameStatement::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            PostgreSQLRenameTableStatement::class,
+            (new ReflectionMethod(PostgreSQLRenameStatement::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            SQLiteRenameTableStatement::class,
+            (new ReflectionMethod(SQLiteRenameStatement::class, 'table'))->getReturnType()?->getName()
+        );
+        self::assertSame(
+            MariaDbRenameTableStatement::class,
+            (new ReflectionMethod(MariaDbRenameStatement::class, 'table'))->getReturnType()?->getName()
+        );
     }
 
     public function testMySqlRenameTableUsesRenameTableSyntax(): void

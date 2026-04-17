@@ -27,12 +27,7 @@ class MariaDbCreateDefinition extends MySQLCreateDefinition
     bool $defaultEncryption = true,
   ): MariaDbCreateDatabaseStatement
   {
-    return $this->createDatabaseStatement(
-      dbName: $dbName,
-      defaultCharacterSet: $defaultCharacterSet,
-      defaultCollation: $defaultCollation,
-      defaultEncryption: $defaultEncryption,
-    );
+    return parent::database($dbName, $defaultCharacterSet, $defaultCollation, $defaultEncryption);
   }
 
   /**
@@ -49,11 +44,7 @@ class MariaDbCreateDefinition extends MySQLCreateDefinition
     bool $checkIfNotExists = true,
   ): MariaDbCreateTableStatement
   {
-    return $this->createTableStatement(
-      tableName: $tableName,
-      isTemporary: $isTemporary,
-      checkIfNotExists: $checkIfNotExists,
-    );
+    return parent::table($tableName, $isTemporary, $checkIfNotExists);
   }
 
   /**

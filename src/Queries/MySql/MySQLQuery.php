@@ -17,9 +17,7 @@ class MySQLQuery extends SQLQuery
    */
   public function alter(): MySQLAlterDefinition
   {
-    $this->init();
-
-    return new MySQLAlterDefinition(query: $this);
+    return parent::alter();
   }
 
   /**
@@ -29,10 +27,7 @@ class MySQLQuery extends SQLQuery
    */
   public function create(): MySQLCreateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::CREATE);
-
-    return new MySQLCreateDefinition(query: $this);
+    return parent::create();
   }
 
   /**
@@ -42,10 +37,7 @@ class MySQLQuery extends SQLQuery
    */
   public function drop(): MySQLDropDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DROP);
-
-    return new MySQLDropDefinition(query: $this);
+    return parent::drop();
   }
 
   /**
@@ -56,10 +48,9 @@ class MySQLQuery extends SQLQuery
    */
   public function use(string $dbName): MySQLUseStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::USE);
+    $this->beginRootQuery(SQLQueryType::USE);
 
-    return new MySQLUseStatement(query: $this, dbName: $dbName);
+    return $this->createUseStatement($dbName);
   }
 
   /**
@@ -70,10 +61,7 @@ class MySQLQuery extends SQLQuery
    */
   public function describe(string $subject): MySQLDescribeStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DESCRIBE);
-
-    return new MySQLDescribeStatement(query: $this, subject: $subject);
+    return parent::describe($subject);
   }
 
   /**
@@ -84,10 +72,7 @@ class MySQLQuery extends SQLQuery
    */
   public function insertInto(string $tableName): MySQLInsertIntoDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::INSERT);
-
-    return new MySQLInsertIntoDefinition(query: $this, tableName: $tableName);
+    return parent::insertInto($tableName);
   }
 
   /**
@@ -97,10 +82,7 @@ class MySQLQuery extends SQLQuery
    */
   public function select(): MySQLSelectDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::SELECT);
-
-    return new MySQLSelectDefinition(query: $this);
+    return parent::select();
   }
 
   /**
@@ -112,10 +94,7 @@ class MySQLQuery extends SQLQuery
    */
   public function deleteFrom(string $tableName, ?string $alias = null): MySQLDeleteFromStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DELETE);
-
-    return new MySQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+    return parent::deleteFrom($tableName, $alias);
   }
 
   /**
@@ -126,10 +105,7 @@ class MySQLQuery extends SQLQuery
    */
   public function truncateTable(string $tableName): MySQLTruncateStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::TRUNCATE);
-
-    return new MySQLTruncateStatement(query: $this, tableName: $tableName);
+    return parent::truncateTable($tableName);
   }
 
   /**
@@ -139,9 +115,7 @@ class MySQLQuery extends SQLQuery
    */
   public function rename(): MySQLRenameStatement
   {
-    $this->init();
-
-    return new MySQLRenameStatement(query: $this);
+    return parent::rename();
   }
 
   /**
@@ -154,14 +128,136 @@ class MySQLQuery extends SQLQuery
    */
   public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): MySQLUpdateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::UPDATE);
+    $this->beginRootQuery(SQLQueryType::UPDATE);
 
+    return $this->createUpdateDefinition($tableName, $lowPriority, $ignore);
+  }
+
+  /**
+   * Create the ALTER builder for this dialect root.
+   *
+   * @return MySQLAlterDefinition Returns the MySQL alter builder.
+   */
+  protected function createAlterDefinition(): MySQLAlterDefinition
+  {
+    return new MySQLAlterDefinition(query: $this);
+  }
+
+  /**
+   * Create the CREATE builder for this dialect root.
+   *
+   * @return MySQLCreateDefinition Returns the MySQL create builder.
+   */
+  protected function createCreateDefinition(): MySQLCreateDefinition
+  {
+    return new MySQLCreateDefinition(query: $this);
+  }
+
+  /**
+   * Create the DROP builder for this dialect root.
+   *
+   * @return MySQLDropDefinition Returns the MySQL drop builder.
+   */
+  protected function createDropDefinition(): MySQLDropDefinition
+  {
+    return new MySQLDropDefinition(query: $this);
+  }
+
+  /**
+   * Create the DESCRIBE builder for this dialect root.
+   *
+   * @param string $subject The table or view name to describe.
+   * @return MySQLDescribeStatement Returns the MySQL describe builder.
+   */
+  protected function createDescribeStatement(string $subject): MySQLDescribeStatement
+  {
+    return new MySQLDescribeStatement(query: $this, subject: $subject);
+  }
+
+  /**
+   * Create the INSERT builder for this dialect root.
+   *
+   * @param string $tableName The target table name.
+   * @return MySQLInsertIntoDefinition Returns the MySQL insert builder.
+   */
+  protected function createInsertIntoDefinition(string $tableName): MySQLInsertIntoDefinition
+  {
+    return new MySQLInsertIntoDefinition(query: $this, tableName: $tableName);
+  }
+
+  /**
+   * Create the SELECT builder for this dialect root.
+   *
+   * @return MySQLSelectDefinition Returns the MySQL select builder.
+   */
+  protected function createSelectDefinition(): MySQLSelectDefinition
+  {
+    return new MySQLSelectDefinition(query: $this);
+  }
+
+  /**
+   * Create the DELETE builder for this dialect root.
+   *
+   * @param string $tableName The target table name.
+   * @param string|null $alias The optional table alias.
+   * @return MySQLDeleteFromStatement Returns the MySQL delete builder.
+   */
+  protected function createDeleteFromStatement(string $tableName, ?string $alias = null): MySQLDeleteFromStatement
+  {
+    return new MySQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  /**
+   * Create the TRUNCATE builder for this dialect root.
+   *
+   * @param string $tableName The table to truncate.
+   * @return MySQLTruncateStatement Returns the MySQL truncate builder.
+   */
+  protected function createTruncateStatement(string $tableName): MySQLTruncateStatement
+  {
+    return new MySQLTruncateStatement(query: $this, tableName: $tableName);
+  }
+
+  /**
+   * Create the RENAME builder for this dialect root.
+   *
+   * @return MySQLRenameStatement Returns the MySQL rename builder.
+   */
+  protected function createRenameStatement(): MySQLRenameStatement
+  {
+    return new MySQLRenameStatement(query: $this);
+  }
+
+  /**
+   * Create the UPDATE builder for this dialect root.
+   *
+   * @param string $tableName The target table name.
+   * @param bool $lowPriority Whether LOW_PRIORITY should be applied.
+   * @param bool $ignore Whether IGNORE should be applied.
+   * @return MySQLUpdateDefinition Returns the MySQL update builder.
+   */
+  protected function createUpdateDefinition(
+    string $tableName,
+    bool $lowPriority = false,
+    bool $ignore = false,
+  ): MySQLUpdateDefinition
+  {
     return new MySQLUpdateDefinition(
       query: $this,
       tableName: $tableName,
       lowPriority: $lowPriority,
       ignore: $ignore,
     );
+  }
+
+  /**
+   * Create the USE builder for this dialect root.
+   *
+   * @param string $dbName The database name to switch to.
+   * @return MySQLUseStatement Returns the MySQL USE statement builder.
+   */
+  protected function createUseStatement(string $dbName): MySQLUseStatement
+  {
+    return new MySQLUseStatement(query: $this, dbName: $dbName);
   }
 }

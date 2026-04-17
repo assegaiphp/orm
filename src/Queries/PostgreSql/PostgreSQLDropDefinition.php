@@ -25,12 +25,7 @@ class PostgreSQLDropDefinition extends SQLTableDropDefinition implements SQLData
     bool $force = false,
   ): PostgreSQLDropDatabaseStatement
   {
-    return new PostgreSQLDropDatabaseStatement(
-      query: $this->query,
-      dbName: $dbName,
-      checkIfExists: $checkIfExists,
-      force: $force,
-    );
+    return $this->createDropDatabaseStatement($dbName, $checkIfExists, $force);
   }
 
   /**
@@ -41,7 +36,29 @@ class PostgreSQLDropDefinition extends SQLTableDropDefinition implements SQLData
    */
   public function table(string $tableName): PostgreSQLDropTableStatement
   {
-    return $this->createDropTableStatement(tableName: $tableName);
+    return parent::table($tableName);
+  }
+
+  /**
+   * Creates the PostgreSQL DROP DATABASE statement builder.
+   *
+   * @param string $dbName The database name to drop.
+   * @param bool $checkIfExists Indicates whether IF EXISTS should be emitted.
+   * @param bool $force Indicates whether WITH (FORCE) should be emitted.
+   * @return PostgreSQLDropDatabaseStatement Returns the PostgreSQL DROP DATABASE statement builder.
+   */
+  protected function createDropDatabaseStatement(
+    string $dbName,
+    bool $checkIfExists = false,
+    bool $force = false,
+  ): PostgreSQLDropDatabaseStatement
+  {
+    return new PostgreSQLDropDatabaseStatement(
+      query: $this->query,
+      dbName: $dbName,
+      checkIfExists: $checkIfExists,
+      force: $force,
+    );
   }
 
   /**

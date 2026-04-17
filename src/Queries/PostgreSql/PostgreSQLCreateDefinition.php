@@ -26,11 +26,7 @@ class PostgreSQLCreateDefinition extends SQLTableCreateDefinition implements SQL
     bool $checkIfNotExists = true,
   ): PostgreSQLCreateTableStatement
   {
-    return $this->createTableStatement(
-      tableName: $tableName,
-      isTemporary: $isTemporary,
-      checkIfNotExists: $checkIfNotExists,
-    );
+    return parent::table($tableName, $isTemporary, $checkIfNotExists);
   }
 
   /**
@@ -43,6 +39,25 @@ class PostgreSQLCreateDefinition extends SQLTableCreateDefinition implements SQL
    * @return PostgreSQLCreateDatabaseStatement Returns the PostgreSQL CREATE DATABASE statement builder.
    */
   public function database(
+    string $dbName,
+    string $encoding = 'UTF8',
+    ?string $owner = null,
+    ?string $template = null,
+  ): PostgreSQLCreateDatabaseStatement
+  {
+    return $this->createDatabaseStatement($dbName, $encoding, $owner, $template);
+  }
+
+  /**
+   * Creates the PostgreSQL CREATE DATABASE statement builder.
+   *
+   * @param string $dbName The database name to create.
+   * @param string $encoding The PostgreSQL encoding to apply.
+   * @param string|null $owner The optional database owner to assign.
+   * @param string|null $template The optional template database to clone from.
+   * @return PostgreSQLCreateDatabaseStatement Returns the PostgreSQL CREATE DATABASE statement builder.
+   */
+  protected function createDatabaseStatement(
     string $dbName,
     string $encoding = 'UTF8',
     ?string $owner = null,

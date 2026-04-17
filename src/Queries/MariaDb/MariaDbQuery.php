@@ -17,9 +17,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function alter(): MariaDbAlterDefinition
   {
-    $this->init();
-
-    return new MariaDbAlterDefinition(query: $this);
+    return parent::alter();
   }
 
   /**
@@ -29,10 +27,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function create(): MariaDbCreateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::CREATE);
-
-    return new MariaDbCreateDefinition(query: $this);
+    return parent::create();
   }
 
   /**
@@ -42,10 +37,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function drop(): MariaDbDropDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DROP);
-
-    return new MariaDbDropDefinition(query: $this);
+    return parent::drop();
   }
 
   /**
@@ -56,10 +48,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function use(string $dbName): MariaDbUseStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::USE);
-
-    return new MariaDbUseStatement(query: $this, dbName: $dbName);
+    return parent::use($dbName);
   }
 
   /**
@@ -70,10 +59,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function describe(string $subject): MariaDbDescribeStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DESCRIBE);
-
-    return new MariaDbDescribeStatement(query: $this, subject: $subject);
+    return parent::describe($subject);
   }
 
   /**
@@ -84,10 +70,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function insertInto(string $tableName): MariaDbInsertIntoDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::INSERT);
-
-    return new MariaDbInsertIntoDefinition(query: $this, tableName: $tableName);
+    return parent::insertInto($tableName);
   }
 
   /**
@@ -99,10 +82,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function deleteFrom(string $tableName, ?string $alias = null): MariaDbDeleteFromStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DELETE);
-
-    return new MariaDbDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+    return parent::deleteFrom($tableName, $alias);
   }
 
   /**
@@ -113,10 +93,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function truncateTable(string $tableName): MariaDbTruncateStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::TRUNCATE);
-
-    return new MariaDbTruncateStatement(query: $this, tableName: $tableName);
+    return parent::truncateTable($tableName);
   }
 
   /**
@@ -126,9 +103,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function rename(): MariaDbRenameStatement
   {
-    $this->init();
-
-    return new MariaDbRenameStatement(query: $this);
+    return parent::rename();
   }
 
   /**
@@ -138,10 +113,7 @@ class MariaDbQuery extends MySQLQuery
    */
   public function select(): MariaDbSelectDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::SELECT);
-
-    return new MariaDbSelectDefinition(query: $this);
+    return parent::select();
   }
 
   /**
@@ -154,14 +126,76 @@ class MariaDbQuery extends MySQLQuery
    */
   public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): MariaDbUpdateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::UPDATE);
+    return parent::update($tableName, $lowPriority, $ignore);
+  }
 
+  protected function createAlterDefinition(): MariaDbAlterDefinition
+  {
+    return new MariaDbAlterDefinition(query: $this);
+  }
+
+  protected function createCreateDefinition(): MariaDbCreateDefinition
+  {
+    return new MariaDbCreateDefinition(query: $this);
+  }
+
+  protected function createDropDefinition(): MariaDbDropDefinition
+  {
+    return new MariaDbDropDefinition(query: $this);
+  }
+
+  protected function createDescribeStatement(string $subject): MariaDbDescribeStatement
+  {
+    return new MariaDbDescribeStatement(query: $this, subject: $subject);
+  }
+
+  protected function createInsertIntoDefinition(string $tableName): MariaDbInsertIntoDefinition
+  {
+    return new MariaDbInsertIntoDefinition(query: $this, tableName: $tableName);
+  }
+
+  protected function createDeleteFromStatement(string $tableName, ?string $alias = null): MariaDbDeleteFromStatement
+  {
+    return new MariaDbDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  protected function createTruncateStatement(string $tableName): MariaDbTruncateStatement
+  {
+    return new MariaDbTruncateStatement(query: $this, tableName: $tableName);
+  }
+
+  protected function createRenameStatement(): MariaDbRenameStatement
+  {
+    return new MariaDbRenameStatement(query: $this);
+  }
+
+  protected function createSelectDefinition(): MariaDbSelectDefinition
+  {
+    return new MariaDbSelectDefinition(query: $this);
+  }
+
+  protected function createUpdateDefinition(
+    string $tableName,
+    bool $lowPriority = false,
+    bool $ignore = false,
+  ): MariaDbUpdateDefinition
+  {
     return new MariaDbUpdateDefinition(
       query: $this,
       tableName: $tableName,
       lowPriority: $lowPriority,
       ignore: $ignore,
     );
+  }
+
+  /**
+   * Create the USE builder for this dialect root.
+   *
+   * @param string $dbName The database name to switch to.
+   * @return MariaDbUseStatement Returns the MariaDB USE statement builder.
+   */
+  protected function createUseStatement(string $dbName): MariaDbUseStatement
+  {
+    return new MariaDbUseStatement(query: $this, dbName: $dbName);
   }
 }

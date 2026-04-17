@@ -17,9 +17,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function alter(): SQLiteAlterDefinition
   {
-    $this->init();
-
-    return new SQLiteAlterDefinition(query: $this);
+    return parent::alter();
   }
 
   /**
@@ -29,10 +27,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function create(): SQLiteCreateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::CREATE);
-
-    return new SQLiteCreateDefinition(query: $this);
+    return parent::create();
   }
 
   /**
@@ -42,10 +37,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function drop(): SQLiteDropDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DROP);
-
-    return new SQLiteDropDefinition(query: $this);
+    return parent::drop();
   }
 
   /**
@@ -56,10 +48,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function describe(string $subject): SQLiteDescribeStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DESCRIBE);
-
-    return new SQLiteDescribeStatement(query: $this, subject: $subject);
+    return parent::describe($subject);
   }
 
   /**
@@ -70,10 +59,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function insertInto(string $tableName): SQLiteInsertIntoDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::INSERT);
-
-    return new SQLiteInsertIntoDefinition(query: $this, tableName: $tableName);
+    return parent::insertInto($tableName);
   }
 
   /**
@@ -83,10 +69,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function select(): SQLiteSelectDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::SELECT);
-
-    return new SQLiteSelectDefinition(query: $this);
+    return parent::select();
   }
 
   /**
@@ -98,10 +81,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function deleteFrom(string $tableName, ?string $alias = null): SQLiteDeleteFromStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DELETE);
-
-    return new SQLiteDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+    return parent::deleteFrom($tableName, $alias);
   }
 
   /**
@@ -112,10 +92,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function truncateTable(string $tableName): SQLiteTruncateStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::TRUNCATE);
-
-    return new SQLiteTruncateStatement(query: $this, tableName: $tableName);
+    return parent::truncateTable($tableName);
   }
 
   /**
@@ -125,9 +102,7 @@ class SQLiteQuery extends SQLQuery
    */
   public function rename(): SQLiteRenameStatement
   {
-    $this->init();
-
-    return new SQLiteRenameStatement(query: $this);
+    return parent::rename();
   }
 
   /**
@@ -138,9 +113,60 @@ class SQLiteQuery extends SQLQuery
    */
   public function update(string $tableName): SQLiteUpdateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::UPDATE);
+    return parent::update($tableName);
+  }
 
+  protected function createAlterDefinition(): SQLiteAlterDefinition
+  {
+    return new SQLiteAlterDefinition(query: $this);
+  }
+
+  protected function createCreateDefinition(): SQLiteCreateDefinition
+  {
+    return new SQLiteCreateDefinition(query: $this);
+  }
+
+  protected function createDropDefinition(): SQLiteDropDefinition
+  {
+    return new SQLiteDropDefinition(query: $this);
+  }
+
+  protected function createDescribeStatement(string $subject): SQLiteDescribeStatement
+  {
+    return new SQLiteDescribeStatement(query: $this, subject: $subject);
+  }
+
+  protected function createInsertIntoDefinition(string $tableName): SQLiteInsertIntoDefinition
+  {
+    return new SQLiteInsertIntoDefinition(query: $this, tableName: $tableName);
+  }
+
+  protected function createSelectDefinition(): SQLiteSelectDefinition
+  {
+    return new SQLiteSelectDefinition(query: $this);
+  }
+
+  protected function createDeleteFromStatement(string $tableName, ?string $alias = null): SQLiteDeleteFromStatement
+  {
+    return new SQLiteDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  protected function createTruncateStatement(string $tableName): SQLiteTruncateStatement
+  {
+    return new SQLiteTruncateStatement(query: $this, tableName: $tableName);
+  }
+
+  protected function createRenameStatement(): SQLiteRenameStatement
+  {
+    return new SQLiteRenameStatement(query: $this);
+  }
+
+  protected function createUpdateDefinition(
+    string $tableName,
+    bool $lowPriority = false,
+    bool $ignore = false,
+  ): SQLiteUpdateDefinition
+  {
     return new SQLiteUpdateDefinition(query: $this, tableName: $tableName);
   }
 }

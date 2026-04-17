@@ -29,6 +29,21 @@ class SQLRenameStatement
    */
   public function table(string $from, string $to): SQLRenameTableStatement
   {
+    return $this->createRenameTableStatement(from: $from, to: $to);
+  }
+
+  /**
+   * Create the rename-table builder for this dialect.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent path
+   * on their own typed rename-table builders.
+   *
+   * @param string $from The current table name.
+   * @param string $to The new table name.
+   * @return SQLRenameTableStatement Returns the rename-table builder.
+   */
+  protected function createRenameTableStatement(string $from, string $to): SQLRenameTableStatement
+  {
     return new SQLRenameTableStatement(query: $this->query, oldTableName: $from, newTableName: $to);
   }
 }

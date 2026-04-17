@@ -17,9 +17,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function alter(): PostgreSQLAlterDefinition
   {
-    $this->init();
-
-    return new PostgreSQLAlterDefinition(query: $this);
+    return parent::alter();
   }
 
   /**
@@ -29,10 +27,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function create(): PostgreSQLCreateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::CREATE);
-
-    return new PostgreSQLCreateDefinition(query: $this);
+    return parent::create();
   }
 
   /**
@@ -42,10 +37,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function drop(): PostgreSQLDropDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DROP);
-
-    return new PostgreSQLDropDefinition(query: $this);
+    return parent::drop();
   }
 
   /**
@@ -56,10 +48,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function describe(string $subject): PostgreSQLDescribeStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DESCRIBE);
-
-    return new PostgreSQLDescribeStatement(query: $this, subject: $subject);
+    return parent::describe($subject);
   }
 
   /**
@@ -70,10 +59,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function insertInto(string $tableName): PostgreSQLInsertIntoDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::INSERT);
-
-    return new PostgreSQLInsertIntoDefinition(query: $this, tableName: $tableName);
+    return parent::insertInto($tableName);
   }
 
   /**
@@ -83,10 +69,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function select(): PostgreSQLSelectDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::SELECT);
-
-    return new PostgreSQLSelectDefinition(query: $this);
+    return parent::select();
   }
 
   /**
@@ -98,10 +81,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function deleteFrom(string $tableName, ?string $alias = null): PostgreSQLDeleteFromStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::DELETE);
-
-    return new PostgreSQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+    return parent::deleteFrom($tableName, $alias);
   }
 
   /**
@@ -112,10 +92,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function truncateTable(string $tableName): PostgreSQLTruncateStatement
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::TRUNCATE);
-
-    return new PostgreSQLTruncateStatement(query: $this, tableName: $tableName);
+    return parent::truncateTable($tableName);
   }
 
   /**
@@ -125,9 +102,7 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function rename(): PostgreSQLRenameStatement
   {
-    $this->init();
-
-    return new PostgreSQLRenameStatement(query: $this);
+    return parent::rename();
   }
 
   /**
@@ -138,9 +113,60 @@ class PostgreSQLQuery extends SQLQuery
    */
   public function update(string $tableName): PostgreSQLUpdateDefinition
   {
-    $this->init();
-    $this->setQueryType(SQLQueryType::UPDATE);
+    return parent::update($tableName);
+  }
 
+  protected function createAlterDefinition(): PostgreSQLAlterDefinition
+  {
+    return new PostgreSQLAlterDefinition(query: $this);
+  }
+
+  protected function createCreateDefinition(): PostgreSQLCreateDefinition
+  {
+    return new PostgreSQLCreateDefinition(query: $this);
+  }
+
+  protected function createDropDefinition(): PostgreSQLDropDefinition
+  {
+    return new PostgreSQLDropDefinition(query: $this);
+  }
+
+  protected function createDescribeStatement(string $subject): PostgreSQLDescribeStatement
+  {
+    return new PostgreSQLDescribeStatement(query: $this, subject: $subject);
+  }
+
+  protected function createInsertIntoDefinition(string $tableName): PostgreSQLInsertIntoDefinition
+  {
+    return new PostgreSQLInsertIntoDefinition(query: $this, tableName: $tableName);
+  }
+
+  protected function createSelectDefinition(): PostgreSQLSelectDefinition
+  {
+    return new PostgreSQLSelectDefinition(query: $this);
+  }
+
+  protected function createDeleteFromStatement(string $tableName, ?string $alias = null): PostgreSQLDeleteFromStatement
+  {
+    return new PostgreSQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+  }
+
+  protected function createTruncateStatement(string $tableName): PostgreSQLTruncateStatement
+  {
+    return new PostgreSQLTruncateStatement(query: $this, tableName: $tableName);
+  }
+
+  protected function createRenameStatement(): PostgreSQLRenameStatement
+  {
+    return new PostgreSQLRenameStatement(query: $this);
+  }
+
+  protected function createUpdateDefinition(
+    string $tableName,
+    bool $lowPriority = false,
+    bool $ignore = false,
+  ): PostgreSQLUpdateDefinition
+  {
     return new PostgreSQLUpdateDefinition(query: $this, tableName: $tableName);
   }
 }

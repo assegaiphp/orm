@@ -19,7 +19,7 @@ class SQLiteDropDefinition extends SQLTableDropDefinition implements SQLDropDefi
    */
   public function table(string $tableName): SQLiteDropTableStatement
   {
-    return $this->createDropTableStatement(tableName: $tableName);
+    return parent::table($tableName);
   }
 
   /**

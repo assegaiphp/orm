@@ -25,11 +25,7 @@ class MySQLCreateDefinition extends SQLCreateDefinition
     bool $checkIfNotExists = true,
   ): MySQLCreateTableStatement
   {
-    return $this->createTableStatement(
-      tableName: $tableName,
-      isTemporary: $isTemporary,
-      checkIfNotExists: $checkIfNotExists,
-    );
+    return parent::table($tableName, $isTemporary, $checkIfNotExists);
   }
 
   /**
@@ -48,12 +44,7 @@ class MySQLCreateDefinition extends SQLCreateDefinition
     bool $defaultEncryption = true,
   ): MySQLCreateDatabaseStatement
   {
-    return $this->createDatabaseStatement(
-      dbName: $dbName,
-      defaultCharacterSet: $defaultCharacterSet,
-      defaultCollation: $defaultCollation,
-      defaultEncryption: $defaultEncryption,
-    );
+    return parent::database($dbName, $defaultCharacterSet, $defaultCollation, $defaultEncryption);
   }
 
   /**

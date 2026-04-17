@@ -20,11 +20,7 @@ class MariaDbAlterDefinition extends MySQLAlterDefinition
    */
   public function database(string $databaseName): MariaDbAlterDatabaseOption
   {
-    $this->query->setQueryString(
-      queryString: 'ALTER DATABASE ' . $this->query->quoteIdentifier($databaseName)
-    );
-
-    return new MariaDbAlterDatabaseOption(query: $this->query);
+    return parent::database($databaseName);
   }
 
   /**
@@ -35,10 +31,26 @@ class MariaDbAlterDefinition extends MySQLAlterDefinition
    */
   public function table(string $tableName): MariaDbAlterTableOption
   {
-    $this->query->setQueryString(
-      queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
-    );
+    return parent::table($tableName);
+  }
 
+  /**
+   * Create the database alter option builder for this dialect.
+   *
+   * @return MariaDbAlterDatabaseOption Returns the database alter option builder.
+   */
+  protected function createAlterDatabaseOption(): MariaDbAlterDatabaseOption
+  {
+    return new MariaDbAlterDatabaseOption(query: $this->query);
+  }
+
+  /**
+   * Create the alter-table option builder for this dialect.
+   *
+   * @return MariaDbAlterTableOption Returns the MariaDB alter-table option builder.
+   */
+  protected function createAlterTableOption(): MariaDbAlterTableOption
+  {
     return new MariaDbAlterTableOption(query: $this->query);
   }
 }

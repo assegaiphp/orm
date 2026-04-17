@@ -20,11 +20,9 @@ class MySQLAlterDefinition extends SQLAlterDefinition
    */
   public function database(string $databaseName): MySQLAlterDatabaseOption
   {
-    $this->query->setQueryString(
-      queryString: 'ALTER DATABASE ' . $this->query->quoteIdentifier($databaseName)
-    );
+    $this->beginAlterDatabase(databaseName: $databaseName);
 
-    return new MySQLAlterDatabaseOption(query: $this->query);
+    return $this->createAlterDatabaseOption();
   }
 
   /**
@@ -35,10 +33,39 @@ class MySQLAlterDefinition extends SQLAlterDefinition
    */
   public function table(string $tableName): MySQLAlterTableOption
   {
-    $this->query->setQueryString(
-      queryString: 'ALTER TABLE ' . $this->query->quoteIdentifier($tableName)
-    );
+    return parent::table($tableName);
+  }
 
+  /**
+   * Start the ALTER DATABASE statement for the given database.
+   *
+   * @param string $databaseName The database being altered.
+   * @return void
+   */
+  protected function beginAlterDatabase(string $databaseName): void
+  {
+    $this->query->setQueryString(
+      queryString: 'ALTER DATABASE ' . $this->query->quoteIdentifier($databaseName)
+    );
+  }
+
+  /**
+   * Create the database alter option builder for this dialect.
+   *
+   * @return MySQLAlterDatabaseOption Returns the database alter option builder.
+   */
+  protected function createAlterDatabaseOption(): MySQLAlterDatabaseOption
+  {
+    return new MySQLAlterDatabaseOption(query: $this->query);
+  }
+
+  /**
+   * Create the alter-table option builder for this dialect.
+   *
+   * @return MySQLAlterTableOption Returns the MySQL alter-table option builder.
+   */
+  protected function createAlterTableOption(): MySQLAlterTableOption
+  {
     return new MySQLAlterTableOption(query: $this->query);
   }
 }
