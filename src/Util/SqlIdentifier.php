@@ -22,7 +22,7 @@ final class SqlIdentifier
       return '*';
     }
 
-    $segments = explode('.', str_replace(['`', '"'], '', $identifier));
+    $segments = explode('.', str_replace(['`', '"', '[', ']'], '', $identifier));
     $quotedSegments = [];
 
     foreach ($segments as $index => $segment) {

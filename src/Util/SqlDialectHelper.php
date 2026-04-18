@@ -26,6 +26,11 @@ final class SqlDialectHelper
 
   public static function quoteIdentifier(string $identifier, SQLDialect $dialect): string
   {
+    if ($dialect === SQLDialect::MSSQL) {
+      $escaped = str_replace(']', ']]', $identifier);
+      return '[' . $escaped . ']';
+    }
+
     $quote = match ($dialect) {
       SQLDialect::POSTGRESQL, SQLDialect::SQLITE => '"',
       default => '`',

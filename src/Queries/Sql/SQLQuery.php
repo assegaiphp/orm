@@ -121,6 +121,15 @@ class SQLQuery
                 passwordHashAlgorithm: $passwordHashAlgorithm,
                 dialect: $resolvedDialect,
             ),
+            SQLDialect::MSSQL => new \Assegai\Orm\Queries\MsSql\MsSqlQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
             SQLDialect::MARIADB => new \Assegai\Orm\Queries\MariaDb\MariaDbQuery(
                 db: $db,
                 fetchClass: $fetchClass,
@@ -301,6 +310,24 @@ class SQLQuery
             passwordHashFields: $this->passwordHashFields,
             passwordHashAlgorithm: $this->passwordHashAlgorithm,
             dialect: SQLDialect::MARIADB,
+        );
+    }
+
+    /**
+     * Returns a query configured for Microsoft SQL Server rendering.
+     *
+     * @return \Assegai\Orm\Queries\MsSql\MsSqlQuery
+     */
+    public function switchToMsSql(): \Assegai\Orm\Queries\MsSql\MsSqlQuery
+    {
+        return \Assegai\Orm\Queries\MsSql\MsSqlQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::MSSQL,
         );
     }
 

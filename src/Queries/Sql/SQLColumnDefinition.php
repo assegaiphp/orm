@@ -107,6 +107,19 @@ class SQLColumnDefinition implements Stringable
         isPrimaryKey: $isPrimaryKey,
         comment: $comment,
       ),
+      SQLDialect::MSSQL => new \Assegai\Orm\Queries\MsSql\MsSqlColumnDefinition(
+        name: $name,
+        type: $type,
+        lengthOrValues: $lengthOrValues,
+        defaultValue: $defaultValue,
+        nullable: $nullable,
+        autoIncrement: $autoIncrement,
+        onUpdate: $onUpdate,
+        isUnique: $isUnique,
+        uniqueKey: $uniqueKey,
+        isPrimaryKey: $isPrimaryKey,
+        comment: $comment,
+      ),
       SQLDialect::MARIADB => new \Assegai\Orm\Queries\MariaDb\MariaDbColumnDefinition(
         name: $name,
         type: $type,
@@ -321,6 +334,30 @@ class SQLColumnDefinition implements Stringable
     return $this->normalizeQueryString($queryString);
   }
 
+  protected function buildMsSqlDefinition(): string
+  {
+    $queryString = $this->getQuotedColumnName() . ' ';
+
+    if ($this->autoIncrement && $this->isPrimaryKey && $this->type->isNumeric()) {
+      return $queryString . $this->getMsSqlType() . ' IDENTITY(1,1) PRIMARY KEY';
+    }
+
+    $queryString .= $this->getMsSqlType() . ' ';
+    $queryString .= $this->buildDefaultClause();
+
+    if (!$this->nullable && !$this->isPrimaryKey) {
+      $queryString .= 'NOT NULL ';
+    }
+
+    if ($this->isPrimaryKey) {
+      $queryString .= 'PRIMARY KEY ';
+    } elseif ($this->isUnique) {
+      $queryString .= 'UNIQUE ';
+    }
+
+    return $this->normalizeQueryString($queryString);
+  }
+
   protected function getQuotedColumnName(): string
   {
     if (empty($this->name)) {
@@ -329,6 +366,7 @@ class SQLColumnDefinition implements Stringable
 
     return match ($this->dialect) {
       SQLDialect::POSTGRESQL => "\"{$this->name}\"",
+      SQLDialect::MSSQL => "[{$this->name}]",
       default => "`{$this->name}`",
     };
   }
@@ -458,6 +496,42 @@ class SQLColumnDefinition implements Stringable
       ColumnType::VARBINARY => 'BYTEA',
       ColumnType::VARCHAR => 'VARCHAR(' . ($this->getNormalizedLengthOrValues() ?: 255) . ')',
       default => 'TEXT',
+    };
+  }
+
+  protected function getMsSqlType(): string
+  {
+    return match ($this->type) {
+      ColumnType::BOOLEAN,
+      ColumnType::BIT => 'BIT',
+      ColumnType::TINYINT,
+      ColumnType::TINYINT_UNSIGNED => 'TINYINT',
+      ColumnType::SMALLINT,
+      ColumnType::SMALLINT_UNSIGNED => 'SMALLINT',
+      ColumnType::INT,
+      ColumnType::INT_UNSIGNED,
+      ColumnType::MEDIUMINT,
+      ColumnType::MEDIUMINT_UNSIGNED => 'INT',
+      ColumnType::BIGINT,
+      ColumnType::BIGINT_UNSIGNED => 'BIGINT',
+      ColumnType::FLOAT => 'REAL',
+      ColumnType::DOUBLE => 'FLOAT',
+      ColumnType::DECIMAL => 'DECIMAL(' . ($this->getNormalizedLengthOrValues() ?: '16,2') . ')',
+      ColumnType::JSON => 'NVARCHAR(MAX)',
+      ColumnType::UUID => 'UNIQUEIDENTIFIER',
+      ColumnType::DATE => 'DATE',
+      ColumnType::TIME => 'TIME',
+      ColumnType::DATETIME,
+      ColumnType::TIMESTAMP => 'DATETIME2',
+      ColumnType::BINARY,
+      ColumnType::BLOB,
+      ColumnType::MEDIUMBLOB,
+      ColumnType::LONGBLOB,
+      ColumnType::TINYBLOB,
+      ColumnType::VARBINARY => 'VARBINARY(MAX)',
+      ColumnType::CHAR => 'CHAR(' . ($this->getNormalizedLengthOrValues() ?: 1) . ')',
+      ColumnType::VARCHAR => 'VARCHAR(' . ($this->getNormalizedLengthOrValues() ?: 255) . ')',
+      default => 'NVARCHAR(MAX)',
     };
   }
 

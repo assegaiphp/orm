@@ -3,6 +3,7 @@
 namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Enumerations\SQLDialect;
+use Assegai\Orm\Queries\MsSql\MsSqlKeyPart;
 use Assegai\Orm\Queries\MariaDb\MariaDbKeyPart;
 use Assegai\Orm\Queries\MySql\MySQLKeyPart;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLKeyPart;
@@ -42,6 +43,7 @@ class SQLKeyPart implements JsonSerializable
       SQLDialect::MYSQL => new MySQLKeyPart(key: $key, ascending: $ascending),
       SQLDialect::POSTGRESQL => new PostgreSQLKeyPart(key: $key, ascending: $ascending),
       SQLDialect::SQLITE => new SQLiteKeyPart(key: $key, ascending: $ascending),
+      SQLDialect::MSSQL => new MsSqlKeyPart(key: $key, ascending: $ascending),
       SQLDialect::MARIADB => new MariaDbKeyPart(key: $key, ascending: $ascending),
     };
   }

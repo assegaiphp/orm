@@ -5,6 +5,31 @@ namespace Tests\PHPUnit\Unit;
 use Assegai\Orm\DataSource\SQLCharacterSet;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Management\Options\FindWhereOptions;
+use Assegai\Orm\Queries\MsSql\MsSqlAssignmentList;
+use Assegai\Orm\Queries\MsSql\MsSqlColumnDefinition;
+use Assegai\Orm\Queries\MsSql\MsSqlCreateDatabaseStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlCreateTableStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlDeleteFromStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlDescribeStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlDropDatabaseStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlDropTableStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlHavingClause;
+use Assegai\Orm\Queries\MsSql\MsSqlInsertIntoMultipleStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlInsertIntoStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlJoinExpression;
+use Assegai\Orm\Queries\MsSql\MsSqlJoinSpecification;
+use Assegai\Orm\Queries\MsSql\MsSqlLimitClause;
+use Assegai\Orm\Queries\MsSql\MsSqlQuery;
+use Assegai\Orm\Queries\MsSql\MsSqlRenameStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlRenameTableStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlSelectDefinition;
+use Assegai\Orm\Queries\MsSql\MsSqlSelectExpression;
+use Assegai\Orm\Queries\MsSql\MsSqlTableOptions;
+use Assegai\Orm\Queries\MsSql\MsSqlTableReference;
+use Assegai\Orm\Queries\MsSql\MsSqlTruncateStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlUpdateDefinition;
+use Assegai\Orm\Queries\MsSql\MsSqlUseStatement;
+use Assegai\Orm\Queries\MsSql\MsSqlWhereClause;
 use Assegai\Orm\Queries\MariaDb\MariaDbAlterDatabaseOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbAlterTableOption;
 use Assegai\Orm\Queries\MariaDb\MariaDbAssignmentList;
@@ -171,12 +196,30 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('SELECT `users`.`name` FROM `users` LIMIT 20,10', $mysql->queryString());
     }
 
+    public function testSwitchToMsSqlReturnsDedicatedMsSqlQueryBuilder(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL);
+        $msSql = $query->switchToMsSql();
+
+        $msSql
+            ->select()
+            ->top(5)
+            ->all(['users.name'])
+            ->from('users');
+
+        self::assertInstanceOf(MsSqlQuery::class, $msSql);
+        self::assertSame(SQLDialect::MYSQL, $query->getDialect());
+        self::assertSame(SQLDialect::MSSQL, $msSql->getDialect());
+        self::assertSame('SELECT TOP (5) [users].[name] FROM [users]', $msSql->queryString());
+    }
+
     public function testDialectSpecificSelectBuildersExposeDialectOnlyFluentMethods(): void
     {
         $mysqlSelect = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql()->select();
         $postgresSelect = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres()->select();
         $sqliteSelect = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite()->select();
         $mariaDbSelect = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb()->select();
+        $msSqlSelect = $this->createQuery(SQLDialect::MYSQL)->switchToMsSql()->select();
 
         self::assertInstanceOf(MySQLSelectDefinition::class, $mysqlSelect);
         self::assertTrue(method_exists($mysqlSelect, 'highPriority'));
@@ -186,6 +229,9 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertFalse(method_exists($sqliteSelect, 'highPriority'));
         self::assertInstanceOf(MariaDbSelectDefinition::class, $mariaDbSelect);
         self::assertTrue(method_exists($mariaDbSelect, 'highPriority'));
+        self::assertInstanceOf(MsSqlSelectDefinition::class, $msSqlSelect);
+        self::assertTrue(method_exists($msSqlSelect, 'top'));
+        self::assertFalse(method_exists($msSqlSelect, 'highPriority'));
     }
 
     public function testDialectSpecificQueryRootsKeepTypedReturnSignaturesForSharedEntryPoints(): void
@@ -229,6 +275,17 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbDeleteFromStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'deleteFrom'))->getReturnType()?->getName());
         self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbTruncateStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'truncateTable'))->getReturnType()?->getName());
         self::assertSame(\Assegai\Orm\Queries\MariaDb\MariaDbRenameStatement::class, (new ReflectionMethod(MariaDbQuery::class, 'rename'))->getReturnType()?->getName());
+
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlAlterDefinition::class, (new ReflectionMethod(MsSqlQuery::class, 'alter'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlCreateDefinition::class, (new ReflectionMethod(MsSqlQuery::class, 'create'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlDropDefinition::class, (new ReflectionMethod(MsSqlQuery::class, 'drop'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlDescribeStatement::class, (new ReflectionMethod(MsSqlQuery::class, 'describe'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlInsertIntoDefinition::class, (new ReflectionMethod(MsSqlQuery::class, 'insertInto'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlSelectDefinition::class, (new ReflectionMethod(MsSqlQuery::class, 'select'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlDeleteFromStatement::class, (new ReflectionMethod(MsSqlQuery::class, 'deleteFrom'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlTruncateStatement::class, (new ReflectionMethod(MsSqlQuery::class, 'truncateTable'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlRenameStatement::class, (new ReflectionMethod(MsSqlQuery::class, 'rename'))->getReturnType()?->getName());
+        self::assertSame(\Assegai\Orm\Queries\MsSql\MsSqlUseStatement::class, (new ReflectionMethod(MsSqlQuery::class, 'use'))->getReturnType()?->getName());
     }
 
 
@@ -239,6 +296,7 @@ final class SqlDialectRenderingTest extends TestCase
             [PostgreSQLSelectDefinition::class, PostgreSQLSelectExpression::class],
             [SQLiteSelectDefinition::class, SQLiteSelectExpression::class],
             [MariaDbSelectDefinition::class, MariaDbSelectExpression::class],
+            [MsSqlSelectDefinition::class, MsSqlSelectExpression::class],
         ] as [$definitionClass, $expressionClass]) {
             foreach (['all', 'count', 'avg', 'sum'] as $methodName) {
                 $returnType = (new ReflectionMethod($definitionClass, $methodName))->getReturnType();
@@ -266,16 +324,22 @@ final class SqlDialectRenderingTest extends TestCase
             ->switchToMariaDb()
             ->select()
             ->all(['users.name']);
+        $msSqlExpression = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMsSql()
+            ->select()
+            ->all(['users.name']);
 
         self::assertInstanceOf(MySQLSelectExpression::class, $mysqlExpression);
         self::assertInstanceOf(PostgreSQLSelectExpression::class, $postgresExpression);
         self::assertInstanceOf(SQLiteSelectExpression::class, $sqliteExpression);
         self::assertInstanceOf(MariaDbSelectExpression::class, $mariaDbExpression);
+        self::assertInstanceOf(MsSqlSelectExpression::class, $msSqlExpression);
 
         self::assertInstanceOf(MySQLTableReference::class, $mysqlExpression->from('users'));
         self::assertInstanceOf(PostgreSQLTableReference::class, $postgresExpression->from('users'));
         self::assertInstanceOf(SQLiteTableReference::class, $sqliteExpression->from('users'));
         self::assertInstanceOf(MariaDbTableReference::class, $mariaDbExpression->from('users'));
+        self::assertInstanceOf(MsSqlTableReference::class, $msSqlExpression->from('users'));
     }
 
     public function testMariaDbHighPrioritySelectChainStaysTyped(): void
@@ -314,16 +378,23 @@ final class SqlDialectRenderingTest extends TestCase
             ->select()
             ->all(['users.name'])
             ->from('users');
+        $msSqlTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMsSql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
 
         self::assertInstanceOf(MySQLWhereClause::class, $mysqlTableReference->where('`users`.`active` = 1'));
         self::assertInstanceOf(PostgreSQLWhereClause::class, $postgresTableReference->where('"users"."active" = true'));
         self::assertInstanceOf(SQLiteWhereClause::class, $sqliteTableReference->where('"users"."active" = 1'));
         self::assertInstanceOf(MariaDbWhereClause::class, $mariaDbTableReference->where('`users`.`active` = 1'));
+        self::assertInstanceOf(MsSqlWhereClause::class, $msSqlTableReference->where('[users].[active] = 1'));
 
         self::assertInstanceOf(MySQLHavingClause::class, $mysqlTableReference->having('COUNT(*) > 1'));
         self::assertInstanceOf(PostgreSQLHavingClause::class, $postgresTableReference->having('COUNT(*) > 1'));
         self::assertInstanceOf(SQLiteHavingClause::class, $sqliteTableReference->having('COUNT(*) > 1'));
         self::assertInstanceOf(MariaDbHavingClause::class, $mariaDbTableReference->having('COUNT(*) > 1'));
+        self::assertInstanceOf(MsSqlHavingClause::class, $msSqlTableReference->having('COUNT(*) > 1'));
     }
 
     public function testDialectSpecificJoinChainsStayTypedAfterJoinOnWhereAndNestedJoin(): void
@@ -348,36 +419,47 @@ final class SqlDialectRenderingTest extends TestCase
             ->select()
             ->all(['users.name'])
             ->from('users');
+        $msSqlTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMsSql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
 
         $mysqlJoinExpression = $mysqlTableReference->join('profiles');
         $postgresJoinExpression = $postgresTableReference->join('profiles');
         $sqliteJoinExpression = $sqliteTableReference->join('profiles');
         $mariaDbJoinExpression = $mariaDbTableReference->join('profiles');
+        $msSqlJoinExpression = $msSqlTableReference->join('profiles');
 
         self::assertInstanceOf(MySQLJoinExpression::class, $mysqlJoinExpression);
         self::assertInstanceOf(PostgreSQLJoinExpression::class, $postgresJoinExpression);
         self::assertInstanceOf(SQLiteJoinExpression::class, $sqliteJoinExpression);
         self::assertInstanceOf(MariaDbJoinExpression::class, $mariaDbJoinExpression);
+        self::assertInstanceOf(MsSqlJoinExpression::class, $msSqlJoinExpression);
 
         $mysqlJoinSpecification = $mysqlJoinExpression->on('`users`.`profile_id` = `profiles`.`id`');
         $postgresJoinSpecification = $postgresJoinExpression->on('"users"."profile_id" = "profiles"."id"');
         $sqliteJoinSpecification = $sqliteJoinExpression->on('"users"."profile_id" = "profiles"."id"');
         $mariaDbJoinSpecification = $mariaDbJoinExpression->on('`users`.`profile_id` = `profiles`.`id`');
+        $msSqlJoinSpecification = $msSqlJoinExpression->on('[users].[profile_id] = [profiles].[id]');
 
         self::assertInstanceOf(MySQLJoinSpecification::class, $mysqlJoinSpecification);
         self::assertInstanceOf(PostgreSQLJoinSpecification::class, $postgresJoinSpecification);
         self::assertInstanceOf(SQLiteJoinSpecification::class, $sqliteJoinSpecification);
         self::assertInstanceOf(MariaDbJoinSpecification::class, $mariaDbJoinSpecification);
+        self::assertInstanceOf(MsSqlJoinSpecification::class, $msSqlJoinSpecification);
 
         self::assertInstanceOf(MySQLWhereClause::class, $mysqlJoinSpecification->where('`profiles`.`active` = 1'));
         self::assertInstanceOf(PostgreSQLWhereClause::class, $postgresJoinSpecification->where('"profiles"."active" = true'));
         self::assertInstanceOf(SQLiteWhereClause::class, $sqliteJoinSpecification->where('"profiles"."active" = 1'));
         self::assertInstanceOf(MariaDbWhereClause::class, $mariaDbJoinSpecification->where('`profiles`.`active` = 1'));
+        self::assertInstanceOf(MsSqlWhereClause::class, $msSqlJoinSpecification->where('[profiles].[active] = 1'));
 
         self::assertInstanceOf(MySQLJoinExpression::class, $mysqlJoinSpecification->leftJoin('teams'));
         self::assertInstanceOf(PostgreSQLJoinExpression::class, $postgresJoinSpecification->leftJoin('teams'));
         self::assertInstanceOf(SQLiteJoinExpression::class, $sqliteJoinSpecification->leftJoin('teams'));
         self::assertInstanceOf(MariaDbJoinExpression::class, $mariaDbJoinSpecification->leftJoin('teams'));
+        self::assertInstanceOf(MsSqlJoinExpression::class, $msSqlJoinSpecification->leftJoin('teams'));
     }
 
     public function testDialectSpecificLimitBuildersStayTypedAfterFromAndWhere(): void
@@ -402,11 +484,17 @@ final class SqlDialectRenderingTest extends TestCase
             ->select()
             ->all(['users.name'])
             ->from('users');
+        $msSqlTableReference = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMsSql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users');
 
         self::assertInstanceOf(MySQLLimitClause::class, $mysqlTableReference->limit(10, 20));
         self::assertInstanceOf(PostgreSQLLimitClause::class, $postgresTableReference->limit(10, 20));
         self::assertInstanceOf(SQLiteLimitClause::class, $sqliteTableReference->limit(10, 20));
         self::assertInstanceOf(MariaDbLimitClause::class, $mariaDbTableReference->limit(10, 20));
+        self::assertInstanceOf(MsSqlLimitClause::class, $msSqlTableReference->limit(10, 20));
 
         $mysqlWhereClause = $this->createQuery(SQLDialect::POSTGRESQL)
             ->switchToMysql()
@@ -432,11 +520,92 @@ final class SqlDialectRenderingTest extends TestCase
             ->all(['users.name'])
             ->from('users')
             ->where('`users`.`active` = 1');
+        $msSqlWhereClause = $this->createQuery(SQLDialect::MYSQL)
+            ->switchToMsSql()
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->where('[users].[active] = 1');
 
         self::assertInstanceOf(MySQLLimitClause::class, $mysqlWhereClause->limit(5));
         self::assertInstanceOf(PostgreSQLLimitClause::class, $postgresWhereClause->limit(5));
         self::assertInstanceOf(SQLiteLimitClause::class, $sqliteWhereClause->limit(5));
         self::assertInstanceOf(MariaDbLimitClause::class, $mariaDbWhereClause->limit(5));
+        self::assertInstanceOf(MsSqlLimitClause::class, $msSqlWhereClause->limit(5));
+    }
+
+    public function testMsSqlSelectTopClauseUsesSqlServerSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $query
+            ->select()
+            ->top(3)
+            ->all(['users.name'])
+            ->from('users');
+
+        self::assertSame('SELECT TOP (3) [users].[name] FROM [users]', $query->queryString());
+    }
+
+    public function testMsSqlLimitClauseUsesOffsetFetchSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $query
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->limit(10, 20);
+
+        self::assertSame('SELECT [users].[name] FROM [users] OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY', $query->queryString());
+    }
+
+    public function testMsSqlUseStatementRendersSqlServerSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $use = $query->use('analytics');
+
+        self::assertInstanceOf(MsSqlUseStatement::class, $use);
+        self::assertSame('USE [analytics]', $query->queryString());
+    }
+
+    public function testMsSqlDescribeUsesInformationSchemaQuery(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $describe = $query->describe('users');
+
+        self::assertInstanceOf(MsSqlDescribeStatement::class, $describe);
+        self::assertSame(
+            'SELECT [COLUMN_NAME], [DATA_TYPE], [IS_NULLABLE], [COLUMN_DEFAULT] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_NAME] = ? ORDER BY [ORDINAL_POSITION] ASC',
+            $query->queryString()
+        );
+    }
+
+    public function testMsSqlRenameTableUsesSpRenameSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $rename = $query->rename()->table('users', 'archived_users');
+
+        self::assertInstanceOf(MsSqlRenameTableStatement::class, $rename);
+        self::assertSame("EXEC sp_rename N'[users]', N'archived_users', N'OBJECT'", $query->queryString());
+    }
+
+    public function testMsSqlCreateAndDropDatabaseRenderSqlServerSyntax(): void
+    {
+        $createQuery = $this->createQuery(SQLDialect::MSSQL);
+        $create = $createQuery->create()->database('analytics');
+
+        self::assertInstanceOf(MsSqlCreateDatabaseStatement::class, $create);
+        self::assertSame("IF DB_ID(N'analytics') IS NULL CREATE DATABASE [analytics]", $createQuery->queryString());
+
+        $dropQuery = $this->createQuery(SQLDialect::MSSQL);
+        $drop = $dropQuery->drop()->database('analytics');
+
+        self::assertInstanceOf(MsSqlDropDatabaseStatement::class, $drop);
+        self::assertSame('DROP DATABASE [analytics]', $dropQuery->queryString());
     }
 
     public function testMySqlSelectHighPriorityCompilesOnlyOnMySqlBuilder(): void

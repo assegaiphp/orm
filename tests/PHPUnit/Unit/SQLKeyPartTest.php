@@ -3,6 +3,7 @@
 namespace Tests\PHPUnit\Unit;
 
 use Assegai\Orm\Enumerations\SQLDialect;
+use Assegai\Orm\Queries\MsSql\MsSqlKeyPart;
 use Assegai\Orm\Queries\MariaDb\MariaDbKeyPart;
 use Assegai\Orm\Queries\MySql\MySQLKeyPart;
 use Assegai\Orm\Queries\PostgreSql\PostgreSQLKeyPart;
@@ -27,6 +28,13 @@ final class SQLKeyPartTest extends TestCase
         self::assertSame('"users"."created_at" DESC', (string) $keyPart);
     }
 
+    public function testQuotesSafeIdentifiersForMsSql(): void
+    {
+        $keyPart = new SQLKeyPart('users.created_at', ascending: false, dialect: SQLDialect::MSSQL);
+
+        self::assertSame('[users].[created_at] DESC', (string) $keyPart);
+    }
+
     public function testRejectsUnsafeIdentifiers(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -41,15 +49,18 @@ final class SQLKeyPartTest extends TestCase
         $postgresKeyPart = SQLKeyPart::forDialect('users.created_at', ascending: false, dialect: SQLDialect::POSTGRESQL);
         $sqliteKeyPart = SQLKeyPart::forDialect('users.created_at', ascending: false, dialect: SQLDialect::SQLITE);
         $mariaDbKeyPart = SQLKeyPart::forDialect('users.created_at', ascending: false, dialect: SQLDialect::MARIADB);
+        $msSqlKeyPart = SQLKeyPart::forDialect('users.created_at', ascending: false, dialect: SQLDialect::MSSQL);
 
         self::assertInstanceOf(MySQLKeyPart::class, $mysqlKeyPart);
         self::assertInstanceOf(PostgreSQLKeyPart::class, $postgresKeyPart);
         self::assertInstanceOf(SQLiteKeyPart::class, $sqliteKeyPart);
         self::assertInstanceOf(MariaDbKeyPart::class, $mariaDbKeyPart);
+        self::assertInstanceOf(MsSqlKeyPart::class, $msSqlKeyPart);
 
         self::assertSame('`users`.`created_at` DESC', (string) $mysqlKeyPart);
         self::assertSame('"users"."created_at" DESC', (string) $postgresKeyPart);
         self::assertSame('"users"."created_at" DESC', (string) $sqliteKeyPart);
         self::assertSame('`users`.`created_at` DESC', (string) $mariaDbKeyPart);
+        self::assertSame('[users].[created_at] DESC', (string) $msSqlKeyPart);
     }
 }

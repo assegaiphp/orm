@@ -19,8 +19,8 @@ enum SQLDialect: string
   {
     return match($case) {
       'mysql' => self::MYSQL,
-      'pgsql' => self::POSTGRESQL,
-      'mssql' => self::MSSQL,
+      'pgsql', 'postgres', 'postgresql' => self::POSTGRESQL,
+      'mssql', 'sqlsrv', 'dblib' => self::MSSQL,
       'mariadb' => self::MARIADB,
       'sqlite' => self::SQLITE,
       default => self::UNKNOWN
