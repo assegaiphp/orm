@@ -100,6 +100,7 @@ class DataSource implements DataSourceInterface
   public function getDatabaseName(): ?string
   {
     $query = match ($this->type) {
+      DataSourceType::MSSQL => 'SELECT DB_NAME()',
       DataSourceType::POSTGRESQL => 'SELECT current_database()',
       DataSourceType::SQLITE => null,
       default => 'SELECT DATABASE()',
@@ -254,6 +255,7 @@ class DataSource implements DataSourceInterface
   private function createConnection(DataSourceOptions $options): PDO
   {
     return match ($this->type) {
+      DataSourceType::MSSQL => $this->createMsSqlConnection($options),
       DataSourceType::POSTGRESQL => $this->createPostgreSqlConnection($options),
       DataSourceType::SQLITE => $this->createSqliteConnection($options),
       DataSourceType::MONGODB => DBFactory::getMongoDbConnection(dbName: $options->name),
@@ -289,6 +291,24 @@ class DataSource implements DataSourceInterface
     }
 
     $dsn = DBFactory::buildPostgreSqlDsn($options->host, $options->port, $options->name);
+    return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
+  }
+
+  /**
+   * Create a SQL Server PDO connection for the current data source.
+   *
+   * @param DataSourceOptions $options The resolved data source options.
+   * @return PDO Returns the SQL Server PDO connection.
+   * @throws DataSourceConnectionException When the connection cannot be created.
+   */
+  private function createMsSqlConnection(DataSourceOptions $options): PDO
+  {
+    if (empty($options->username) && empty($options->password)) {
+      $this->usesSharedConnection = true;
+      return DBFactory::getMsSqlConnection(dbName: $options->name);
+    }
+
+    $dsn = DBFactory::buildMsSqlDsn($options->host, $options->port, $options->name);
     return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
   }
 

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.3/phpunit.xsd"
+         bootstrap="tests/PHPUnit/bootstrap.php"
+         colors="true"
+         cacheDirectory="tests/_output/.phpunit.mssql.cache"
+>
+    <testsuites>
+        <testsuite name="ORM PHPUnit MSSQL">
+            <file>./tests/PHPUnit/Unit/ConnectionConfigTest.php</file>
+            <file>./tests/PHPUnit/Unit/SQLKeyPartTest.php</file>
+            <file>./tests/PHPUnit/Unit/SqlDialectRenderingTest.php</file>
+            <directory suffix="Test.php">./tests/PHPUnit/MsSqlIntegration</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory suffix=".php">./src</directory>
+        </include>
+    </source>
+</phpunit>

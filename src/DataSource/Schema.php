@@ -120,14 +120,19 @@ class Schema implements ISchema
   public static function rename(string $from, string $to, ?SchemaOptions $options = new SchemaOptions()): ?bool
   {
     $options ??= new SchemaOptions();
-    $fromTable = self::getQualifiedTableName($from, $options);
+    $fromTable = match ($options->dialect) {
+      SQLDialect::MSSQL => SqlDialectHelper::quoteIdentifier($from, $options->dialect),
+      default => self::getQualifiedTableName($from, $options),
+    };
     $toTable = match ($options->dialect) {
+      SQLDialect::MSSQL => str_replace("'", "''", $to),
       SQLDialect::SQLITE,
       SQLDialect::POSTGRESQL => SqlDialectHelper::quoteIdentifier($to, $options->dialect),
       default => self::getQualifiedTableName($to, $options),
     };
 
     $query = match ($options->dialect) {
+      SQLDialect::MSSQL => "EXEC sp_rename N'$fromTable', N'$toTable', N'OBJECT'",
       SQLDialect::SQLITE,
       SQLDialect::POSTGRESQL => "ALTER TABLE $fromTable RENAME TO $toTable",
       default => "RENAME TABLE $fromTable TO $toTable",
@@ -365,6 +370,7 @@ class Schema implements ISchema
 
     $dialect = $dataSource->getDialect();
     $query = match ($dialect) {
+      SQLDialect::MSSQL => "SELECT [TABLE_NAME] FROM [INFORMATION_SCHEMA].[TABLES] WHERE [TABLE_CATALOG] = DB_NAME() AND [TABLE_NAME] = " . $dataSource->getClient()->quote($tableName),
       SQLDialect::SQLITE => "SELECT name FROM sqlite_master WHERE type = 'table' AND name = " . $dataSource->getClient()->quote($tableName),
       SQLDialect::POSTGRESQL => "SELECT table_name FROM information_schema.tables WHERE table_name = " . $dataSource->getClient()->quote($tableName),
       default => "SHOW TABLES LIKE " . $dataSource->getClient()->quote($tableName),
@@ -463,6 +469,20 @@ class Schema implements ISchema
 
     $createDefinitions = trim($createDefinitions, ",\t\n\r\0\x0B");
     $qualifiedTableName = self::getQualifiedTableName($tableName, $options);
+
+    if ($options->dialect === SQLDialect::MSSQL)
+    {
+      $createTableStatement = "CREATE TABLE {$qualifiedTableName} ($createDefinitions)";
+
+      if (!$options->checkIfExists)
+      {
+        return $createTableStatement;
+      }
+
+      $lookupName = str_replace("'", "''", $qualifiedTableName);
+
+      return "IF OBJECT_ID(N'{$lookupName}', N'U') IS NULL {$createTableStatement}";
+    }
 
     $query = "CREATE{$temporary}TABLE{$ifExists}{$qualifiedTableName} ($createDefinitions)";
 
@@ -1260,6 +1280,7 @@ SQL;
     $dialect = SqlDialectHelper::fromPdo($connection);
 
     return match ($dialect) {
+      SQLDialect::MSSQL => self::getMsSqlTableDescriptions($connection, $tableName),
       SQLDialect::SQLITE => self::getSQLiteTableDescriptions($connection, $tableName),
       SQLDialect::POSTGRESQL => self::getPostgreSqlTableDescriptions($connection, $tableName),
       default => self::getMySqlTableDescriptions($connection, $tableName),
@@ -1304,6 +1325,7 @@ SQL;
   private static function getTableDefinitionSql(PDO $connection, string $tableName, SQLDialect $dialect): ?string
   {
     return match ($dialect) {
+      SQLDialect::MSSQL => self::getMsSqlTableDefinitionSql($connection, $tableName),
       SQLDialect::SQLITE => self::getSQLiteTableDefinitionSql($connection, $tableName),
       SQLDialect::POSTGRESQL => self::getPostgreSqlTableDefinitionSql($connection, $tableName),
       default => self::getMySqlTableDefinitionSql($connection, $tableName),
@@ -1347,6 +1369,23 @@ SQL;
     $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
     $definitions = array_map(
       fn(SQLTableDescription $field): string => '  ' . self::buildPostgreSqlColumnDefinition($field),
+      $tableFields,
+    );
+
+    return sprintf("CREATE TABLE %s (\n%s\n)", $quotedTableName, implode(",\n", $definitions));
+  }
+
+  private static function getMsSqlTableDefinitionSql(PDO $connection, string $tableName): ?string
+  {
+    $tableFields = self::getMsSqlTableDescriptions($connection, $tableName);
+
+    if (empty($tableFields)) {
+      return null;
+    }
+
+    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::MSSQL);
+    $definitions = array_map(
+      fn(SQLTableDescription $field): string => '  ' . self::buildMsSqlColumnDefinition($field),
       $tableFields,
     );
 
@@ -1416,6 +1455,63 @@ SQL;
     return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
   }
 
+  private static function getMsSqlTableDescriptions(PDO $connection, string $tableName): array
+  {
+    $quotedTableName = $connection->quote($tableName);
+    $sql = <<<SQL
+SELECT
+  c.COLUMN_NAME AS [Field],
+  CASE
+    WHEN c.DATA_TYPE IN ('nvarchar', 'nchar', 'varchar', 'char', 'binary', 'varbinary')
+      AND c.CHARACTER_MAXIMUM_LENGTH IS NOT NULL
+      AND c.CHARACTER_MAXIMUM_LENGTH > 0
+      THEN c.DATA_TYPE + '(' + CAST(c.CHARACTER_MAXIMUM_LENGTH AS VARCHAR(10)) + ')'
+    WHEN c.DATA_TYPE IN ('nvarchar', 'varchar', 'varbinary')
+      AND c.CHARACTER_MAXIMUM_LENGTH = -1
+      THEN c.DATA_TYPE + '(max)'
+    WHEN c.DATA_TYPE IN ('decimal', 'numeric')
+      AND c.NUMERIC_PRECISION IS NOT NULL
+      THEN c.DATA_TYPE + '(' + CAST(c.NUMERIC_PRECISION AS VARCHAR(10)) + ',' + CAST(c.NUMERIC_SCALE AS VARCHAR(10)) + ')'
+    WHEN c.DATA_TYPE IN ('datetime2', 'datetimeoffset', 'time')
+      AND c.DATETIME_PRECISION IS NOT NULL
+      THEN c.DATA_TYPE + '(' + CAST(c.DATETIME_PRECISION AS VARCHAR(10)) + ')'
+    ELSE c.DATA_TYPE
+  END AS [Type],
+  CASE WHEN c.IS_NULLABLE = 'YES' THEN 'YES' ELSE 'NO' END AS [Null],
+  CASE
+    WHEN tc.CONSTRAINT_TYPE = 'PRIMARY KEY' THEN 'PRI'
+    WHEN tc.CONSTRAINT_TYPE = 'UNIQUE' THEN 'UNI'
+    ELSE ''
+  END AS [Key],
+  c.COLUMN_DEFAULT AS [Default],
+  CASE
+    WHEN COLUMNPROPERTY(OBJECT_ID(QUOTENAME(c.TABLE_SCHEMA) + '.' + QUOTENAME(c.TABLE_NAME)), c.COLUMN_NAME, 'IsIdentity') = 1 THEN 'auto_increment'
+    ELSE ''
+  END AS [Extra]
+FROM INFORMATION_SCHEMA.COLUMNS c
+LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+  ON c.TABLE_CATALOG = kcu.TABLE_CATALOG
+ AND c.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+ AND c.TABLE_NAME = kcu.TABLE_NAME
+ AND c.COLUMN_NAME = kcu.COLUMN_NAME
+LEFT JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+  ON kcu.CONSTRAINT_CATALOG = tc.CONSTRAINT_CATALOG
+ AND kcu.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+ AND kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+WHERE c.TABLE_CATALOG = DB_NAME()
+  AND c.TABLE_NAME = $quotedTableName
+ORDER BY c.ORDINAL_POSITION
+SQL;
+
+    $statement = $connection->query($sql);
+
+    if (!$statement || !$statement->execute()) {
+      throw new ORMException("Failed to load MSSQL table metadata for '$tableName'.");
+    }
+
+    return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
+  }
+
   private static function buildPostgreSqlColumnDefinition(SQLTableDescription $field): string
   {
     $columnName = SqlDialectHelper::quoteIdentifier((string) $field->Field, SQLDialect::POSTGRESQL);
@@ -1429,6 +1525,30 @@ SQL;
       $definition .= ' DEFAULT ' . $field->Default;
     } elseif (($field->Extra ?? '') === 'auto_increment') {
       $definition .= ' GENERATED BY DEFAULT AS IDENTITY';
+    }
+
+    if (($field->Key ?? '') === 'PRI') {
+      $definition .= ' PRIMARY KEY';
+    } elseif (($field->Key ?? '') === 'UNI') {
+      $definition .= ' UNIQUE';
+    }
+
+    return $definition;
+  }
+
+  private static function buildMsSqlColumnDefinition(SQLTableDescription $field): string
+  {
+    $columnName = SqlDialectHelper::quoteIdentifier((string) $field->Field, SQLDialect::MSSQL);
+    $definition = $columnName . ' ' . (string) $field->Type;
+
+    if (($field->Extra ?? '') === 'auto_increment') {
+      $definition .= ' IDENTITY(1,1)';
+    }
+
+    $definition .= ($field->Null ?? 'YES') === 'NO' ? ' NOT NULL' : ' NULL';
+
+    if (($field->Extra ?? '') !== 'auto_increment' && is_string($field->Default) && $field->Default !== '') {
+      $definition .= ' DEFAULT ' . $field->Default;
     }
 
     if (($field->Key ?? '') === 'PRI') {

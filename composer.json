@@ -29,6 +29,7 @@
         "assegaiphp/console": "Optional: enables Assegai CLI installers and ORM command discovery.",
         "ext-pdo_mysql": "Enable this if your app uses MySQL or MariaDB connections.",
         "ext-pdo_pgsql": "Enable this if your app uses PostgreSQL connections.",
+        "ext-pdo_sqlsrv": "Enable this if your app uses Microsoft SQL Server connections.",
         "ext-pdo_sqlite": "Enable this if your app uses SQLite connections."
     },
     "require-dev": {
@@ -42,6 +43,7 @@
         "test": "vendor/bin/phpunit -c phpunit.xml",
         "test:unit": "vendor/bin/phpunit -c phpunit.xml",
         "test:mysql": "vendor/bin/phpunit -c phpunit.mysql.xml",
+        "test:mssql": "vendor/bin/phpunit -c phpunit.mssql.xml",
         "test:pgsql": "vendor/bin/phpunit -c phpunit.pgsql.xml",
         "test:sqlite": "php -d register_argc_argv=On vendor/bin/codecept run SQLite",
         "test:legacy-unit": "php -d register_argc_argv=On vendor/bin/codecept run Unit"

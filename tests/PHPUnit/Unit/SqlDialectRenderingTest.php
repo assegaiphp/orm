@@ -557,7 +557,27 @@ final class SqlDialectRenderingTest extends TestCase
             ->from('users')
             ->limit(10, 20);
 
-        self::assertSame('SELECT [users].[name] FROM [users] OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY', $query->queryString());
+        self::assertSame(
+            'SELECT [users].[name] FROM [users] ORDER BY (SELECT 0) OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY',
+            $query->queryString()
+        );
+    }
+
+    public function testMsSqlLimitClauseKeepsExistingOrderByBeforeOffsetFetch(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $query
+            ->select()
+            ->all(['users.name'])
+            ->from('users')
+            ->orderBy(['users.name' => 'ASC'])
+            ->limit(10, 20);
+
+        self::assertSame(
+            'SELECT [users].[name] FROM [users] ORDER BY [users].[name] ASC OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY',
+            $query->queryString()
+        );
     }
 
     public function testMsSqlUseStatementRendersSqlServerSyntax(): void
@@ -1134,17 +1154,30 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('CREATE TABLE IF NOT EXISTS `users`', $query->queryString());
     }
 
+    public function testMsSqlCreateTableUsesSqlServerGuardSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMsSql();
+
+        $query
+            ->create()
+            ->table('users');
+
+        self::assertSame("IF OBJECT_ID(N'[users]', N'U') IS NULL CREATE TABLE [users]", $query->queryString());
+    }
+
     public function testDialectSpecificCreateTableColumnsBuildersStayTyped(): void
     {
         $mysqlTable = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql()->create()->table('users');
         $postgresTable = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres()->create()->table('users');
         $sqliteTable = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite()->create()->table('users');
         $mariaDbTable = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb()->create()->table('users');
+        $msSqlTable = $this->createQuery(SQLDialect::MYSQL)->switchToMsSql()->create()->table('users');
 
         self::assertInstanceOf(MySQLCreateTableStatement::class, $mysqlTable);
         self::assertInstanceOf(PostgreSQLCreateTableStatement::class, $postgresTable);
         self::assertInstanceOf(SQLiteCreateTableStatement::class, $sqliteTable);
         self::assertInstanceOf(MariaDbCreateTableStatement::class, $mariaDbTable);
+        self::assertInstanceOf(MsSqlCreateTableStatement::class, $msSqlTable);
 
         self::assertInstanceOf(
             MySQLTableOptions::class,
@@ -1161,6 +1194,10 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(
             MariaDbTableOptions::class,
             $mariaDbTable->columns([new MariaDbColumnDefinition('id', ColumnType::INT, nullable: false)])
+        );
+        self::assertInstanceOf(
+            MsSqlTableOptions::class,
+            $msSqlTable->columns([new MsSqlColumnDefinition('id', ColumnType::INT, nullable: false)])
         );
     }
 
@@ -1196,6 +1233,24 @@ final class SqlDialectRenderingTest extends TestCase
 
         self::assertSame(
             'CREATE TABLE IF NOT EXISTS "users" ("id" INTEGER NOT NULL PRIMARY KEY, "name" VARCHAR(255) NOT NULL)',
+            $query->queryString()
+        );
+    }
+
+    public function testMsSqlCreateTableColumnsAppendRenderedBody(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMsSql();
+
+        $query
+            ->create()
+            ->table('users')
+            ->columns([
+                '[id] INT NOT NULL PRIMARY KEY',
+                '[name] NVARCHAR(255) NOT NULL',
+            ]);
+
+        self::assertSame(
+            "IF OBJECT_ID(N'[users]', N'U') IS NULL CREATE TABLE [users] ([id] INT NOT NULL PRIMARY KEY, [name] NVARCHAR(255) NOT NULL)",
             $query->queryString()
         );
     }

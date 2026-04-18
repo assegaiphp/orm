@@ -42,7 +42,7 @@ final class SqlDialectHelper
 
   public static function qualifyTable(string $tableName, ?string $databaseName, SQLDialect $dialect): string
   {
-    if (empty($databaseName) || in_array($dialect, [SQLDialect::POSTGRESQL, SQLDialect::SQLITE], true)) {
+    if (empty($databaseName) || in_array($dialect, [SQLDialect::POSTGRESQL, SQLDialect::SQLITE, SQLDialect::MSSQL], true)) {
       return self::quoteIdentifier($tableName, $dialect);
     }
 

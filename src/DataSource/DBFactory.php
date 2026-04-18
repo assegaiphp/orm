@@ -23,6 +23,7 @@ final class DBFactory
         'mysql' => [],
         'mariadb' => [],
         'pgsql' => [],
+        'mssql' => [],
         'sqlite' => [],
         'mongodb' => [],
     ];
@@ -34,6 +35,7 @@ final class DBFactory
         'mysql' => [],
         'mariadb' => [],
         'pgsql' => [],
+        'mssql' => [],
         'sqlite' => [],
         'mongodb' => [],
     ];
@@ -48,6 +50,7 @@ final class DBFactory
     {
         return match ($dialect) {
             SQLDialect::MARIADB => self::getMariaDBConnection(dbName: $dbName),
+            SQLDialect::MSSQL => self::getMsSqlConnection(dbName: $dbName),
             SQLDialect::POSTGRESQL => self::getPostgresSQLConnection(dbName: $dbName),
             SQLDialect::SQLITE => self::getSQLiteConnection(dbName: $dbName),
             default => self::getMySQLConnection(dbName: $dbName)
@@ -133,6 +136,7 @@ final class DBFactory
     {
         return match ($type) {
             'mariadb' => DataSourceType::MARIADB,
+            'mssql' => DataSourceType::MSSQL,
             'pgsql' => DataSourceType::POSTGRESQL,
             'sqlite' => DataSourceType::SQLITE,
             'mongodb' => DataSourceType::MONGODB,
@@ -280,6 +284,79 @@ final class DBFactory
     }
 
     /**
+     * Build the SQL Server PDO DSN for a database connection.
+     *
+     * @param string $host The SQL Server host name or address.
+     * @param int $port The SQL Server TCP port.
+     * @param string $database The database name.
+     * @return string Returns the SQL Server PDO DSN.
+     */
+    public static function buildMsSqlDsn(string $host, int $port, string $database): string
+    {
+        $server = $port > 0
+            ? sprintf('%s,%d', $host, $port)
+            : $host;
+
+        return sprintf(
+            'sqlsrv:Server=%s;Database=%s;Encrypt=yes;TrustServerCertificate=yes',
+            $server,
+            $database
+        );
+    }
+
+    /**
+     * Retrieve or create a shared SQL Server connection from the runtime config.
+     *
+     * @param string $dbName The configured SQL Server database name.
+     * @return PDO Returns the cached SQL Server connection.
+     * @throws DataSourceConnectionException When the connection cannot be created.
+     */
+    public static function getMsSqlConnection(string $dbName): PDO
+    {
+        $type = 'mssql';
+        self::ensureDriverIsAvailable(SQLDialect::MSSQL);
+
+        if (empty($dbName)) {
+            throw new DataSourceConnectionException(DataSourceType::MSSQL);
+        }
+
+        if (!isset(self::$connections[$type][$dbName]) || empty(self::$connections[$type][$dbName])) {
+            self::validateDatabaseDetails(type: $type, dbName: $dbName);
+            $config = OrmRuntime::databaseConfigs()[$type][$dbName];
+
+            if (empty($config)) {
+                $databases = OrmRuntime::databaseConfigs()[$type];
+
+                if (!empty($databases)) {
+                    $config = array_pop($databases);
+                }
+            }
+
+            try {
+                $options = DataSourceOptions::fromArray([
+                    ...$config,
+                    'name' => $config['name'] ?? $dbName,
+                    'database' => $config['database'] ?? $dbName,
+                    'type' => DataSourceType::MSSQL,
+                ]);
+                $user = $options->username ?? 'sa';
+                $password = $options->password ?? '';
+
+                self::$connections[$type][$dbName] = new PDO(
+                    dsn: self::buildMsSqlDsn($options->host, $options->port, $options->name),
+                    username: $user,
+                    password: $password
+                );
+                self::applyConnectionAttributes(self::$connections[$type][$dbName], SQLDialect::MSSQL);
+            } catch (PDOException) {
+                throw new DataSourceConnectionException(DataSourceType::MSSQL);
+            }
+        }
+
+        return self::$connections[$type][$dbName];
+    }
+
+    /**
      * @param string $dbName
      * @return PDO
      * @throws DataSourceConnectionException
@@ -352,6 +429,7 @@ final class DBFactory
     {
         return match ($dialect) {
             SQLDialect::MARIADB => 'mysql',
+            SQLDialect::MSSQL => 'mssql',
             SQLDialect::POSTGRESQL => 'pgsql',
             SQLDialect::SQLITE => 'sqlite',
             default => 'mysql',
@@ -406,6 +484,7 @@ final class DBFactory
         return match ($dialect) {
             SQLDialect::MYSQL, SQLDialect::MARIADB => 'pdo_mysql',
             SQLDialect::POSTGRESQL => 'pdo_pgsql',
+            SQLDialect::MSSQL => 'pdo_sqlsrv',
             SQLDialect::SQLITE => 'pdo_sqlite',
             default => null,
         };
@@ -416,6 +495,7 @@ final class DBFactory
         return match ($dialect) {
             SQLDialect::MYSQL, SQLDialect::MARIADB => 'mysql',
             SQLDialect::POSTGRESQL => 'pgsql',
+            SQLDialect::MSSQL => 'sqlsrv',
             SQLDialect::SQLITE => 'sqlite',
             default => null,
         };
@@ -432,11 +512,12 @@ final class DBFactory
 
         if (!extension_loaded($extension) || !in_array($driver, PDO::getAvailableDrivers(), true)) {
             $type = match ($dialect) {
-                SQLDialect::MARIADB => DataSourceType::MARIADB,
-                SQLDialect::POSTGRESQL => DataSourceType::POSTGRESQL,
-                SQLDialect::SQLITE => DataSourceType::SQLITE,
-                default => DataSourceType::MYSQL,
-            };
+            SQLDialect::MARIADB => DataSourceType::MARIADB,
+            SQLDialect::MSSQL => DataSourceType::MSSQL,
+            SQLDialect::POSTGRESQL => DataSourceType::POSTGRESQL,
+            SQLDialect::SQLITE => DataSourceType::SQLITE,
+            default => DataSourceType::MYSQL,
+        };
 
             throw new DataSourceConnectionException(
                 $type,
