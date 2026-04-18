@@ -2,10 +2,8 @@
 
 namespace Assegai\Orm\Queries\PostgreSql;
 
-use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Queries\Sql\SQLDescribeStatement;
-use Assegai\Orm\Queries\Sql\SQLQuery;
-use Assegai\Orm\Util\SqlDialectHelper;
+use Assegai\Orm\Util\SqlIdentifier;
 
 /**
  * PostgreSQL-specific describe statement builder.
@@ -16,31 +14,26 @@ use Assegai\Orm\Util\SqlDialectHelper;
 class PostgreSQLDescribeStatement extends SQLDescribeStatement
 {
   /**
-   * Create a PostgreSQL describe statement.
+   * Build the PostgreSQL metadata query used for table description.
    *
-   * @param SQLQuery $query The query instance being built.
-   * @param string $subject The table or view name to describe.
+   * @return string Returns the rendered PostgreSQL describe query.
    */
-  public function __construct(
-    protected readonly SQLQuery $query,
-    protected readonly string $subject,
-  ) {
-    $columnName = SqlDialectHelper::quoteIdentifier('column_name', SQLDialect::POSTGRESQL);
-    $dataType = SqlDialectHelper::quoteIdentifier('data_type', SQLDialect::POSTGRESQL);
-    $isNullable = SqlDialectHelper::quoteIdentifier('is_nullable', SQLDialect::POSTGRESQL);
-    $columnDefault = SqlDialectHelper::quoteIdentifier('column_default', SQLDialect::POSTGRESQL);
-    $tableSchema = SqlDialectHelper::quoteIdentifier('table_schema', SQLDialect::POSTGRESQL);
-    $tableName = SqlDialectHelper::quoteIdentifier('table_name', SQLDialect::POSTGRESQL);
-    $ordinalPosition = SqlDialectHelper::quoteIdentifier('ordinal_position', SQLDialect::POSTGRESQL);
-    $informationSchema = SqlDialectHelper::quoteIdentifier('information_schema', SQLDialect::POSTGRESQL);
-    $columnsTable = SqlDialectHelper::quoteIdentifier('columns', SQLDialect::POSTGRESQL);
+  protected function buildQueryString(): string
+  {
+    $dialect = $this->query->getDialect();
+    $columnName = SqlIdentifier::quote('column_name', $dialect);
+    $dataType = SqlIdentifier::quote('data_type', $dialect);
+    $isNullable = SqlIdentifier::quote('is_nullable', $dialect);
+    $columnDefault = SqlIdentifier::quote('column_default', $dialect);
+    $tableSchema = SqlIdentifier::quote('table_schema', $dialect);
+    $tableName = SqlIdentifier::quote('table_name', $dialect);
+    $ordinalPosition = SqlIdentifier::quote('ordinal_position', $dialect);
+    $columnsTable = SqlIdentifier::quote('information_schema.columns', $dialect);
     $placeholder = $this->query->addParam($this->subject);
 
-    $this->query->setQueryString(
-      "SELECT $columnName, $dataType, $isNullable, $columnDefault " .
-      "FROM $informationSchema.$columnsTable " .
+    return "SELECT $columnName, $dataType, $isNullable, $columnDefault " .
+      "FROM $columnsTable " .
       "WHERE $tableSchema = CURRENT_SCHEMA() AND $tableName = $placeholder " .
-      "ORDER BY $ordinalPosition ASC"
-    );
+      "ORDER BY $ordinalPosition ASC";
   }
 }

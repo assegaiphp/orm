@@ -21,21 +21,31 @@ class MySQLUpdateDefinition extends SQLUpdateDefinition
     public function __construct(
         protected SQLQuery $query,
         protected string $tableName,
-        private readonly bool $lowPriority = false,
-        private readonly bool $ignore = false,
+        protected readonly bool $lowPriority = false,
+        protected readonly bool $ignore = false,
     )
     {
-        $queryString = 'UPDATE ';
+        parent::__construct(query: $query, tableName: $tableName);
+    }
+
+    /**
+     * Build the MySQL-specific UPDATE prefix.
+     *
+     * @return string Returns the leading UPDATE clause with MySQL modifiers when enabled.
+     */
+    protected function buildUpdatePrefix(): string
+    {
+        $parts = ['UPDATE'];
 
         if ($this->lowPriority) {
-            $queryString .= 'LOW_PRIORITY ';
+            $parts[] = 'LOW_PRIORITY';
         }
 
         if ($this->ignore) {
-            $queryString .= 'IGNORE ';
+            $parts[] = 'IGNORE';
         }
 
-        $this->query->setQueryString(trim($queryString) . ' ' . $this->query->quoteIdentifier($this->tableName));
+        return implode(' ', $parts);
     }
 
     /**

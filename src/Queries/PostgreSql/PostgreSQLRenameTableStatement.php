@@ -12,15 +12,22 @@ use Assegai\Orm\Queries\Sql\SQLRenameTableStatement;
 class PostgreSQLRenameTableStatement extends SQLRenameTableStatement
 {
   /**
-   * Build the PostgreSQL-specific SQL string for the rename operation.
+   * Build the PostgreSQL-specific rename prefix.
    *
-   * @return string Returns the compiled PostgreSQL rename SQL.
+   * @return string Returns the PostgreSQL rename prefix.
    */
-  protected function buildRenameTableQuery(): string
+  protected function buildRenamePrefix(): string
   {
-    $quotedOldTableName = $this->query->quoteIdentifier($this->oldTableName);
-    $quotedNewTableName = $this->query->quoteIdentifier($this->newTableName);
+    return 'ALTER TABLE';
+  }
 
-    return "ALTER TABLE $quotedOldTableName RENAME TO $quotedNewTableName";
+  /**
+   * Build the PostgreSQL-specific rename target clause.
+   *
+   * @return string Returns the PostgreSQL rename target clause.
+   */
+  protected function buildRenameTargetClause(): string
+  {
+    return 'RENAME TO';
   }
 }

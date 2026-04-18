@@ -18,9 +18,37 @@ class SQLInsertIntoDefinition
     protected readonly string $tableName
   )
   {
-    $queryString = 'INSERT INTO ' . $this->query->quoteIdentifier($this->tableName) . ' ';
+    $this->query->setQueryString($this->buildQueryString());
+  }
 
-    $this->query->setQueryString($queryString);
+  /**
+   * Build the initial INSERT INTO statement for the active SQL-family builder.
+   *
+   * @return string Returns the rendered INSERT statement prefix.
+   */
+  protected function buildQueryString(): string
+  {
+    return $this->buildInsertPrefix() . ' ' . $this->buildTableExpression() . ' ';
+  }
+
+  /**
+   * Build the INSERT prefix clause.
+   *
+   * @return string Returns the leading INSERT clause.
+   */
+  protected function buildInsertPrefix(): string
+  {
+    return 'INSERT INTO';
+  }
+
+  /**
+   * Build the table expression for the insert target.
+   *
+   * @return string Returns the quoted table expression.
+   */
+  protected function buildTableExpression(): string
+  {
+    return $this->query->quoteIdentifier($this->tableName);
   }
 
   /**

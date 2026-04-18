@@ -21,8 +21,27 @@ class SQLSelectDefinition
    */
   public function __construct(protected readonly SQLQuery $query)
   {
-    $queryString = 'SELECT ';
-    $this->query->setQueryString(queryString: $queryString);
+    $this->query->setQueryString(queryString: $this->buildQueryString());
+  }
+
+  /**
+   * Build the initial SELECT statement prefix for the active SQL-family builder.
+   *
+   * @return string Returns the rendered SELECT prefix.
+   */
+  protected function buildQueryString(): string
+  {
+    return $this->buildSelectPrefix() . ' ';
+  }
+
+  /**
+   * Build the SELECT prefix clause.
+   *
+   * @return string Returns the leading SELECT clause.
+   */
+  protected function buildSelectPrefix(): string
+  {
+    return 'SELECT';
   }
 
   /**
@@ -80,9 +99,20 @@ class SQLSelectDefinition
    */
   protected function createTypedExpression(string $selection): SQLSelectExpression
   {
-    $this->query->appendQueryString($selection);
+    $this->appendSelection($selection);
 
     return new SQLSelectExpression(query: $this->query);
+  }
+
+  /**
+   * Append the rendered selection fragment to the owning query.
+   *
+   * @param string $selection The rendered selection fragment.
+   * @return void
+   */
+  protected function appendSelection(string $selection): void
+  {
+    $this->query->appendQueryString($selection);
   }
 
   /**

@@ -2,10 +2,7 @@
 
 namespace Assegai\Orm\Queries\SQLite;
 
-use Assegai\Orm\Enumerations\SQLDialect;
-use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLTruncateStatement;
-use Assegai\Orm\Util\SqlDialectHelper;
 
 /**
  * SQLite-specific table-clearing statement builder.
@@ -16,16 +13,12 @@ use Assegai\Orm\Util\SqlDialectHelper;
 class SQLiteTruncateStatement extends SQLTruncateStatement
 {
   /**
-   * Create a SQLite truncate-equivalent statement.
+   * Build the SQLite truncate-equivalent statement.
    *
-   * @param SQLQuery $query The query instance being built.
-   * @param string $tableName The table to clear.
+   * @return string Returns the rendered SQLite table-clearing statement.
    */
-  public function __construct(
-    protected readonly SQLQuery $query,
-    protected readonly string $tableName,
-  ) {
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($this->tableName, SQLDialect::SQLITE);
-    $this->query->setQueryString("DELETE FROM $quotedTableName");
+  protected function buildQueryString(): string
+  {
+    return 'DELETE FROM ' . $this->buildTableExpression();
   }
 }

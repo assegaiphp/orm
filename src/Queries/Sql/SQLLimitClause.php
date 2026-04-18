@@ -2,7 +2,6 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Traits\ExecutableTrait;
 
 /**
@@ -26,12 +25,38 @@ class SQLLimitClause
     protected readonly ?int     $offset = null,
   )
   {
-    $queryString = match (true) {
-      is_null($offset) => "LIMIT $limit",
-      $this->query->getDialect() === SQLDialect::POSTGRESQL => "LIMIT $limit OFFSET $offset",
-      default => "LIMIT $offset,$limit",
-    };
+    $this->query->appendQueryString($this->buildQueryString());
+  }
 
-    $this->query->appendQueryString($queryString);
+  /**
+   * Build the LIMIT fragment for the active SQL-family builder.
+   *
+   * @return string Returns the rendered LIMIT fragment.
+   */
+  protected function buildQueryString(): string
+  {
+    return $this->offset === null
+      ? $this->buildLimitOnlyQueryString()
+      : $this->buildOffsetLimitQueryString();
+  }
+
+  /**
+   * Build the LIMIT fragment used when only a limit value is present.
+   *
+   * @return string Returns the rendered LIMIT-only fragment.
+   */
+  protected function buildLimitOnlyQueryString(): string
+  {
+    return "LIMIT {$this->limit}";
+  }
+
+  /**
+   * Build the LIMIT fragment used when both limit and offset values are present.
+   *
+   * @return string Returns the rendered LIMIT/OFFSET fragment.
+   */
+  protected function buildOffsetLimitQueryString(): string
+  {
+    return "LIMIT {$this->offset},{$this->limit}";
   }
 }

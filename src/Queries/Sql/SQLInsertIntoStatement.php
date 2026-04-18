@@ -26,32 +26,9 @@ class SQLInsertIntoStatement
    */
   public function __construct(protected readonly SQLQuery $query, protected readonly array $columns = [])
   {
-    $queryString = '';
-    $columns = array_map(function(string $column): string {
-      $parts = explode('.', $column);
-      return end($parts);
-    }, array_values($columns));
-
-    if (!empty($columns)) {
-      $quotedColumns = array_map(fn(string $column): string => $this->query->quoteIdentifier($column), $columns);
-      $queryString = '(' . implode(', ', $quotedColumns) . ') ';
-
-      $columnIndex = 0;
-      foreach ($columns as $index => $column) {
-        if (is_numeric($index)) {
-          if (in_array($column, $this->query->passwordHashFields(), true)) {
-            $this->hashableIndexes[] = $index;
-          }
-        } else {
-          if (in_array($index, $this->query->passwordHashFields(), true)) {
-            $this->hashableIndexes[] = $columnIndex;
-          }
-        }
-        ++$columnIndex;
-      }
-    }
-
-    $this->query->appendQueryString($queryString);
+    $normalizedColumns = $this->normalizeColumns($this->columns);
+    $this->hashableIndexes = $this->resolveHashableIndexes($normalizedColumns);
+    $this->query->appendQueryString($this->buildColumnListQueryString($normalizedColumns));
   }
 
   /**
@@ -62,25 +39,99 @@ class SQLInsertIntoStatement
    */
   public function values(array $valuesList): static
   {
-    $queryString = 'VALUES(';
-    $separator = ', ';
+    $this->query->appendQueryString($this->buildValuesQueryString($valuesList));
+    return $this;
+  }
 
-    foreach ($valuesList as $index => $value) {
-      if (in_array($index, $this->hashableIndexes, true)) {
-        $value = password_hash($value, $this->query->passwordHashAlgorithm());
+  /**
+   * Normalize qualified column references down to the insert target column names.
+   *
+   * @param array<int|string, string> $columns The raw column list.
+   * @return array<int, string> Returns the normalized column names.
+   */
+  protected function normalizeColumns(array $columns): array
+  {
+    return array_map(function(string $column): string {
+      $parts = explode('.', $column);
+
+      return end($parts);
+    }, array_values($columns));
+  }
+
+  /**
+   * Resolve which column positions should be password-hashed before insert.
+   *
+   * @param array<int, string> $columns The normalized insert columns.
+   * @return array<int, int> Returns the index positions that should be hashed.
+   */
+  protected function resolveHashableIndexes(array $columns): array
+  {
+    $hashableIndexes = [];
+
+    foreach ($columns as $index => $column) {
+      if (in_array($column, $this->query->passwordHashFields(), true)) {
+        $hashableIndexes[] = $index;
       }
-
-      if (is_string($value) && in_array($value, ['CURRENT_TIMESTAMP', 'NULL'], true)) {
-        $queryString .= "$value$separator";
-        continue;
-      }
-
-      $queryString .= $this->query->addParam($value) . $separator;
     }
 
-    $queryString = trim(string: $queryString, characters: $separator) . ') ';
-    $this->query->appendQueryString($queryString);
-    return $this;
+    return $hashableIndexes;
+  }
+
+  /**
+   * Build the column-list fragment appended after INSERT INTO.
+   *
+   * @param array<int, string> $columns The normalized insert columns.
+   * @return string Returns the rendered column-list fragment, or an empty string when no columns were supplied.
+   */
+  protected function buildColumnListQueryString(array $columns): string
+  {
+    if (empty($columns)) {
+      return '';
+    }
+
+    $quotedColumns = array_map(
+      fn(string $column): string => $this->query->quoteIdentifier($column),
+      $columns
+    );
+
+    return '(' . implode(', ', $quotedColumns) . ') ';
+  }
+
+  /**
+   * Build the VALUES fragment for a single-row insert.
+   *
+   * @param array<int|string, mixed> $valuesList The values to insert.
+   * @return string Returns the rendered VALUES fragment.
+   */
+  protected function buildValuesQueryString(array $valuesList): string
+  {
+    $parts = [];
+
+    foreach ($valuesList as $index => $value) {
+      $parts[] = $this->buildValueExpression(index: $index, value: $value);
+    }
+
+    return 'VALUES(' . implode(', ', $parts) . ') ';
+  }
+
+  /**
+   * Build a single insert value expression.
+   *
+   * @param int|string $index The value index within the insert payload.
+   * @param mixed $value The raw value to encode.
+   * @return string Returns either a placeholder or a raw SQL literal token.
+   */
+  protected function buildValueExpression(int|string $index, mixed $value): string
+  {
+    if (in_array($index, $this->hashableIndexes, true)) {
+      $value = password_hash($value, $this->query->passwordHashAlgorithm());
+    }
+
+    if (is_string($value) && in_array($value, ['CURRENT_TIMESTAMP', 'NULL'], true)) {
+      return $value;
+    }
+
+    return $this->query->addParam($value);
   }
 
   /**

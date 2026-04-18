@@ -693,6 +693,26 @@ final class SqlDialectRenderingTest extends TestCase
         );
     }
 
+    public function testMySqlDescribeUsesQuotedDescribeSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();
+
+        $statement = $query->describe('users');
+
+        self::assertInstanceOf(MySQLDescribeStatement::class, $statement);
+        self::assertSame('DESCRIBE `users`', $query->queryString());
+    }
+
+    public function testMariaDbDescribeUsesQuotedDescribeSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $statement = $query->describe('users');
+
+        self::assertInstanceOf(MariaDbDescribeStatement::class, $statement);
+        self::assertSame('DESCRIBE `users`', $query->queryString());
+    }
+
     public function testSqliteDescribeUsesPragmaTableInfo(): void
     {
         $query = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite();
@@ -736,6 +756,16 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('TRUNCATE TABLE "users"', $query->queryString());
     }
 
+    public function testMariaDbTruncateUsesQuotedTruncateSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $statement = $query->truncateTable('users');
+
+        self::assertInstanceOf(MariaDbTruncateStatement::class, $statement);
+        self::assertSame('TRUNCATE TABLE `users`', $query->queryString());
+    }
+
     public function testSqliteTruncateUsesDeleteFromEquivalent(): void
     {
         $query = $this->createQuery(SQLDialect::MYSQL)->switchToSqlite();
@@ -770,6 +800,36 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(PostgreSQLInsertIntoStatement::class, $postgresInsert);
         self::assertFalse(method_exists($postgresInsert, 'onDuplicateKeyUpdate'));
         self::assertTrue(method_exists($postgresInsert, 'returning'));
+    }
+
+    public function testMySqlSingleRowInsertAppendsColumnsAndValues(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();
+
+        $query
+            ->insertInto('users')
+            ->singleRow(['name', 'email'])
+            ->values(['Ada', 'ada@example.com']);
+
+        self::assertSame(
+            'INSERT INTO `users` (`name`, `email`) VALUES(?, ?) ',
+            $query->queryString()
+        );
+    }
+
+    public function testMariaDbSingleRowInsertAppendsColumnsAndValues(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $query
+            ->insertInto('users')
+            ->singleRow(['name', 'email'])
+            ->values(['Ada', 'ada@example.com']);
+
+        self::assertSame(
+            'INSERT INTO `users` (`name`, `email`) VALUES(?, ?) ',
+            $query->queryString()
+        );
     }
 
     public function testDatabaseCapabilityInterfacesMatchDialectSupport(): void
@@ -894,6 +954,17 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('CREATE TABLE IF NOT EXISTS "users"', $query->queryString());
     }
 
+    public function testMariaDbCreateTableUsesQuotedIdentifier(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $query
+            ->create()
+            ->table('users');
+
+        self::assertSame('CREATE TABLE IF NOT EXISTS `users`', $query->queryString());
+    }
+
     public function testDialectSpecificCreateTableColumnsBuildersStayTyped(): void
     {
         $mysqlTable = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql()->create()->table('users');
@@ -921,6 +992,60 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertInstanceOf(
             MariaDbTableOptions::class,
             $mariaDbTable->columns([new MariaDbColumnDefinition('id', ColumnType::INT, nullable: false)])
+        );
+    }
+
+    public function testMySqlCreateTableColumnsAppendRenderedBody(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();
+
+        $query
+            ->create()
+            ->table('users')
+            ->columns([
+                '`id` INT NOT NULL PRIMARY KEY',
+                '`name` VARCHAR(255) NOT NULL',
+            ]);
+
+        self::assertSame(
+            'CREATE TABLE IF NOT EXISTS `users` (`id` INT NOT NULL PRIMARY KEY, `name` VARCHAR(255) NOT NULL)',
+            $query->queryString()
+        );
+    }
+
+    public function testPostgreSqlCreateTableColumnsAppendRenderedBody(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToPostgres();
+
+        $query
+            ->create()
+            ->table('users')
+            ->columns([
+                '"id" INTEGER NOT NULL PRIMARY KEY',
+                '"name" VARCHAR(255) NOT NULL',
+            ]);
+
+        self::assertSame(
+            'CREATE TABLE IF NOT EXISTS "users" ("id" INTEGER NOT NULL PRIMARY KEY, "name" VARCHAR(255) NOT NULL)',
+            $query->queryString()
+        );
+    }
+
+    public function testSharedCreateTableBodySuppressesDuplicatePrimaryKeyClauses(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();
+
+        $query
+            ->create()
+            ->table('users')
+            ->columns([
+                '`id` INT NOT NULL PRIMARY KEY',
+                '`legacy_id` INT PRIMARY KEY',
+            ]);
+
+        self::assertSame(
+            'CREATE TABLE IF NOT EXISTS `users` (`id` INT NOT NULL PRIMARY KEY, `legacy_id` INT)',
+            $query->queryString()
         );
     }
 
@@ -1000,6 +1125,28 @@ final class SqlDialectRenderingTest extends TestCase
             ->table('users');
 
         self::assertSame('DROP TABLE IF EXISTS "users"', $query->queryString());
+    }
+
+    public function testMySqlDropTableUsesQuotedIdentifier(): void
+    {
+        $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();
+
+        $query
+            ->drop()
+            ->table('users');
+
+        self::assertSame('DROP TABLE IF EXISTS `users`', $query->queryString());
+    }
+
+    public function testMariaDbDropTableUsesQuotedIdentifier(): void
+    {
+        $query = $this->createQuery(SQLDialect::MYSQL)->switchToMariaDb();
+
+        $query
+            ->drop()
+            ->table('users');
+
+        self::assertSame('DROP TABLE IF EXISTS `users`', $query->queryString());
     }
     public function testDialectSpecificUpdateBuildersExposeOnlySupportedApiShapes(): void
     {

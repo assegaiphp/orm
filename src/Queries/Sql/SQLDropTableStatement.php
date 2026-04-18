@@ -34,14 +34,35 @@ class SQLDropTableStatement
    */
   protected function buildQueryString(): string
   {
+    $parts = $this->buildDropTablePrefix();
+    $parts[] = $this->buildTableNameExpression();
+
+    return implode(' ', array_filter($parts, static fn(string $part): bool => $part !== ''));
+  }
+
+  /**
+   * Build the DROP TABLE prefix for the current query dialect.
+   *
+   * @return array<int, string> Returns the DROP TABLE prefix segments.
+   */
+  protected function buildDropTablePrefix(): array
+  {
     $parts = ['DROP TABLE'];
 
     if ($this->checkIfExists) {
       $parts[] = 'IF EXISTS';
     }
 
-    $parts[] = SqlIdentifier::quote($this->tableName, $this->query->getDialect());
+    return $parts;
+  }
 
-    return implode(' ', $parts);
+  /**
+   * Build the quoted table identifier for the active dialect.
+   *
+   * @return string Returns the quoted table name expression.
+   */
+  protected function buildTableNameExpression(): string
+  {
+    return SqlIdentifier::quote($this->tableName, $this->query->getDialect());
   }
 }

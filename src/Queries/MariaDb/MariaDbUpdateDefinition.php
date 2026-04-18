@@ -3,36 +3,12 @@
 namespace Assegai\Orm\Queries\MariaDb;
 
 use Assegai\Orm\Queries\MySql\MySQLUpdateDefinition;
-use Assegai\Orm\Queries\Sql\SQLQuery;
 
 /**
  * MariaDB-specific UPDATE builder.
  */
 class MariaDbUpdateDefinition extends MySQLUpdateDefinition
 {
-  /**
-   * Create a new MariaDB UPDATE statement builder.
-   *
-   * @param SQLQuery $query The query instance being built.
-   * @param string $tableName The target table name.
-   * @param bool $lowPriority Whether LOW_PRIORITY should be applied.
-   * @param bool $ignore Whether IGNORE should be applied.
-   */
-  public function __construct(
-    protected SQLQuery $query,
-    protected string $tableName,
-    private readonly bool $lowPriority = false,
-    private readonly bool $ignore = false,
-  )
-  {
-    parent::__construct(
-      query: $query,
-      tableName: $tableName,
-      lowPriority: $lowPriority,
-      ignore: $ignore,
-    );
-  }
-
   /**
    * Start building the SET clause and keep the fluent chain on the MariaDB builder path.
    *

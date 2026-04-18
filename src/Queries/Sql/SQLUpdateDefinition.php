@@ -18,7 +18,37 @@ class SQLUpdateDefinition
     protected string $tableName,
   )
   {
-    $this->query->setQueryString('UPDATE ' . $this->query->quoteIdentifier($this->tableName));
+    $this->query->setQueryString($this->buildQueryString());
+  }
+
+  /**
+   * Build the initial UPDATE statement for the active SQL-family builder.
+   *
+   * @return string Returns the rendered UPDATE statement.
+   */
+  protected function buildQueryString(): string
+  {
+    return $this->buildUpdatePrefix() . ' ' . $this->buildTableExpression();
+  }
+
+  /**
+   * Build the UPDATE prefix clause.
+   *
+   * @return string Returns the leading UPDATE clause.
+   */
+  protected function buildUpdatePrefix(): string
+  {
+    return 'UPDATE';
+  }
+
+  /**
+   * Build the table expression for the update target.
+   *
+   * @return string Returns the quoted table expression.
+   */
+  protected function buildTableExpression(): string
+  {
+    return $this->query->quoteIdentifier($this->tableName);
   }
 
   /**

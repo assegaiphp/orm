@@ -24,24 +24,62 @@ class SQLTableOptions
     protected readonly string $comment = ""
   )
   {
+    $this->query->appendQueryString($this->buildQueryString());
+  }
+
+  /**
+   * Build the CREATE TABLE body for the active SQL-family builder.
+   *
+   * @return string Returns the rendered CREATE TABLE body.
+   */
+  protected function buildQueryString(): string
+  {
+    return '(' . $this->buildColumnDefinitions() . ')';
+  }
+
+  /**
+   * Build the comma-delimited column definition list.
+   *
+   * @return string Returns the rendered column definitions.
+   */
+  protected function buildColumnDefinitions(): string
+  {
     $primaryKeyAlreadySet = false;
-    $queryString = "(";
-    foreach ($this->columns as $column)
-    {
-      $column = strval($column);
+    $parts = [];
 
-      if (str_contains($column, 'PRIMARY KEY'))
-      {
-        if ($primaryKeyAlreadySet)
-        {
-          $column = str_replace('PRIMARY KEY', '', $column);
-        }
+    foreach ($this->columns as $column) {
+      $normalizedColumn = $this->normalizeColumnDefinition(
+        column: (string)$column,
+        primaryKeyAlreadySet: $primaryKeyAlreadySet,
+      );
 
+      if ($normalizedColumn === '') {
+        continue;
+      }
+
+      if (str_contains($normalizedColumn, 'PRIMARY KEY')) {
         $primaryKeyAlreadySet = true;
       }
-      $queryString .= $column . ", ";
+
+      $parts[] = $normalizedColumn;
     }
-    $queryString = trim(string: $queryString, characters: ", ") . ")";
-    $this->query->appendQueryString($queryString);
+
+    return implode(', ', $parts);
+  }
+
+  /**
+   * Normalize a single column definition before it is appended to the table body.
+   *
+   * @param string $column The raw column definition.
+   * @param bool $primaryKeyAlreadySet Whether a PRIMARY KEY has already been emitted.
+   * @return string Returns the normalized column definition.
+   */
+  protected function normalizeColumnDefinition(string $column, bool $primaryKeyAlreadySet): string
+  {
+    if ($primaryKeyAlreadySet && str_contains($column, 'PRIMARY KEY')) {
+      return trim(str_replace('PRIMARY KEY', '', $column));
+    }
+
+    return $column;
   }
 }

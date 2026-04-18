@@ -33,6 +33,19 @@ class SQLCreateTableStatement
    */
   protected function buildQueryString(): string
   {
+    $parts = $this->buildCreateTablePrefix();
+    $parts[] = $this->buildTableNameExpression();
+
+    return implode(' ', array_filter($parts, static fn(string $part): bool => $part !== ''));
+  }
+
+  /**
+   * Build the CREATE TABLE prefix for the current query dialect.
+   *
+   * @return array<int, string> Returns the CREATE TABLE prefix segments.
+   */
+  protected function buildCreateTablePrefix(): array
+  {
     $parts = ['CREATE'];
 
     if ($this->isTemporary) {
@@ -45,9 +58,17 @@ class SQLCreateTableStatement
       $parts[] = 'IF NOT EXISTS';
     }
 
-    $parts[] = SqlIdentifier::quote($this->tableName, $this->query->getDialect());
+    return $parts;
+  }
 
-    return implode(' ', $parts);
+  /**
+   * Build the quoted table identifier for the active dialect.
+   *
+   * @return string Returns the quoted table name expression.
+   */
+  protected function buildTableNameExpression(): string
+  {
+    return SqlIdentifier::quote($this->tableName, $this->query->getDialect());
   }
 
   /**

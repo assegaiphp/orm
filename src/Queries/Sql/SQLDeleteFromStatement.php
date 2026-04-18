@@ -30,14 +30,62 @@ class SQLDeleteFromStatement
     protected readonly ?string $alias = null
   )
   {
-    $tableName = str_replace(['`', '"'], '', $tableName);
-    $queryString = 'DELETE FROM ' . $this->query->quoteIdentifier($tableName);
+    $this->query->setQueryString(queryString: $this->buildQueryString());
+  }
 
-    if (!is_null($alias)) {
-      $queryString .= ' AS ' . $this->query->quoteIdentifier($alias);
+  /**
+   * Build the initial DELETE statement for the active SQL-family builder.
+   *
+   * @return string Returns the rendered DELETE statement.
+   */
+  protected function buildQueryString(): string
+  {
+    $parts = [
+      $this->buildDeletePrefix(),
+      $this->buildTableExpression(),
+    ];
+
+    $aliasClause = $this->buildAliasClause();
+
+    if ($aliasClause !== '') {
+      $parts[] = $aliasClause;
     }
 
-    $this->query->setQueryString(queryString: $queryString);
+    return implode(' ', $parts);
+  }
+
+  /**
+   * Build the DELETE prefix clause.
+   *
+   * @return string Returns the leading DELETE clause.
+   */
+  protected function buildDeletePrefix(): string
+  {
+    return 'DELETE FROM';
+  }
+
+  /**
+   * Build the table expression for the delete target.
+   *
+   * @return string Returns the quoted table expression.
+   */
+  protected function buildTableExpression(): string
+  {
+    return $this->query->quoteIdentifier(str_replace(['`', '"'], '', $this->tableName));
+  }
+
+  /**
+   * Build the optional alias clause for the delete target.
+   *
+   * @return string Returns the rendered alias clause, or an empty string when no alias is set.
+   */
+  protected function buildAliasClause(): string
+  {
+    if ($this->alias === null) {
+      return '';
+    }
+
+    return 'AS ' . $this->query->quoteIdentifier($this->alias);
   }
 
   /**

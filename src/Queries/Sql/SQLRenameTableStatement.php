@@ -21,7 +21,7 @@ class SQLRenameTableStatement
     protected readonly string $oldTableName,
     protected readonly string $newTableName,
   ) {
-    $this->queryString = $this->buildRenameTableQuery();
+    $this->queryString = $this->buildQueryString();
     $this->query->setQueryString($this->queryString);
   }
 
@@ -30,12 +30,52 @@ class SQLRenameTableStatement
    *
    * @return string Returns the SQL query string for the rename operation.
    */
-  protected function buildRenameTableQuery(): string
+  protected function buildQueryString(): string
   {
-    $quotedOldTableName = $this->query->quoteIdentifier($this->oldTableName);
-    $quotedNewTableName = $this->query->quoteIdentifier($this->newTableName);
+    return $this->buildRenamePrefix() . ' ' .
+      $this->buildOldTableExpression() . ' ' .
+      $this->buildRenameTargetClause() . ' ' .
+      $this->buildNewTableExpression();
+  }
 
-    return "RENAME TABLE $quotedOldTableName TO $quotedNewTableName";
+  /**
+   * Build the rename prefix for the active SQL dialect.
+   *
+   * @return string Returns the leading rename clause.
+   */
+  protected function buildRenamePrefix(): string
+  {
+    return 'RENAME TABLE';
+  }
+
+  /**
+   * Build the quoted old table identifier.
+   *
+   * @return string Returns the quoted old table expression.
+   */
+  protected function buildOldTableExpression(): string
+  {
+    return $this->query->quoteIdentifier($this->oldTableName);
+  }
+
+  /**
+   * Build the rename target clause between the old and new table names.
+   *
+   * @return string Returns the rename target clause.
+   */
+  protected function buildRenameTargetClause(): string
+  {
+    return 'TO';
+  }
+
+  /**
+   * Build the quoted new table identifier.
+   *
+   * @return string Returns the quoted new table expression.
+   */
+  protected function buildNewTableExpression(): string
+  {
+    return $this->query->quoteIdentifier($this->newTableName);
   }
 
   /**
