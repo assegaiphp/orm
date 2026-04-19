@@ -53,6 +53,16 @@ final class ConnectionConfigTest extends TestCase
         self::assertFalse($attributes[PDO::ATTR_EMULATE_PREPARES]);
     }
 
+    public function testAppliesSafeDefaultPostgreSqlPdoAttributes(): void
+    {
+        $attributes = DBFactory::getDefaultPdoAttributes(SQLDialect::POSTGRESQL);
+
+        self::assertSame(PDO::ERRMODE_EXCEPTION, $attributes[PDO::ATTR_ERRMODE]);
+        self::assertSame(PDO::FETCH_ASSOC, $attributes[PDO::ATTR_DEFAULT_FETCH_MODE]);
+        self::assertFalse($attributes[PDO::ATTR_STRINGIFY_FETCHES]);
+        self::assertFalse($attributes[PDO::ATTR_EMULATE_PREPARES]);
+    }
+
     public function testReadsCharSetFromOptionsArrays(): void
     {
         $options = DataSourceOptions::fromArray([

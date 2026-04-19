@@ -36,6 +36,16 @@ class ConnectionConfigCest
     $I->assertFalse($attributes[PDO::ATTR_EMULATE_PREPARES]);
   }
 
+  public function appliesSafeDefaultPostgreSqlPdoAttributes(UnitTester $I): void
+  {
+    $attributes = DBFactory::getDefaultPdoAttributes(SQLDialect::POSTGRESQL);
+
+    $I->assertSame(PDO::ERRMODE_EXCEPTION, $attributes[PDO::ATTR_ERRMODE]);
+    $I->assertSame(PDO::FETCH_ASSOC, $attributes[PDO::ATTR_DEFAULT_FETCH_MODE]);
+    $I->assertFalse($attributes[PDO::ATTR_STRINGIFY_FETCHES]);
+    $I->assertFalse($attributes[PDO::ATTR_EMULATE_PREPARES]);
+  }
+
   public function readsCharSetFromOptionsArrays(UnitTester $I): void
   {
     $options = DataSourceOptions::fromArray([

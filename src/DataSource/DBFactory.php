@@ -200,7 +200,7 @@ final class DBFactory
             PDO::ATTR_STRINGIFY_FETCHES => false,
         ];
 
-        if (in_array($dialect, [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
+        if (in_array($dialect, [SQLDialect::MYSQL, SQLDialect::MARIADB, SQLDialect::POSTGRESQL], true)) {
             $attributes[PDO::ATTR_EMULATE_PREPARES] = false;
         }
 

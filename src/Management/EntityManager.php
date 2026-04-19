@@ -200,7 +200,7 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * Executes a raw SQL query and returns the raw database results.
+   * Executes a raw SQL query and returns the executed database statement.
    *
    * @param string $query
    * @param array $parameters
@@ -210,10 +210,6 @@ class EntityManager implements IEntityStoreOwner
    */
   public function query(string $query, array $parameters = []): PDOStatement|false
   {
-    if (empty($parameters)) {
-      return $this->connection->getClient()->query($query);
-    }
-
     $statement = $this->connection->getClient()->prepare($query);
 
     if ($statement === false) {
