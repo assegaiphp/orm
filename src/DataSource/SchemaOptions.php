@@ -21,6 +21,7 @@ readonly class SchemaOptions
    * @param bool $isTemporary
    * @param SQLCharacterSet|null $characterSet
    * @param SchemaEngineType|null $engine
+   * @param string|null $schema
    */
   public function __construct(
     public string             $dbName = '',
@@ -33,5 +34,6 @@ readonly class SchemaOptions
     public bool               $isTemporary = false,
     public ?SQLCharacterSet   $characterSet = null,
     public ?SchemaEngineType  $engine = null,
+    public ?string            $schema = null,
   ) { }
 }

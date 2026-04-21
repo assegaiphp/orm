@@ -157,7 +157,7 @@ use Assegai\Orm\Queries\Sql\ColumnType;
 
 #[Entity(
   table: 'notes',
-  database: 'app',
+  dataSource: 'app',
   driver: DataSourceType::SQLITE,
 )]
 class NoteEntity
@@ -172,6 +172,30 @@ class NoteEntity
   public ?string $body = null;
 }
 ```
+
+When you need SQL-only storage knobs such as engine, schema, or SQLite `WITHOUT ROWID`, keep the entity metadata focused on shared concerns and add the SQL companion attribute:
+
+```php
+<?php
+
+namespace App\Entities;
+
+use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Attributes\SqlEntityOptions;
+use Assegai\Orm\Enumerations\DataSourceType;
+
+#[Entity(
+  table: 'audit_logs',
+  dataSource: 'reporting',
+  driver: DataSourceType::POSTGRESQL,
+)]
+#[SqlEntityOptions(schema: 'analytics')]
+class AuditLogEntity
+{
+}
+```
+
+Legacy `#[Entity(engine: ...)]`, `#[Entity(schema: ...)]`, and `#[Entity(withRowId: ...)]` declarations still work, but new code should put SQL-specific storage options on `#[SqlEntityOptions(...)]`.
 
 ## Relation mental model
 

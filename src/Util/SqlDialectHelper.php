@@ -40,8 +40,12 @@ final class SqlDialectHelper
     return $quote . $escaped . $quote;
   }
 
-  public static function qualifyTable(string $tableName, ?string $databaseName, SQLDialect $dialect): string
+  public static function qualifyTable(string $tableName, ?string $databaseName, SQLDialect $dialect, ?string $schema = null): string
   {
+    if (in_array($dialect, [SQLDialect::POSTGRESQL, SQLDialect::MSSQL], true) && !empty($schema)) {
+      return self::quoteIdentifier($schema, $dialect) . '.' . self::quoteIdentifier($tableName, $dialect);
+    }
+
     if (empty($databaseName) || in_array($dialect, [SQLDialect::POSTGRESQL, SQLDialect::SQLITE, SQLDialect::MSSQL], true)) {
       return self::quoteIdentifier($tableName, $dialect);
     }

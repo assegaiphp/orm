@@ -4,6 +4,7 @@ namespace Assegai\Orm\Management\Inspectors;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Entity;
+use Assegai\Orm\Attributes\SqlEntityOptions;
 use Assegai\Orm\Attributes\Relations\JoinColumn;
 use Assegai\Orm\Attributes\Relations\JoinTable;
 use Assegai\Orm\Attributes\Relations\ManyToMany;
@@ -92,6 +93,33 @@ final class EntityInspector
     $entityAttributeInstance = $entityAttributeReflection->newInstance();
 
     return $entityAttributeInstance;
+  }
+
+  /**
+   * Returns SQL-specific companion metadata for the specified entity when present.
+   *
+   * @param object $entity The entity to inspect.
+   * @return SqlEntityOptions|null
+   * @throws ClassNotFoundException If the entity does not have the required attributes.
+   * @throws ORMException If the entity attributes have invalid values.
+   * @throws ReflectionException If the entity cannot be reflected.
+   */
+  public function getSqlOptions(object $entity): ?SqlEntityOptions
+  {
+    $this->validateEntityName(get_class($entity));
+    $className = get_class($entity);
+
+    $entityReflection = new ReflectionClass($className);
+    $sqlOptionsAttributeReflections = $entityReflection->getAttributes(SqlEntityOptions::class);
+
+    if (empty($sqlOptionsAttributeReflections)) {
+      return null;
+    }
+
+    /** @var SqlEntityOptions $sqlOptionsAttributeInstance */
+    $sqlOptionsAttributeInstance = $sqlOptionsAttributeReflections[0]->newInstance();
+
+    return $sqlOptionsAttributeInstance;
   }
 
   /**

@@ -43,6 +43,18 @@ final class ConnectionConfigTest extends TestCase
         self::assertSame('[mocks]', SqlDialectHelper::qualifyTable('mocks', 'master', SQLDialect::MSSQL));
     }
 
+    public function testQualifiesSchemaAwareTablesWhenSchemaIsProvided(): void
+    {
+        self::assertSame(
+            '"reporting"."mocks"',
+            SqlDialectHelper::qualifyTable('mocks', 'assegai', SQLDialect::POSTGRESQL, 'reporting')
+        );
+        self::assertSame(
+            '[reporting].[mocks]',
+            SqlDialectHelper::qualifyTable('mocks', 'master', SQLDialect::MSSQL, 'reporting')
+        );
+    }
+
     public function testAppliesSafeDefaultMysqlPdoAttributes(): void
     {
         $attributes = DBFactory::getDefaultPdoAttributes(SQLDialect::MYSQL);

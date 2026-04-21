@@ -2,11 +2,15 @@
 
 namespace Tests\PHPUnit\Unit;
 
+use Assegai\Orm\Attributes\SqlEntityOptions;
 use Assegai\Orm\Exceptions\ORMException;
 use Assegai\Orm\Management\Inspectors\EntityInspector;
 use PHPUnit\Framework\TestCase;
 use Unit\mocks\MockEntity;
+use Unit\mocks\MySqlEngineEntity;
 use Unit\mocks\NotAMockEntity;
+
+require_once __DIR__ . '/../../Unit/mocks/MySqlEngineEntity.php';
 
 final class EntityInspectorTest extends TestCase
 {
@@ -42,6 +46,14 @@ final class EntityInspectorTest extends TestCase
 
         self::assertSame('mocks', $metadata->table);
         self::assertSame('assegai_test_db', $metadata->database);
+    }
+
+    public function testGetSqlOptionsReturnsCompanionAttributeWhenPresent(): void
+    {
+        $sqlOptions = $this->inspector->getSqlOptions(new MySqlEngineEntity());
+
+        self::assertInstanceOf(SqlEntityOptions::class, $sqlOptions);
+        self::assertSame('MyISAM', $sqlOptions?->engine);
     }
 
     public function testGetColumnsReturnsEntityColumnsAndRespectsExclusions(): void

@@ -2,6 +2,8 @@
 
 namespace Assegai\Orm\Support;
 
+use Assegai\Orm\Enumerations\DataSourceType;
+
 final class OrmRuntime
 {
   private static array $config = [];
@@ -51,6 +53,22 @@ final class OrmRuntime
     return is_array($databases) ? $databases : [];
   }
 
+  public static function resolveDatabaseType(?string $dataSourceName): ?DataSourceType
+  {
+    if (empty($dataSourceName)) {
+      return null;
+    }
+
+    foreach (self::databaseConfigs() as $type => $databases) {
+      if (!is_array($databases) || !array_key_exists($dataSourceName, $databases)) {
+        continue;
+      }
+
+      return DataSourceType::tryFrom((string)$type);
+    }
+
+    return null;
+  }
   public static function moduleConfig(string $key, mixed $default = null): mixed
   {
     $value = self::getFromArray(self::$moduleConfig, $key);

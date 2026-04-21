@@ -95,6 +95,7 @@ class Schema implements ISchema
         isTemporary: $resolvedOptions->isTemporary,
         characterSet: $resolvedOptions->characterSet,
         engine: $resolvedOptions->engine,
+        schema: $resolvedOptions->schema,
       );
       $db = DBFactory::getSQLConnection(dbName: $resolvedOptions->dbName, dialect: $resolvedOptions->dialect);
 
@@ -203,6 +204,7 @@ class Schema implements ISchema
         $entityInspector->getTableName($entityInstance),
         $changes,
         $tableFields,
+        $options->schema,
       );
     }
 
@@ -221,6 +223,7 @@ class Schema implements ISchema
     $options = self::resolveSchemaOptions($entityInstance, $options);
     $entityInspector = EntityInspector::getInstance();
 
+    $entityAttribute = $entityInspector->getMetaData($entityInstance);
     $tableName = $entityInspector->getTableName($entityInstance);
 
     # Describe the current table schema
@@ -232,7 +235,7 @@ class Schema implements ISchema
       return null;
     }
 
-    $result = self::getTableDefinitionSql($db, $tableName, $options->dialect);
+    $result = self::getTableDefinitionSql($db, $tableName, $options->dialect, $options->schema);
 
     if (!is_string($result))
     {
@@ -259,6 +262,7 @@ class Schema implements ISchema
     $reflection = new ReflectionClass($entityClass);
     $entityInstance = $reflection->newInstance();
     $options = self::resolveSchemaOptions($entityInstance, $options);
+    $entityAttribute = $entityInspector->getMetaData($entityInstance);
     $tableName = $entityInspector->getTableName($entityInstance);
     $qualifiedTableName = self::getQualifiedTableName($tableName, $options);
     $query = $options->dialect === SQLDialect::SQLITE
@@ -309,7 +313,8 @@ class Schema implements ISchema
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
       $options = self::resolveSchemaOptions($entityInstance, $options);
-      $tableName = $entityInspector->getTableName($entityInstance);
+      $entityAttribute = $entityInspector->getMetaData($entityInstance);
+    $tableName = $entityInspector->getTableName($entityInstance);
       $query = 'DROP TABLE ' . self::getQualifiedTableName($tableName, $options);
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
@@ -342,7 +347,8 @@ class Schema implements ISchema
       $reflection = new ReflectionClass(objectOrClass: $entityClass);
       $entityInstance = $reflection->newInstance();
       $options = self::resolveSchemaOptions($entityInstance, $options);
-      $tableName = $entityInspector->getTableName($entityInstance);
+      $entityAttribute = $entityInspector->getMetaData($entityInstance);
+    $tableName = $entityInspector->getTableName($entityInstance);
       $query = 'DROP TABLE IF EXISTS ' . self::getQualifiedTableName($tableName, $options);
 
       $db = DBFactory::getSQLConnection(dbName: $options->dbName, dialect: $options->dialect);
@@ -435,6 +441,8 @@ class Schema implements ISchema
     $entityInstance = $reflection->newInstance();
     $options = self::resolveSchemaOptions($entityInstance, $options);
     $entityInspector = EntityInspector::getInstance();
+    $entityAttribute = $entityInspector->getMetaData($entityInstance);
+    $sqlEntityOptions = $entityInspector->getSqlOptions($entityInstance);
     $tableName = $entityInspector->getTableName($entityInstance);
 
     $temporary = $options->isTemporary ? " TEMPORARY " : " ";
@@ -491,10 +499,17 @@ class Schema implements ISchema
       SQLDialect::MARIADB => sprintf(
         '%s ENGINE=%s DEFAULT CHARSET=%s COLLATE=%s',
         $query,
-        ($options->engine?->value ?? 'InnoDB'),
+        ($options->engine?->value
+          ?? $sqlEntityOptions?->engineForDialect($options->dialect)
+          ?? $entityAttribute->engineForDialect($options->dialect)
+          ?? 'InnoDB'),
         ($options->characterSet ?? SQLCharacterSet::UTF8MB4)->value,
         ($options->characterSet ?? SQLCharacterSet::UTF8MB4)->getDefaultCollation(),
       ),
+      SQLDialect::SQLITE => ($sqlEntityOptions?->withoutRowIdForDialect($options->dialect)
+          ?? $entityAttribute->withoutRowIdForDialect($options->dialect))
+        ? $query . ' WITHOUT ROWID'
+        : $query,
       default => $query,
     };
   }
@@ -682,6 +697,7 @@ class Schema implements ISchema
   private static function commitRebuiltSchemaChanges(PDO|IDataObject $connection, ReflectionClass $entityReflection, object $entityInstance, SchemaOptions $options, array $tableFields): bool
   {
     $entityInspector = EntityInspector::getInstance();
+    $entityAttribute = $entityInspector->getMetaData($entityInstance);
     $tableName = $entityInspector->getTableName($entityInstance);
     $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, $options->dialect);
     $temporaryTableName = self::generateTemporaryTableName($tableName);
@@ -697,6 +713,7 @@ class Schema implements ISchema
       isTemporary: false,
       characterSet: $options->characterSet,
       engine: $options->engine,
+      schema: $options->schema,
     );
     $createTableSql = self::getDDLStatementFromEntity($entityInstance, $createTableOptions);
     $temporaryCreateTableSql = self::replaceCreateTableName($createTableSql, $quotedTemporaryTableName);
@@ -802,8 +819,9 @@ class Schema implements ISchema
     string $tableName,
     SchemaChangeManifest $changes,
     array $tableFields,
+    ?string $schema = null,
   ): bool {
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+    $quotedTableName = SqlDialectHelper::qualifyTable($tableName, null, SQLDialect::POSTGRESQL, $schema);
     $tableFieldMap = [];
 
     foreach ($tableFields as $tableField)
@@ -849,10 +867,11 @@ class Schema implements ISchema
           $columnName,
           $changeStatement->columnDefinition,
           $currentField,
+          $schema,
         );
       }
 
-      self::synchronizePostgreSqlSequences($connection, $tableName);
+      self::synchronizePostgreSqlSequences($connection, $tableName, $schema);
       $connection->commit();
     }
     catch (PDOException $e)
@@ -883,8 +902,9 @@ class Schema implements ISchema
     string $columnName,
     \Assegai\Orm\Queries\Sql\SQLColumnDefinition $columnDefinition,
     ?SQLTableDescription $currentField,
+    ?string $schema = null,
   ): void {
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+    $quotedTableName = SqlDialectHelper::qualifyTable($tableName, null, SQLDialect::POSTGRESQL, $schema);
     $quotedColumnName = SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::POSTGRESQL);
 
     if (!self::postgreSqlFieldMatchesColumnDefinition($currentField, $columnDefinition)) {
@@ -902,7 +922,7 @@ class Schema implements ISchema
 
     $defaultExpression = $columnDefinition->getDefaultExpression();
     if ($columnDefinition->isAutoIncrement()) {
-      $defaultExpression = self::resolvePostgreSqlAutoIncrementDefault($connection, $tableName, $columnName, $currentField);
+      $defaultExpression = self::resolvePostgreSqlAutoIncrementDefault($connection, $tableName, $columnName, $currentField, $schema);
     }
 
     if ($defaultExpression === null)
@@ -948,7 +968,7 @@ class Schema implements ISchema
       );
     }
 
-    self::synchronizePostgreSqlColumnConstraints($connection, $tableName, $columnName, $currentField, $columnDefinition);
+    self::synchronizePostgreSqlColumnConstraints($connection, $tableName, $columnName, $currentField, $columnDefinition, $schema);
   }
 
   private static function postgreSqlFieldMatchesColumnDefinition(
@@ -968,13 +988,15 @@ class Schema implements ISchema
     string $tableName,
     string $columnName,
     ?SQLTableDescription $currentField,
+    ?string $schema = null,
   ): ?string {
     if (is_string($currentField?->Default) && $currentField->Default !== '')
     {
       return $currentField->Default;
     }
 
-    $tableLiteral = $connection->quote($tableName);
+    $tableReference = $schema !== null && $schema !== '' ? $schema . '.' . $tableName : $tableName;
+    $tableLiteral = $connection->quote($tableReference);
     $columnLiteral = $connection->quote($columnName);
     $statement = $connection->query(
       "SELECT pg_get_serial_sequence($tableLiteral, $columnLiteral)"
@@ -1001,18 +1023,19 @@ class Schema implements ISchema
     string $columnName,
     ?SQLTableDescription $currentField,
     \Assegai\Orm\Queries\Sql\SQLColumnDefinition $columnDefinition,
+    ?string $schema = null,
   ): void {
     $currentKey = $currentField?->Key ?? '';
     $wantsPrimaryKey = $columnDefinition->isPrimaryKey();
     $wantsUnique = !$wantsPrimaryKey && $columnDefinition->isUnique();
     $hasPrimaryKey = $currentKey === 'PRI';
     $hasUniqueKey = $currentKey === 'UNI';
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+    $quotedTableName = SqlDialectHelper::qualifyTable($tableName, null, SQLDialect::POSTGRESQL, $schema);
     $quotedColumnName = SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::POSTGRESQL);
 
     if (!$wantsPrimaryKey && $hasPrimaryKey)
     {
-      foreach (self::getPostgreSqlConstraintNames($connection, $tableName, $columnName, 'p') as $constraintName)
+      foreach (self::getPostgreSqlConstraintNames($connection, $tableName, $columnName, 'p', $schema) as $constraintName)
       {
         $quotedConstraintName = SqlDialectHelper::quoteIdentifier($constraintName, SQLDialect::POSTGRESQL);
         self::executeDialectStatement(
@@ -1025,7 +1048,7 @@ class Schema implements ISchema
 
     if (!$wantsUnique && $hasUniqueKey)
     {
-      foreach (self::getPostgreSqlConstraintNames($connection, $tableName, $columnName, 'u') as $constraintName)
+      foreach (self::getPostgreSqlConstraintNames($connection, $tableName, $columnName, 'u', $schema) as $constraintName)
       {
         $quotedConstraintName = SqlDialectHelper::quoteIdentifier($constraintName, SQLDialect::POSTGRESQL);
         self::executeDialectStatement(
@@ -1067,16 +1090,18 @@ class Schema implements ISchema
     string $tableName,
     string $columnName,
     string $constraintType,
+    ?string $schema = null,
   ): array {
+    $schemaSql = $schema !== null && $schema !== '' ? ':schema' : 'current_schema()';
     $statement = $connection->prepare(
-      <<<'SQL'
+      <<<SQL
 SELECT con.conname
 FROM pg_constraint con
 JOIN pg_class rel ON rel.oid = con.conrelid
 JOIN pg_namespace n ON n.oid = rel.relnamespace
 JOIN pg_attribute a ON a.attrelid = rel.oid AND a.attnum = ANY(con.conkey)
 WHERE rel.relname = :table
-  AND n.nspname = current_schema()
+  AND n.nspname = {$schemaSql}
   AND con.contype = :type
   AND a.attname = :column
   AND array_length(con.conkey, 1) = 1
@@ -1084,11 +1109,16 @@ ORDER BY con.conname
 SQL
     );
 
-    if (!$statement || !$statement->execute([
+    $params = [
       'table' => $tableName,
       'type' => $constraintType,
       'column' => $columnName,
-    ])) {
+    ];
+    if ($schema !== null && $schema !== '') {
+      $params['schema'] = $schema;
+    }
+
+    if (!$statement || !$statement->execute($params)) {
       throw new ORMException("Failed to inspect PostgreSQL constraints for '$tableName.$columnName'.");
     }
 
@@ -1160,28 +1190,35 @@ SQL
     }
   }
 
-  private static function synchronizeRebuiltTableState(PDO|IDataObject $connection, string $tableName, SQLDialect $dialect): void
+  private static function synchronizeRebuiltTableState(PDO|IDataObject $connection, string $tableName, SQLDialect $dialect, ?string $schema = null): void
   {
     if ($dialect !== SQLDialect::POSTGRESQL) {
       return;
     }
 
-    self::synchronizePostgreSqlSequences($connection, $tableName);
+    self::synchronizePostgreSqlSequences($connection, $tableName, $schema);
   }
 
-  private static function synchronizePostgreSqlSequences(PDO|IDataObject $connection, string $tableName): void
+  private static function synchronizePostgreSqlSequences(PDO|IDataObject $connection, string $tableName, ?string $schema = null): void
   {
     $tableLiteral = $connection->quote($tableName);
+    $schemaLiteral = $connection->quote($schema ?? 'public');
+    $schemaFilter = $schema !== null && $schema !== ''
+      ? 'n.nspname = ' . $schemaLiteral
+      : 'n.nspname = current_schema()';
+    $sequenceLookup = $schema !== null && $schema !== ''
+      ? "pg_get_serial_sequence(format('%I.%I', {$schemaLiteral}, c.relname), a.attname)"
+      : "pg_get_serial_sequence(format('%I.%I', current_schema(), c.relname), a.attname)";
     $sql = <<<SQL
 SELECT
   a.attname AS column_name,
-  pg_get_serial_sequence(format('%I.%I', current_schema(), c.relname), a.attname) AS sequence_name
+  {$sequenceLookup} AS sequence_name
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
 WHERE c.relkind = 'r'
-  AND n.nspname = current_schema()
+  AND {$schemaFilter}
   AND c.relname = $tableLiteral
   AND a.attnum > 0
   AND NOT a.attisdropped
@@ -1210,7 +1247,7 @@ SQL;
       }
 
       $quotedSequenceName = $connection->quote($sequenceName);
-      $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+      $quotedTableName = SqlDialectHelper::qualifyTable($tableName, null, SQLDialect::POSTGRESQL, $schema);
       $quotedColumnName = SqlDialectHelper::quoteIdentifier($columnName, SQLDialect::POSTGRESQL);
       $syncSql = <<<SQL
 SELECT setval(
@@ -1279,25 +1316,36 @@ SQL;
       : $entityInspector->getTableName($entityInstance);
     $dialect = SqlDialectHelper::fromPdo($connection);
 
+    $schema = null;
+
+    if (!property_exists($entityInstance, '__tableName')) {
+      $entityMetadata = $entityInspector->getMetaData($entityInstance);
+      $sqlEntityOptions = $entityInspector->getSqlOptions($entityInstance);
+      $schema = $sqlEntityOptions?->schemaForDialect($dialect)
+        ?? $entityMetadata->schemaForDialect($dialect);
+    }
+
     return match ($dialect) {
-      SQLDialect::MSSQL => self::getMsSqlTableDescriptions($connection, $tableName),
+      SQLDialect::MSSQL => self::getMsSqlTableDescriptions($connection, $tableName, $schema),
       SQLDialect::SQLITE => self::getSQLiteTableDescriptions($connection, $tableName),
-      SQLDialect::POSTGRESQL => self::getPostgreSqlTableDescriptions($connection, $tableName),
+      SQLDialect::POSTGRESQL => self::getPostgreSqlTableDescriptions($connection, $tableName, $schema),
       default => self::getMySqlTableDescriptions($connection, $tableName),
     };
   }
 
   private static function getQualifiedTableName(string $tableName, SchemaOptions $options): string
   {
-    return SqlDialectHelper::qualifyTable($tableName, $options->dbName, $options->dialect);
+    return SqlDialectHelper::qualifyTable($tableName, $options->dbName, $options->dialect, $options->schema);
   }
 
   private static function resolveSchemaOptions(object $entityInstance, ?SchemaOptions $options): SchemaOptions
   {
     $options ??= new SchemaOptions();
 
-    $entityMetadata = EntityInspector::getInstance()->getMetaData($entityInstance);
-    $dbName = $options->dbName ?: ($entityMetadata->database ?? '');
+    $entityInspector = EntityInspector::getInstance();
+    $entityMetadata = $entityInspector->getMetaData($entityInstance);
+    $sqlEntityOptions = $entityInspector->getSqlOptions($entityInstance);
+    $dbName = $options->dbName ?: ($entityMetadata->dataSourceName() ?? '');
     $dialect = $options->dialect;
 
     if (
@@ -1307,6 +1355,10 @@ SQL;
     ) {
       $dialect = SqlDialectHelper::fromDataSourceType($entityMetadata->driver);
     }
+
+    $schema = $options->schema
+      ?: $sqlEntityOptions?->schemaForDialect($dialect)
+      ?: $entityMetadata->schemaForDialect($dialect);
 
     return new SchemaOptions(
       dbName: $dbName,
@@ -1319,15 +1371,16 @@ SQL;
       isTemporary: $options->isTemporary,
       characterSet: $options->characterSet,
       engine: $options->engine,
+      schema: $schema,
     );
   }
 
-  private static function getTableDefinitionSql(PDO $connection, string $tableName, SQLDialect $dialect): ?string
+  private static function getTableDefinitionSql(PDO $connection, string $tableName, SQLDialect $dialect, ?string $schema = null): ?string
   {
     return match ($dialect) {
-      SQLDialect::MSSQL => self::getMsSqlTableDefinitionSql($connection, $tableName),
+      SQLDialect::MSSQL => self::getMsSqlTableDefinitionSql($connection, $tableName, $schema),
       SQLDialect::SQLITE => self::getSQLiteTableDefinitionSql($connection, $tableName),
-      SQLDialect::POSTGRESQL => self::getPostgreSqlTableDefinitionSql($connection, $tableName),
+      SQLDialect::POSTGRESQL => self::getPostgreSqlTableDefinitionSql($connection, $tableName, $schema),
       default => self::getMySqlTableDefinitionSql($connection, $tableName),
     };
   }
@@ -1358,15 +1411,15 @@ SQL;
     return is_string($result) ? $result : null;
   }
 
-  private static function getPostgreSqlTableDefinitionSql(PDO $connection, string $tableName): ?string
+  private static function getPostgreSqlTableDefinitionSql(PDO $connection, string $tableName, ?string $schema = null): ?string
   {
-    $tableFields = self::getPostgreSqlTableDescriptions($connection, $tableName);
+    $tableFields = self::getPostgreSqlTableDescriptions($connection, $tableName, $schema);
 
     if (empty($tableFields)) {
       return null;
     }
 
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::POSTGRESQL);
+    $quotedTableName = SqlDialectHelper::qualifyTable($tableName, null, SQLDialect::POSTGRESQL, $schema);
     $definitions = array_map(
       fn(SQLTableDescription $field): string => '  ' . self::buildPostgreSqlColumnDefinition($field),
       $tableFields,
@@ -1375,15 +1428,15 @@ SQL;
     return sprintf("CREATE TABLE %s (\n%s\n)", $quotedTableName, implode(",\n", $definitions));
   }
 
-  private static function getMsSqlTableDefinitionSql(PDO $connection, string $tableName): ?string
+  private static function getMsSqlTableDefinitionSql(PDO $connection, string $tableName, ?string $schema = null): ?string
   {
-    $tableFields = self::getMsSqlTableDescriptions($connection, $tableName);
+    $tableFields = self::getMsSqlTableDescriptions($connection, $tableName, $schema);
 
     if (empty($tableFields)) {
       return null;
     }
 
-    $quotedTableName = SqlDialectHelper::quoteIdentifier($tableName, SQLDialect::MSSQL);
+    $quotedTableName = SqlDialectHelper::qualifyTable($tableName, null, SQLDialect::MSSQL, $schema);
     $definitions = array_map(
       fn(SQLTableDescription $field): string => '  ' . self::buildMsSqlColumnDefinition($field),
       $tableFields,
@@ -1404,9 +1457,12 @@ SQL;
     return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
   }
 
-  private static function getPostgreSqlTableDescriptions(PDO $connection, string $tableName): array
+  private static function getPostgreSqlTableDescriptions(PDO $connection, string $tableName, ?string $schema = null): array
   {
     $quotedTableName = $connection->quote($tableName);
+    $schemaFilter = $schema !== null && $schema !== ''
+      ? 'n.nspname = ' . $connection->quote($schema)
+      : 'n.nspname = current_schema()';
     $sql = <<<SQL
 SELECT
   a.attname AS "Field",
@@ -1439,7 +1495,7 @@ JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
 WHERE c.relkind = 'r'
-  AND n.nspname = current_schema()
+  AND $schemaFilter
   AND c.relname = $quotedTableName
   AND a.attnum > 0
   AND NOT a.attisdropped
@@ -1455,9 +1511,12 @@ SQL;
     return $statement->fetchAll(PDO::FETCH_CLASS, SQLTableDescription::class);
   }
 
-  private static function getMsSqlTableDescriptions(PDO $connection, string $tableName): array
+  private static function getMsSqlTableDescriptions(PDO $connection, string $tableName, ?string $schema = null): array
   {
     $quotedTableName = $connection->quote($tableName);
+    $schemaFilter = $schema !== null && $schema !== ''
+      ? 'c.TABLE_SCHEMA = ' . $connection->quote($schema)
+      : 'c.TABLE_SCHEMA = SCHEMA_NAME()';
     $sql = <<<SQL
 SELECT
   c.COLUMN_NAME AS [Field],
@@ -1499,6 +1558,7 @@ LEFT JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
  AND kcu.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
  AND kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
 WHERE c.TABLE_CATALOG = DB_NAME()
+  AND $schemaFilter
   AND c.TABLE_NAME = $quotedTableName
 ORDER BY c.ORDINAL_POSITION
 SQL;
