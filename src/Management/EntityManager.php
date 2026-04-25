@@ -135,7 +135,7 @@ class EntityManager implements IEntityStoreOwner
   public function __construct(protected DataSource $connection, protected ?SQLQuery $query = null, protected ?EntityInspector $entityInspector = null, protected ?TypeResolver $typeResolver = null)
   {
     $this->logger = new Logger(new ConsoleOutput());
-    $this->query = $query ?? new SQLQuery(db: $connection->getClient());
+    $this->query = $query ?? SQLQuery::forConnection(db: $connection->getClient(), dialect: $connection->getDialect());
 
     // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
     if (!$this->entityInspector) {
@@ -200,7 +200,7 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * Executes a raw SQL query and returns the raw database results.
+   * Executes a raw SQL query and returns the executed database statement.
    *
    * @param string $query
    * @param array $parameters
@@ -210,10 +210,6 @@ class EntityManager implements IEntityStoreOwner
    */
   public function query(string $query, array $parameters = []): PDOStatement|false
   {
-    if (empty($parameters)) {
-      return $this->connection->getClient()->query($query);
-    }
-
     $statement = $this->connection->getClient()->prepare($query);
 
     if ($statement === false) {
@@ -415,10 +411,40 @@ class EntityManager implements IEntityStoreOwner
     }
 
     # Find the record by the resolved primary key and hydrate the entity
-    $identifierValue = $instance->{$primaryKeyField} ?? $this->lastInsertId();
-    $result = $this->findOne(entityClass: $entityClass, options: new FindOneOptions(where: [$primaryKeyField => $identifierValue]));
+    $identifierCandidates = [];
+    $explicitIdentifierValue = $instance->{$primaryKeyField} ?? null;
+    $lastInsertId = $this->lastInsertId();
 
-    if ($result->isError()) {
+    if ($explicitIdentifierValue !== null && $explicitIdentifierValue !== '') {
+      $identifierCandidates[] = $explicitIdentifierValue;
+    }
+
+    if ($lastInsertId !== null && $lastInsertId !== '' && !in_array($lastInsertId, $identifierCandidates, true)) {
+      $identifierCandidates[] = $lastInsertId;
+    }
+
+    if (empty($identifierCandidates)) {
+      $identifierCandidates[] = $explicitIdentifierValue;
+    }
+
+    $identifierValue = $identifierCandidates[0] ?? null;
+    $result = null;
+
+    foreach ($identifierCandidates as $candidateIdentifierValue) {
+      $lookupResult = $this->findOne(
+        entityClass: $entityClass,
+        options: new FindOneOptions(where: [$primaryKeyField => $candidateIdentifierValue])
+      );
+
+      $result = $lookupResult;
+
+      if (!$lookupResult->isError() && !$lookupResult->isEmpty()) {
+        $identifierValue = $candidateIdentifierValue;
+        break;
+      }
+    }
+
+    if ($result?->isError()) {
       if (!headers_sent()) {
         http_response_code(500);
       }
@@ -431,6 +457,10 @@ class EntityManager implements IEntityStoreOwner
     $entity = is_array($result->getData()) && array_is_list($result->getData())
       ? ($result->getData()[0] ?? null)
       : $result->getData();
+
+    if (is_object($entity) && isset($entity->{$primaryKeyField}) && $entity->{$primaryKeyField} !== null && $entity->{$primaryKeyField} !== '') {
+      $identifierValue = $entity->{$primaryKeyField};
+    }
 
     $generatedMaps = (object)array_merge((array)$entity, (array)new stdClass());
     $generatedMaps->{$primaryKeyField} = $identifierValue;
@@ -1243,7 +1273,7 @@ class EntityManager implements IEntityStoreOwner
     );
     $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
 
-    $query = new SQLQuery($this->query->getConnection());
+    $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
     $statement = $query
       ->select()
       ->all(columns: $columns)
@@ -1298,7 +1328,7 @@ class EntityManager implements IEntityStoreOwner
     $entity = $this->create($entityClass);
     $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
     $tableName = $this->entityInspector->getTableName($entity);
-    $query = new SQLQuery($this->query->getConnection());
+    $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
     $statement = $query
       ->select()
       ->all(columns: $columns)
@@ -1709,7 +1739,7 @@ class EntityManager implements IEntityStoreOwner
 
               $columnName = $relationProperties[$columnName]->joinColumn->effectiveColumnName;
             } else {
-              $columnName = $columnMap[$columnName];
+              $columnName = $this->getUnqualifiedColumnName($columnMap[$columnName]);
             }
           }
 
@@ -1829,20 +1859,37 @@ class EntityManager implements IEntityStoreOwner
   }
 
   /**
-   * Returns the column name for a given property. If no column name is specified, returns the property name.
+   * Removes the table prefix from a column reference when a SQL assignment target must be unqualified.
    *
-   * @param object $entity The entity to get the column name for.
-   * @param string $prop The property to get the column name for.
-   * @return string Returns the column name for the given property.
+   * @param string $columnReference The column reference to normalize.
+   * @return string The unqualified column name.
+   */
+  private function getUnqualifiedColumnName(string $columnReference): string
+  {
+    if (!str_contains($columnReference, '.')) {
+      return $columnReference;
+    }
+
+    return substr($columnReference, strrpos($columnReference, '.') + 1);
+  }
+
+  /**
+   * Resolves the storage column name for a given entity property.
+   *
+   * Regular column-backed properties default to snake_case when no explicit column name is supplied.
+   * Relation properties continue to return the PHP property name so relation metadata can decide which
+   * join column to use later in the update and condition-building paths.
+   *
+   * @param object $entity The entity that owns the property.
+   * @param string $prop The property name to resolve.
+   * @return string The resolved storage column name or the original relation property name.
    */
   private function getColumnNameFromProperty(object $entity, string $prop): string
   {
     if (!property_exists($entity, $prop)) {
-      # Check if this is a relation property
-
-      # Get all entities with
       return $prop;
     }
+
     $propertyReflection = new ReflectionProperty($entity, $prop);
     $attributes = $propertyReflection->getAttributes();
 
@@ -1865,7 +1912,7 @@ class EntityManager implements IEntityStoreOwner
 
     /** @var Column $column */
     $column = $columnAttribute->newInstance();
-    return empty($column->name) ? $prop : $column->name;
+    return empty($column->name) ? strtosnake($prop) : $column->name;
   }
 
   /**
@@ -1997,20 +2044,25 @@ class EntityManager implements IEntityStoreOwner
 
     $this->validateEntityName(entityClass: $entityClass);
 
+    $entity = $this->create(
+      entityClass: $entityClass,
+      entityLike: is_array($entityOrEntities) ? $entityOrEntities : (object)$entityOrEntities,
+    );
+
     // TODO: Configure the upsert options
-    $primaryKey = $this->getPrimaryKeyMetadata($entityOrEntities);
+    $primaryKey = $this->getPrimaryKeyMetadata($entity);
     $primaryKeyField = $primaryKey['field'];
     $primaryColumn = $primaryKey['column'];
 
-    $columns = $this->entityInspector->getColumns(entity: $entityOrEntities);
-    $updateColumns = $this->entityInspector->getColumns(entity: $entityOrEntities, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
-    $values = $this->entityInspector->getValues(entity: $entityOrEntities);
-    $tableName = $this->entityInspector->getTableName(entity: $entityOrEntities);
+    $columns = $this->entityInspector->getColumns(entity: $entity);
+    $updateColumns = $this->entityInspector->getColumns(entity: $entity, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
+    $values = $this->entityInspector->getValues(entity: $entity);
+    $tableName = $this->entityInspector->getTableName(entity: $entity);
 
     return match ($this->query->getDialect()) {
-      SQLDialect::SQLITE => $this->executeSqliteUpsert($tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
-      SQLDialect::POSTGRESQL => $this->executePostgreSqlUpsert($entityClass, $tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
-      default => $this->executeMySqlUpsert($entityClass, $tableName, $entityOrEntities, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      SQLDialect::SQLITE => $this->executeSqliteUpsert($tableName, $entity, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      SQLDialect::POSTGRESQL => $this->executePostgreSqlUpsert($entityClass, $tableName, $entity, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
+      default => $this->executeMySqlUpsert($entityClass, $tableName, $entity, $columns, $updateColumns, $values, $options, $primaryKeyField, $primaryColumn),
     };
   }
 

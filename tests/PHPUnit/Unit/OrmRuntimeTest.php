@@ -2,6 +2,7 @@
 
 namespace Tests\PHPUnit\Unit;
 
+use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Support\OrmRuntime;
 use PHPUnit\Framework\TestCase;
 
@@ -39,6 +40,21 @@ final class OrmRuntimeTest extends TestCase
         );
     }
 
+    public function testResolvesDatabaseTypeFromConfiguredDatabaseName(): void
+    {
+        OrmRuntime::configure([
+            'databases' => [
+                'sqlite' => [
+                    'app' => [
+                        'path' => '/tmp/demo.sqlite',
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame(DataSourceType::SQLITE, OrmRuntime::resolveDatabaseType('app'));
+        self::assertNull(OrmRuntime::resolveDatabaseType('missing'));
+    }
     public function testReadsModuleConfigFromOrmRuntimeState(): void
     {
         OrmRuntime::setModuleConfig([

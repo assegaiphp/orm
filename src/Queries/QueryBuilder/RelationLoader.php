@@ -95,7 +95,7 @@ readonly class RelationLoader
     // TODO: Implement loadManyToOneOrOneToOneOwner() method.
     $entities = is_array($entityOrEntities) ? $entityOrEntities : [$entityOrEntities];
     $joinAliasName = $relation->entityMetadata->name;
-    $query = $selectQueryBuilder ?? new SQLQuery(db: $this->connection->getClient());
+    $query = $selectQueryBuilder ?? SQLQuery::forConnection(db: $this->connection->getClient());
     $mainAlias = $query->getMainAlias();
 
 

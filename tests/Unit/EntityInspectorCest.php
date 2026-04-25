@@ -82,6 +82,7 @@ class EntityInspectorCest
     $columnProperties = $this->inspector->getColumns($this->entity);
     $I->assertArrayHasKey('id', $columnProperties);
     $I->assertArrayHasKey('createdAt', $columnProperties);
+    $I->assertEquals('mocks.color_type', $columnProperties['colorType']);
     $I->assertArrayNotHasKey('rank', $columnProperties);
 
     $columnProperties = $this->inspector->getColumns($this->entity, ['id']);

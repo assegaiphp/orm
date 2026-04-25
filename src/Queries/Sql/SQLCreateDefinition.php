@@ -2,38 +2,45 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-final class SQLCreateDefinition
+/**
+ * Shared CREATE entry point for SQL dialects that also support database creation.
+ */
+class SQLCreateDefinition extends SQLTableCreateDefinition implements SQLDatabaseCreateDefinitionInterface
 {
-  public function __construct(protected SQLQuery $query) {}
-
   /**
-   * @param string $tableName
-   * @param bool $isTemporary
-   * @param bool $checkIfNotExists
-   * @return SQLCreateTableStatement
+   * Begins a CREATE DATABASE statement.
+   *
+   * @param string $dbName The database name to create.
+   * @param string $defaultCharacterSet The default character set to assign.
+   * @param string $defaultCollation The default collation to assign.
+   * @param bool $defaultEncryption Indicates whether database encryption should be enabled when supported.
+   * @return SQLCreateDatabaseStatement Returns the shared CREATE DATABASE statement builder.
    */
-  public function table(
-    string $tableName,
-    bool $isTemporary = false,
-    bool $checkIfNotExists = true
-  ): SQLCreateTableStatement
+  public function database(
+    string $dbName,
+    string $defaultCharacterSet = 'utf8mb4',
+    string $defaultCollation = 'utf8mb4_general_ci',
+    bool $defaultEncryption = true,
+  ): SQLCreateDatabaseStatement
   {
-    return new SQLCreateTableStatement(
-      query: $this->query,
-      tableName: $tableName,
-      isTemporary: $isTemporary,
-      checkIfNotExists: $checkIfNotExists
+    return $this->createDatabaseStatement(
+      dbName: $dbName,
+      defaultCharacterSet: $defaultCharacterSet,
+      defaultCollation: $defaultCollation,
+      defaultEncryption: $defaultEncryption,
     );
   }
 
   /**
-   * @param string $dbName
-   * @param string $defaultCharacterSet
-   * @param string $defaultCollation
-   * @param bool $defaultEncryption
-   * @return SQLCreateDatabaseStatement
+   * Creates the CREATE DATABASE statement builder for the active SQL dialect.
+   *
+   * @param string $dbName The database name to create.
+   * @param string $defaultCharacterSet The default character set to assign.
+   * @param string $defaultCollation The default collation to assign.
+   * @param bool $defaultEncryption Indicates whether database encryption should be enabled when supported.
+   * @return SQLCreateDatabaseStatement Returns the CREATE DATABASE statement builder.
    */
-  public function database(
+  protected function createDatabaseStatement(
     string $dbName,
     string $defaultCharacterSet = 'utf8mb4',
     string $defaultCollation = 'utf8mb4_general_ci',
@@ -45,15 +52,7 @@ final class SQLCreateDefinition
       dbName: $dbName,
       defaultCharacterSet: $defaultCharacterSet,
       defaultCollation: $defaultCollation,
-      defaultEncryption: $defaultEncryption
+      defaultEncryption: $defaultEncryption,
     );
-  }
-
-  /**
-   * @return SQLQueryResult
-   */
-  public function execute(): SQLQueryResult
-  {
-    return $this->query->execute();
   }
 }

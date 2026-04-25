@@ -5,79 +5,60 @@ namespace Assegai\Orm\Queries\Sql;
 use Assegai\Orm\Traits\ExecutableTrait;
 
 /**
- * The SQLAlterTableOption class provides methods for altering a table in a SQL database.
+ * Base fluent builder for ALTER TABLE operations shared across SQL dialects.
  */
-final class SQLAlterTableOption
+class SQLAlterTableOption
 {
   use ExecutableTrait;
 
   /**
-   * Constructs an instance of the SQLAlterTableOption.
+   * Create a new ALTER TABLE option builder.
    *
-   * @param SQLQuery $query The SQLQuery instance used to construct queries.
+   * @param SQLQuery $query The query instance being built.
    */
-  public function __construct(private readonly SQLQuery $query)
+  public function __construct(protected readonly SQLQuery $query)
   {
   }
 
   /**
-   * Adds a new column to the table.
+   * Add a column to the target table.
    *
-   * @param SQLColumnDefinition $dataType The definition of the new column.
-   * @param bool|null $first Specifies that the new column should be positioned first within a table row.
-   * @param string|null $afterColumn Specifies the column after which to position the new column within a table row.
-   * @return SQLAlterTableOption
+   * @param SQLColumnDefinition $dataType The column definition to add.
+   * @return static Returns the current alter-table builder for fluent chaining.
    */
-  public function addColumn(SQLColumnDefinition $dataType, ?bool $first = false, ?string $afterColumn = null): SQLAlterTableOption
+  public function addColumn(SQLColumnDefinition $dataType): static
   {
-    $this->query->appendQueryString(tail: "ADD COLUMN $dataType");
-    if ($first && in_array($this->query->getDialect(), [\Assegai\Orm\Enumerations\SQLDialect::MYSQL, \Assegai\Orm\Enumerations\SQLDialect::MARIADB], true))
-    {
-      $this->query->appendQueryString(tail: "FIRST");
-    }
-    else if (!is_null($afterColumn) && in_array($this->query->getDialect(), [\Assegai\Orm\Enumerations\SQLDialect::MYSQL, \Assegai\Orm\Enumerations\SQLDialect::MARIADB], true))
-    {
-      $this->query->appendQueryString(tail: "AFTER " . $this->query->quoteIdentifier($afterColumn));
-    }
+    $this->query->appendQueryString(tail: 'ADD COLUMN ' . $dataType);
+
     return $this;
   }
 
   /**
-   * Modifies an existing column in the table.
+   * Rename an existing column.
    *
-   * @param SQLColumnDefinition $dataType The new definition of the column.
-   * @return SQLAlterTableOption
+   * @param string $oldColumnName The current column name.
+   * @param string $newColumnName The new column name.
+   * @return static Returns the current alter-table builder for fluent chaining.
    */
-  public function modifyColumn(SQLColumnDefinition $dataType): SQLAlterTableOption
-  {
-    $this->query->appendQueryString(tail: "MODIFY COLUMN $dataType");
-    return $this;
-  }
-
-  /**
-   * Renames an existing column in the table.
-   *
-   * @param string $oldColumnName The name of the column to be renamed.
-   * @param string $newColumnName The new name for the column.
-   * @return SQLAlterTableOption
-   */
-  public function renameColumn(string $oldColumnName, string $newColumnName): SQLAlterTableOption
+  public function renameColumn(string $oldColumnName, string $newColumnName): static
   {
     $this->query->appendQueryString(
-      tail: "RENAME COLUMN {$this->query->quoteIdentifier($oldColumnName)} TO {$this->query->quoteIdentifier($newColumnName)}"
+      tail: 'RENAME COLUMN ' . $this->query->quoteIdentifier($oldColumnName) . ' TO ' . $this->query->quoteIdentifier($newColumnName)
     );
+
     return $this;
   }
 
   /**
-   * Drops a column from the table.
+   * Drop a column from the target table.
    *
-   * @param string $columnName The name of the column to be dropped.
-   * @return SQLAlterTableOption
+   * @param string $columnName The column to drop.
+   * @return static Returns the current alter-table builder for fluent chaining.
    */
-  public function dropColumn(string $columnName): SQLAlterTableOption
+  public function dropColumn(string $columnName): static
   {
-    $this->query->appendQueryString(tail: "DROP COLUMN " . $this->query->quoteIdentifier($columnName));
+    $this->query->appendQueryString(tail: 'DROP COLUMN ' . $this->query->quoteIdentifier($columnName));
+
     return $this;
   }
 }

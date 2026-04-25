@@ -140,4 +140,25 @@ class SecurityCest
 
     $I->assertSame("Upserted 'quoted' value", $updatedRow['description']);
   }
+
+  public function supportsParameterlessRawQueries(UnitTester $I): void
+  {
+    $tableName = 'raw_query_probe';
+
+    $createStatement = $this->manager->query(
+      "CREATE TABLE IF NOT EXISTS `$tableName` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `name` TEXT NOT NULL)"
+    );
+    $I->assertNotFalse($createStatement);
+
+    $insertStatement = $this->manager->query(
+      "INSERT INTO `$tableName` (`name`) VALUES ('prepared path')"
+    );
+    $I->assertNotFalse($insertStatement);
+
+    $countStatement = $this->manager->query("SELECT COUNT(*) AS total FROM `$tableName`");
+    $row = $countStatement?->fetch();
+
+    $I->assertSame(1, (int)($row['total'] ?? 0));
+  }
+
 }

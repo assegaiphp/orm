@@ -6,7 +6,13 @@ use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Traits\ExecutableTrait;
 
-final class SQLAssignmentList
+/**
+ * Base SET-clause builder shared across SQL-family dialects.
+ *
+ * Dialect-specific subclasses keep the fluent chain typed after
+ * `update(...)->set(...)`.
+ */
+class SQLAssignmentList
 {
   use ExecutableTrait;
 
@@ -15,8 +21,8 @@ final class SQLAssignmentList
    * @param array $assignmentList
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly array $assignmentList
+    protected readonly SQLQuery $query,
+    protected readonly array $assignmentList
   )
   {
     $queryString = 'SET ';
@@ -46,6 +52,20 @@ final class SQLAssignmentList
    */
   public function where(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
   {
-    return new SQLWhereClause( query: $this->query, condition: $condition );
+    return $this->createWhereClause(condition: $condition);
+  }
+
+  /**
+   * Create the WHERE-clause builder used by this assignment list.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed WHERE builders.
+   *
+   * @param string|array|FindOptions|FindWhereOptions $condition The condition to compile and append.
+   * @return SQLWhereClause Returns the WHERE-clause builder.
+   */
+  protected function createWhereClause(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
+  {
+    return new SQLWhereClause(query: $this->query, condition: $condition);
   }
 }

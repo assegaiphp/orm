@@ -22,6 +22,8 @@ class DataSourceFactory
         return new MySQLDataSource($name);
       case DataSourceType::POSTGRESQL:
         return new PostgreSQLDataSource($name);
+      case DataSourceType::MSSQL:
+        return new MsSqlDataSource($name);
       case DataSourceType::SQLITE:
         return new SQLiteDataSource($name);
       case DataSourceType::REDIS:

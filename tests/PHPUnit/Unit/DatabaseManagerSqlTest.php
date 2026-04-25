@@ -10,6 +10,7 @@ use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Management\DatabaseManager;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionProperty;
 
 final class DatabaseManagerSqlTest extends TestCase
@@ -42,6 +43,25 @@ final class DatabaseManagerSqlTest extends TestCase
 
         self::assertSame('CREATE DATABASE "assegai_blog"', $createSql);
         self::assertSame('DROP DATABASE IF EXISTS "assegai_blog"', $dropSql);
+    }
+
+    public function testBuildsMsSqlDatabaseStatementsSafely(): void
+    {
+        $createSql = DatabaseManager::buildCreateDatabaseStatement(DataSourceType::MSSQL, 'assegai_blog');
+        $dropSql = DatabaseManager::buildDropDatabaseStatement(DataSourceType::MSSQL, 'assegai_blog');
+
+        self::assertSame("IF DB_ID(N'assegai_blog') IS NULL CREATE DATABASE [assegai_blog]", $createSql);
+        self::assertSame('DROP DATABASE IF EXISTS [assegai_blog]', $dropSql);
+    }
+
+    public function testBuildsMsSqlSessionTerminationStatementBeforeDrop(): void
+    {
+        $method = new ReflectionMethod(DatabaseManager::class, 'buildMsSqlTerminateConnectionsStatement');
+
+        self::assertSame(
+            "IF DB_ID(N'assegai_blog') IS NOT NULL ALTER DATABASE [assegai_blog] SET SINGLE_USER WITH ROLLBACK IMMEDIATE",
+            $method->invoke(null, 'assegai_blog')
+        );
     }
 
     public function testRejectsUnsafeDatabaseNames(): void
@@ -124,6 +144,52 @@ final class DatabaseManagerSqlTest extends TestCase
             port: 1,
             username: 'postgres',
             password: 'postgres',
+        ));
+
+        $this->expectException(DataSourceException::class);
+        $this->expectExceptionMessage('Data Source error:');
+
+        $manager->drop($dataSource, 'assegai_blog');
+    }
+
+    public function testMsSqlSetupWrapsManagementConnectionFailures(): void
+    {
+        if (!extension_loaded('pdo_sqlsrv')) {
+            self::markTestSkipped('pdo_sqlsrv is required for MSSQL management tests.');
+        }
+
+        $manager = DatabaseManager::getInstance();
+        $dataSource = $this->createDetachedDataSource(new DataSourceOptions(
+            entities: [],
+            name: 'assegai_blog',
+            type: DataSourceType::MSSQL,
+            host: '127.0.0.1',
+            port: 1,
+            username: 'sa',
+            password: 'Password123!',
+        ));
+
+        $this->expectException(DataSourceException::class);
+        $this->expectExceptionMessage('Data Source error:');
+
+        $manager->setup($dataSource, 'assegai_blog');
+    }
+
+    public function testMsSqlDropWrapsManagementConnectionFailures(): void
+    {
+        if (!extension_loaded('pdo_sqlsrv')) {
+            self::markTestSkipped('pdo_sqlsrv is required for MSSQL management tests.');
+        }
+
+        $manager = DatabaseManager::getInstance();
+        $dataSource = $this->createDetachedDataSource(new DataSourceOptions(
+            entities: [],
+            name: 'assegai_blog',
+            type: DataSourceType::MSSQL,
+            host: '127.0.0.1',
+            port: 1,
+            username: 'sa',
+            password: 'Password123!',
         ));
 
         $this->expectException(DataSourceException::class);

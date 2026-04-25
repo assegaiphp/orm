@@ -3,31 +3,66 @@
 namespace Assegai\Orm\Queries\Sql;
 
 use Assegai\Orm\Traits\ExecutableTrait;
+use Assegai\Orm\Util\SqlIdentifier;
 
 /**
- * Removes one or more tables. You must have the [DROP](https://dev.mysql.com/doc/refman/8.0/en/privileges-provided.html#priv_drop) privelege for each table.
+ * Shared DROP TABLE statement builder.
  */
-final class SQLDropTableStatement
+class SQLDropTableStatement
 {
   use ExecutableTrait;
 
   /**
-   * @param SQLQuery $query
-   * @param string $tableName
-   * @param bool $checkIfExists
+   * Creates a DROP TABLE statement builder and primes the owning query string.
+   *
+   * @param SQLQuery $query Receives the rendered DROP TABLE statement.
+   * @param string $tableName The table name to drop.
+   * @param bool $checkIfExists Indicates whether IF EXISTS should be emitted.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly string   $tableName,
-    private readonly bool $checkIfExists = true
-  )
+    protected readonly SQLQuery $query,
+    protected readonly string $tableName,
+    protected readonly bool $checkIfExists = true,
+  ) {
+    $this->query->setQueryString(queryString: $this->buildQueryString());
+  }
+
+  /**
+   * Builds the DROP TABLE statement for the current SQL dialect.
+   *
+   * @return string Returns the DROP TABLE statement.
+   */
+  protected function buildQueryString(): string
   {
-    $queryString = "DROP TABLE ";
-    if ($checkIfExists)
-    {
-      $queryString .= "IF EXISTS ";
+    $parts = $this->buildDropTablePrefix();
+    $parts[] = $this->buildTableNameExpression();
+
+    return implode(' ', array_filter($parts, static fn(string $part): bool => $part !== ''));
+  }
+
+  /**
+   * Build the DROP TABLE prefix for the current query dialect.
+   *
+   * @return array<int, string> Returns the DROP TABLE prefix segments.
+   */
+  protected function buildDropTablePrefix(): array
+  {
+    $parts = ['DROP TABLE'];
+
+    if ($this->checkIfExists) {
+      $parts[] = 'IF EXISTS';
     }
-    $queryString .= "`$tableName`";
-    $this->query->setQueryString(queryString: $queryString);
+
+    return $parts;
+  }
+
+  /**
+   * Build the quoted table identifier for the active dialect.
+   *
+   * @return string Returns the quoted table name expression.
+   */
+  protected function buildTableNameExpression(): string
+  {
+    return SqlIdentifier::quote($this->tableName, $this->query->getDialect());
   }
 }

@@ -154,6 +154,10 @@ final class DatabaseManager
       {
         $this->terminatePostgreSqlConnections($client, $databaseName);
       }
+      elseif ($dataSource->type === DataSourceType::MSSQL)
+      {
+        $this->terminateMsSqlConnections($dataSource, $client, $databaseName);
+      }
 
       $result = $client->exec(
         self::buildDropDatabaseStatement($dataSource->type, $databaseName)
@@ -220,6 +224,7 @@ final class DatabaseManager
       $client = $this->getManagementClient($dataSource, $databaseName);
 
       $query = match ($dataSource->type) {
+        DataSourceType::MSSQL => 'SELECT [name] FROM sys.databases WHERE [name] = ?',
         DataSourceType::POSTGRESQL => 'SELECT datname FROM pg_database WHERE datname = ?',
         default => 'SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?',
       };
@@ -263,7 +268,7 @@ final class DatabaseManager
     $quotedDatabaseName = self::quoteDatabaseIdentifier($type, $databaseName);
 
     return match ($type) {
-      DataSourceType::MSSQL => "CREATE DATABASE $quotedDatabaseName",
+      DataSourceType::MSSQL => "IF DB_ID(N'$databaseName') IS NULL CREATE DATABASE $quotedDatabaseName",
       DataSourceType::POSTGRESQL => "CREATE DATABASE $quotedDatabaseName",
       DataSourceType::MARIADB,
       DataSourceType::MYSQL => sprintf(
@@ -289,6 +294,20 @@ final class DatabaseManager
 
   private function getManagementClient(DataSource $dataSource, string $databaseName): PDO
   {
+    if ($dataSource->type === DataSourceType::MSSQL)
+    {
+      $options = $dataSource->getOptions();
+      $maintenanceDatabase = strcasecmp($databaseName, 'master') === 0 ? 'tempdb' : 'master';
+      $client = new PDO(
+        DBFactory::buildMsSqlDsn($options->host, $options->port, $maintenanceDatabase),
+        $options->username ?? 'sa',
+        $options->password ?? '',
+      );
+      DBFactory::applyConnectionAttributes($client, SqlDialectHelper::fromDataSourceType(DataSourceType::MSSQL));
+
+      return $client;
+    }
+
     if ($dataSource->type !== DataSourceType::POSTGRESQL)
     {
       return $dataSource->getClient();
@@ -308,7 +327,7 @@ final class DatabaseManager
 
   private function closeTemporaryManagementClient(DataSource $dataSource, ?PDO &$client): void
   {
-    if ($dataSource->type === DataSourceType::POSTGRESQL)
+    if (in_array($dataSource->type, [DataSourceType::POSTGRESQL, DataSourceType::MSSQL], true))
     {
       $client = null;
     }
@@ -320,6 +339,28 @@ final class DatabaseManager
       'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :database AND pid <> pg_backend_pid()'
     );
     $statement->execute(['database' => $databaseName]);
+  }
+
+  private function terminateMsSqlConnections(DataSource $dataSource, PDO $client, string $databaseName): void
+  {
+    if ($dataSource->isConnected()) {
+      $dataSource->disconnect();
+    }
+
+    $statement = $client->exec(self::buildMsSqlTerminateConnectionsStatement($databaseName));
+
+    if ($statement === false) {
+      throw new DataSourceException("Failed to terminate MSSQL connections for database: $databaseName" .
+        PHP_EOL . print_r($client->errorInfo(), true));
+    }
+  }
+
+  private static function buildMsSqlTerminateConnectionsStatement(string $databaseName): string
+  {
+    $quotedDatabaseName = self::quoteDatabaseIdentifier(DataSourceType::MSSQL, $databaseName);
+    $escapedDatabaseName = str_replace("'", "''", $databaseName);
+
+    return "IF DB_ID(N'{$escapedDatabaseName}') IS NOT NULL ALTER DATABASE {$quotedDatabaseName} SET SINGLE_USER WITH ROLLBACK IMMEDIATE";
   }
 
   private static function quoteDatabaseIdentifier(DataSourceType $type, string $databaseName): string

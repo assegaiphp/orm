@@ -2,10 +2,14 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
-final class SQLInsertIntoPriority
+use Assegai\Orm\Queries\MySql\MySQLInsertIntoPriority;
+
+/**
+ * Backward-compatible wrapper for the old shared insert-priority constants.
+ *
+ * @deprecated Use Assegai\Orm\Queries\MySql\MySQLInsertIntoPriority or
+ *             Assegai\Orm\Queries\MariaDb\MariaDbInsertIntoPriority instead.
+ */
+class SQLInsertIntoPriority extends MySQLInsertIntoPriority
 {
-  const LOW_PRIORITY = 'LOW PRIORITY';
-  const DELAYED = 'DELAYED';
-  const HIGH_PRIORITY = 'HIGH PRIORITY';
-  const HIGH = 'HIGH';
 }

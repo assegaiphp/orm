@@ -2,12 +2,9 @@
 
 namespace Assegai\Orm\Traits;
 
-use Assegai\Orm\Queries\Sql\SQLInsertIntoMultipleStatement;
-use Assegai\Orm\Queries\Sql\SQLInsertIntoStatement;
-
 trait DuplicateKeyUpdatableTrait
 {
-  public function onDuplicateKeyUpdate(array $assignmentList): SQLInsertIntoStatement|SQLInsertIntoMultipleStatement
+  public function onDuplicateKeyUpdate(array $assignmentList): static
   {
     $queryString = "";
     if (!empty($assignmentList))

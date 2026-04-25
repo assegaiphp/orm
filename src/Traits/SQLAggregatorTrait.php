@@ -23,10 +23,41 @@ trait SQLAggregatorTrait
   public function limit(int $limit, ?int $offset = null): SQLLimitClause|static
   {
     if (property_exists($this, 'query')) {
-      return new SQLLimitClause(query: $this->query, limit: $limit, offset: $offset);
+      return $this->createLimitClause(limit: $limit, offset: $offset);
     }
 
     return $this;
+  }
+
+  /**
+   * Create the LIMIT-clause builder used by this query segment.
+   *
+   * Dialect-specific builders override this method to keep the fluent
+   * chain on their own typed LIMIT builders.
+   *
+   * @param int $limit The maximum number of rows to return.
+   * @param int|null $offset The number of rows to skip before returning results.
+   * @return SQLLimitClause Returns the LIMIT-clause builder.
+   */
+  protected function createLimitClause(int $limit, ?int $offset = null): SQLLimitClause
+  {
+    return new SQLLimitClause(query: $this->query, limit: $limit, offset: $offset);
+  }
+
+  /**
+   * Create the ORDER BY key-part builder used by this query segment.
+   *
+   * @param string $key The identifier to sort by.
+   * @param bool|null $ascending The sort direction to append, or null to omit it.
+   * @return SQLKeyPart Returns the key-part builder for the active dialect.
+   */
+  protected function createKeyPart(string $key, ?bool $ascending = null): SQLKeyPart
+  {
+    return SQLKeyPart::forDialect(
+      key: $key,
+      ascending: $ascending,
+      dialect: $this->query->getDialect()
+    );
   }
 
   /**
@@ -42,10 +73,9 @@ trait SQLAggregatorTrait
     if (property_exists($this, 'query')) {
       if (array_is_associative($keyParts)) {
         $callback = function ($key, $value) {
-          return new SQLKeyPart(
+          return $this->createKeyPart(
             key: $key,
-            ascending: strtoupper((string) $value) === 'ASC',
-            dialect: $this->query->getDialect()
+            ascending: strtoupper((string) $value) === 'ASC'
           );
         };
         $bufferKeyPart = array_map($callback, array_keys($keyParts), $keyParts);

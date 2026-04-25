@@ -9,6 +9,7 @@ use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\DataSource\SQLCharacterSet;
 use Assegai\Orm\DataSource\SQLiteDataSource;
 use Assegai\Orm\Enumerations\DataSourceType;
+use Assegai\Orm\Util\SqlDialectHelper;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Support\OrmRuntime;
 use PDO;
@@ -20,12 +21,53 @@ final class ConnectionConfigTest extends TestCase
     {
         $dsn = DBFactory::buildMySqlDsn('localhost', 3306, 'assegai', SQLCharacterSet::UTF8MB4);
 
-        self::assertSame('mysql:host=localhost;port=3306;dbname=assegai;charset=utf8mb4', $dsn);
+        self::assertSame('mysql:host=127.0.0.1;port=3306;dbname=assegai;charset=utf8mb4', $dsn);
+    }
+
+    public function testNormalizesLocalhostToTcpForPortBasedMySqlConnections(): void
+    {
+        $dsn = DBFactory::buildMySqlDsn('localhost', 3307, 'assegai', SQLCharacterSet::UTF8MB4);
+
+        self::assertSame('mysql:host=127.0.0.1;port=3307;dbname=assegai;charset=utf8mb4', $dsn);
+    }
+
+    public function testBuildsMsSqlDsnWithServerAndDatabaseSegments(): void
+    {
+        $dsn = DBFactory::buildMsSqlDsn('127.0.0.1', 1433, 'assegai');
+
+        self::assertSame('sqlsrv:Server=127.0.0.1,1433;Database=assegai;Encrypt=yes;TrustServerCertificate=yes', $dsn);
+    }
+
+    public function testDoesNotQualifyMsSqlTablesWithDatabaseName(): void
+    {
+        self::assertSame('[mocks]', SqlDialectHelper::qualifyTable('mocks', 'master', SQLDialect::MSSQL));
+    }
+
+    public function testQualifiesSchemaAwareTablesWhenSchemaIsProvided(): void
+    {
+        self::assertSame(
+            '"reporting"."mocks"',
+            SqlDialectHelper::qualifyTable('mocks', 'assegai', SQLDialect::POSTGRESQL, 'reporting')
+        );
+        self::assertSame(
+            '[reporting].[mocks]',
+            SqlDialectHelper::qualifyTable('mocks', 'master', SQLDialect::MSSQL, 'reporting')
+        );
     }
 
     public function testAppliesSafeDefaultMysqlPdoAttributes(): void
     {
         $attributes = DBFactory::getDefaultPdoAttributes(SQLDialect::MYSQL);
+
+        self::assertSame(PDO::ERRMODE_EXCEPTION, $attributes[PDO::ATTR_ERRMODE]);
+        self::assertSame(PDO::FETCH_ASSOC, $attributes[PDO::ATTR_DEFAULT_FETCH_MODE]);
+        self::assertFalse($attributes[PDO::ATTR_STRINGIFY_FETCHES]);
+        self::assertFalse($attributes[PDO::ATTR_EMULATE_PREPARES]);
+    }
+
+    public function testAppliesSafeDefaultPostgreSqlPdoAttributes(): void
+    {
+        $attributes = DBFactory::getDefaultPdoAttributes(SQLDialect::POSTGRESQL);
 
         self::assertSame(PDO::ERRMODE_EXCEPTION, $attributes[PDO::ATTR_ERRMODE]);
         self::assertSame(PDO::FETCH_ASSOC, $attributes[PDO::ATTR_DEFAULT_FETCH_MODE]);
@@ -50,6 +92,8 @@ final class ConnectionConfigTest extends TestCase
         self::assertSame('mysql', DBFactory::getRequiredPdoDriverName(SQLDialect::MYSQL));
         self::assertSame('pdo_pgsql', DBFactory::getRequiredPdoExtension(SQLDialect::POSTGRESQL));
         self::assertSame('pgsql', DBFactory::getRequiredPdoDriverName(SQLDialect::POSTGRESQL));
+        self::assertSame('pdo_sqlsrv', DBFactory::getRequiredPdoExtension(SQLDialect::MSSQL));
+        self::assertSame('sqlsrv', DBFactory::getRequiredPdoDriverName(SQLDialect::MSSQL));
         self::assertSame('pdo_sqlite', DBFactory::getRequiredPdoExtension(SQLDialect::SQLITE));
         self::assertSame('sqlite', DBFactory::getRequiredPdoDriverName(SQLDialect::SQLITE));
     }

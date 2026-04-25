@@ -16,7 +16,7 @@ use UnitEnum;
 /**
  * Class SQLQuery. Represents a SQL query.
  */
-final class SQLQuery
+class SQLQuery
 {
     /**
      * @var string The raw SQL query as a string.
@@ -78,6 +78,79 @@ final class SQLQuery
         }
         $this->init();
     }
+    /**
+     * Creates the appropriate root query builder for the given connection and dialect.
+     *
+     * @param PDO $db
+     * @param string $fetchClass
+     * @param int $fetchMode
+     * @param array $fetchClassParams
+     * @param array $passwordHashFields
+     * @param string $passwordHashAlgorithm
+     * @param SQLDialect|null $dialect
+     * @return self
+     */
+    public static function forConnection(
+        PDO $db,
+        string $fetchClass = stdClass::class,
+        int $fetchMode = PDO::FETCH_ASSOC,
+        array $fetchClassParams = [],
+        array $passwordHashFields = ['password'],
+        string $passwordHashAlgorithm = '',
+        ?SQLDialect $dialect = null,
+    ): self
+    {
+        $resolvedDialect = $dialect ?? SqlDialectHelper::fromPdo($db);
+
+        return match ($resolvedDialect) {
+            SQLDialect::POSTGRESQL => new \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            SQLDialect::SQLITE => new \Assegai\Orm\Queries\SQLite\SQLiteQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            SQLDialect::MSSQL => new \Assegai\Orm\Queries\MsSql\MsSqlQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            SQLDialect::MARIADB => new \Assegai\Orm\Queries\MariaDb\MariaDbQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+            default => new \Assegai\Orm\Queries\MySql\MySQLQuery(
+                db: $db,
+                fetchClass: $fetchClass,
+                fetchMode: $fetchMode,
+                fetchClassParams: $fetchClassParams,
+                passwordHashFields: $passwordHashFields,
+                passwordHashAlgorithm: $passwordHashAlgorithm,
+                dialect: $resolvedDialect,
+            ),
+        };
+    }
+
 
     /**
      * Initializes the query.
@@ -153,7 +226,128 @@ final class SQLQuery
     {
         return $this->dialect;
     }
+    /**
+     * Returns a query instance configured for the given SQL dialect.
+     *
+     * @param SQLDialect $dialect
+     * @return self
+     */
+    public function withDialect(SQLDialect $dialect): self
+    {
+        if ($this->dialect === $dialect) {
+            return $this;
+        }
 
+        return self::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: $dialect,
+        );
+    }
+
+    /**
+     * Returns a query configured for PostgreSQL rendering.
+     *
+     * @return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+     */
+    public function switchToPostgres(): \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+    {
+        return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::POSTGRESQL,
+        );
+    }
+
+    /**
+     * Returns a query configured for PostgreSQL rendering.
+     *
+     * @return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+     */
+    public function switchToPostgreSql(): \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery
+    {
+        return $this->switchToPostgres();
+    }
+
+    /**
+     * Returns a query configured for MySQL rendering.
+     *
+     * @return \Assegai\Orm\Queries\MySql\MySQLQuery
+     */
+    public function switchToMysql(): \Assegai\Orm\Queries\MySql\MySQLQuery
+    {
+        return \Assegai\Orm\Queries\MySql\MySQLQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::MYSQL,
+        );
+    }
+
+    /**
+     * Returns a query configured for MariaDB rendering.
+     *
+     * @return \Assegai\Orm\Queries\MariaDb\MariaDbQuery
+     */
+    public function switchToMariaDb(): \Assegai\Orm\Queries\MariaDb\MariaDbQuery
+    {
+        return \Assegai\Orm\Queries\MariaDb\MariaDbQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::MARIADB,
+        );
+    }
+
+    /**
+     * Returns a query configured for Microsoft SQL Server rendering.
+     *
+     * @return \Assegai\Orm\Queries\MsSql\MsSqlQuery
+     */
+    public function switchToMsSql(): \Assegai\Orm\Queries\MsSql\MsSqlQuery
+    {
+        return \Assegai\Orm\Queries\MsSql\MsSqlQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::MSSQL,
+        );
+    }
+
+    /**
+     * Returns a query configured for SQLite rendering.
+     *
+     * @return \Assegai\Orm\Queries\SQLite\SQLiteQuery
+     */
+    public function switchToSqlite(): \Assegai\Orm\Queries\SQLite\SQLiteQuery
+    {
+        return \Assegai\Orm\Queries\SQLite\SQLiteQuery::forConnection(
+            db: $this->db,
+            fetchClass: $this->fetchClass,
+            fetchMode: $this->fetchMode,
+            fetchClassParams: $this->fetchClassParams,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: SQLDialect::SQLITE,
+        );
+    }
     /**
      * Quotes an SQL identifier for the current query dialect.
      *
@@ -173,6 +367,17 @@ final class SQLQuery
     {
         $this->queryString = $queryString;
     }
+    /**
+     * Marks the current query with the provided query type.
+     *
+     * @param string $type
+     * @return void
+     */
+    protected function setQueryType(string $type): void
+    {
+        $this->type = $type;
+    }
+
 
     /**
      * @param string $tail
@@ -196,32 +401,48 @@ final class SQLQuery
     }
 
     /**
+     * Reset the root query builder state and assign the query type when needed.
+     *
+     * @param string|null $type The query type to assign, if any.
+     * @return void
+     */
+    protected function beginRootQuery(?string $type = null): void
+    {
+        $this->init();
+
+        if ($type !== null) {
+            $this->setQueryType($type);
+        }
+    }
+
+    /**
      * @return SQLAlterDefinition
      */
     public function alter(): SQLAlterDefinition
     {
-        $this->init();
-        return new SQLAlterDefinition(query: $this);
+        $this->beginRootQuery();
+
+        return $this->createAlterDefinition();
     }
 
     /**
-     * @return SQLCreateDefinition
+     * @return SQLCreateDefinitionInterface Returns a CREATE builder for the active SQL-family root.
      */
-    public function create(): SQLCreateDefinition
+    public function create(): SQLCreateDefinitionInterface
     {
-        $this->init();
-        $this->type = SQLQueryType::CREATE;
-        return new SQLCreateDefinition(query: $this);
+        $this->beginRootQuery(SQLQueryType::CREATE);
+
+        return $this->createCreateDefinition();
     }
 
     /**
-     * @return SQLDropDefinition
+     * @return SQLDropDefinitionInterface Returns a DROP builder for the active SQL-family root.
      */
-    public function drop(): SQLDropDefinition
+    public function drop(): SQLDropDefinitionInterface
     {
-        $this->init();
-        $this->type = SQLQueryType::DROP;
-        return new SQLDropDefinition(query: $this);
+        $this->beginRootQuery(SQLQueryType::DROP);
+
+        return $this->createDropDefinition();
     }
 
     /**
@@ -229,20 +450,11 @@ final class SQLQuery
      */
     public function rename(): SQLRenameStatement
     {
-        $this->init();
-        return new SQLRenameStatement(query: $this);
+        $this->beginRootQuery();
+
+        return $this->createRenameStatement();
     }
 
-    /**
-     * @param string $dbName
-     * @return SQLUseStatement
-     */
-    public function use(string $dbName): SQLUseStatement
-    {
-        $this->init();
-        $this->type = SQLQueryType::USE;
-        return new SQLUseStatement(query: $this, dbName: $dbName);
-    }
 
     /**
      * @param string $subject
@@ -250,9 +462,9 @@ final class SQLQuery
      */
     public function describe(string $subject): SQLDescribeStatement
     {
-        $this->init();
-        $this->type = SQLQueryType::DESCRIBE;
-        return new SQLDescribeStatement(query: $this, subject: $subject);
+        $this->beginRootQuery(SQLQueryType::DESCRIBE);
+
+        return $this->createDescribeStatement($subject);
     }
 
     /**
@@ -261,9 +473,9 @@ final class SQLQuery
      */
     public function insertInto(string $tableName): SQLInsertIntoDefinition
     {
-        $this->init();
-        $this->type = SQLQueryType::INSERT;
-        return new SQLInsertIntoDefinition(query: $this, tableName: $tableName);
+        $this->beginRootQuery(SQLQueryType::INSERT);
+
+        return $this->createInsertIntoDefinition($tableName);
     }
 
     /**
@@ -272,11 +484,11 @@ final class SQLQuery
      * @param bool $ignore
      * @return SQLUpdateDefinition
      */
-    public function update(string $tableName, bool $lowPriority = false, bool $ignore = false): SQLUpdateDefinition
+    public function update(string $tableName): SQLUpdateDefinition
     {
-        $this->init();
-        $this->type = SQLQueryType::UPDATE;
-        return new SQLUpdateDefinition(query: $this, tableName: $tableName, lowPriority: $lowPriority, ignore: $ignore);
+        $this->beginRootQuery(SQLQueryType::UPDATE);
+
+        return $this->createUpdateDefinition($tableName);
     }
 
     /**
@@ -284,9 +496,9 @@ final class SQLQuery
      */
     public function select(): SQLSelectDefinition
     {
-        $this->init();
-        $this->type = SQLQueryType::SELECT;
-        return new SQLSelectDefinition(query: $this);
+        $this->beginRootQuery(SQLQueryType::SELECT);
+
+        return $this->createSelectDefinition();
     }
 
     /**
@@ -296,9 +508,9 @@ final class SQLQuery
      */
     public function deleteFrom(string $tableName, ?string $alias = null): SQLDeleteFromStatement
     {
-        $this->init();
-        $this->type = SQLQueryType::DELETE;
-        return new SQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+        $this->beginRootQuery(SQLQueryType::DELETE);
+
+        return $this->createDeleteFromStatement($tableName, $alias);
     }
 
     /**
@@ -307,8 +519,120 @@ final class SQLQuery
      */
     public function truncateTable(string $tableName): SQLTruncateStatement
     {
-        $this->init();
-        $this->type = SQLQueryType::TRUNCATE;
+        $this->beginRootQuery(SQLQueryType::TRUNCATE);
+
+        return $this->createTruncateStatement($tableName);
+    }
+
+    /**
+     * Create the ALTER builder for this dialect root.
+     *
+     * @return SQLAlterDefinition Returns the alter builder.
+     */
+    protected function createAlterDefinition(): SQLAlterDefinition
+    {
+        return new SQLAlterDefinition(query: $this);
+    }
+
+    /**
+     * Create the CREATE builder for this dialect root.
+     *
+     * @return SQLCreateDefinitionInterface Returns the create builder.
+     */
+    protected function createCreateDefinition(): SQLCreateDefinitionInterface
+    {
+        return new SQLCreateDefinition(query: $this);
+    }
+
+    /**
+     * Create the DROP builder for this dialect root.
+     *
+     * @return SQLDropDefinitionInterface Returns the drop builder.
+     */
+    protected function createDropDefinition(): SQLDropDefinitionInterface
+    {
+        return new SQLDropDefinition(query: $this);
+    }
+
+    /**
+     * Create the RENAME builder for this dialect root.
+     *
+     * @return SQLRenameStatement Returns the rename builder.
+     */
+    protected function createRenameStatement(): SQLRenameStatement
+    {
+        return new SQLRenameStatement(query: $this);
+    }
+
+    /**
+     * Create the DESCRIBE builder for this dialect root.
+     *
+     * @param string $subject The table or view name to describe.
+     * @return SQLDescribeStatement Returns the describe builder.
+     */
+    protected function createDescribeStatement(string $subject): SQLDescribeStatement
+    {
+        return new SQLDescribeStatement(query: $this, subject: $subject);
+    }
+
+    /**
+     * Create the INSERT builder for this dialect root.
+     *
+     * @param string $tableName The target table name.
+     * @return SQLInsertIntoDefinition Returns the insert builder.
+     */
+    protected function createInsertIntoDefinition(string $tableName): SQLInsertIntoDefinition
+    {
+        return new SQLInsertIntoDefinition(query: $this, tableName: $tableName);
+    }
+
+    /**
+     * Create the UPDATE builder for this dialect root.
+     *
+     * @param string $tableName The target table name.
+     * @param bool $lowPriority Whether LOW_PRIORITY should be applied when supported.
+     * @param bool $ignore Whether IGNORE should be applied when supported.
+     * @return SQLUpdateDefinition Returns the update builder.
+     */
+    protected function createUpdateDefinition(
+        string $tableName,
+        bool $lowPriority = false,
+        bool $ignore = false,
+    ): SQLUpdateDefinition
+    {
+        return new SQLUpdateDefinition(query: $this, tableName: $tableName);
+    }
+
+    /**
+     * Create the SELECT builder for this dialect root.
+     *
+     * @return SQLSelectDefinition Returns the select builder.
+     */
+    protected function createSelectDefinition(): SQLSelectDefinition
+    {
+        return new SQLSelectDefinition(query: $this);
+    }
+
+    /**
+     * Create the DELETE builder for this dialect root.
+     *
+     * @param string $tableName The target table name.
+     * @param string|null $alias The optional table alias.
+     * @return SQLDeleteFromStatement Returns the delete builder.
+     */
+    protected function createDeleteFromStatement(string $tableName, ?string $alias = null): SQLDeleteFromStatement
+    {
+        return new SQLDeleteFromStatement(query: $this, tableName: $tableName, alias: $alias);
+    }
+
+    /**
+     * Create the TRUNCATE builder for this dialect root.
+     *
+     * @param string $tableName The table to truncate.
+     * @return SQLTruncateStatement Returns the truncate builder.
+     */
+    protected function createTruncateStatement(string $tableName): SQLTruncateStatement
+    {
         return new SQLTruncateStatement(query: $this, tableName: $tableName);
     }
 

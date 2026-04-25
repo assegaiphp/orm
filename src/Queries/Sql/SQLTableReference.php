@@ -2,25 +2,34 @@
 
 namespace Assegai\Orm\Queries\Sql;
 
+use Assegai\Orm\Enumerations\JoinType;
 use Assegai\Orm\Management\Options\FindOptions;
 use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Traits\ExecutableTrait;
 use Assegai\Orm\Traits\JoinableTrait;
 use Assegai\Orm\Traits\SQLAggregatorTrait;
 
-final class SQLTableReference
+/**
+ * Base FROM-clause builder shared across SQL-family dialects.
+ *
+ * The class is intentionally extensible so dialect-specific subclasses can
+ * keep the fluent chain typed without duplicating the shared FROM rendering.
+ */
+class SQLTableReference
 {
   use ExecutableTrait;
   use SQLAggregatorTrait;
   use JoinableTrait;
 
   /**
-   * @param SQLQuery $query
-   * @param array|string $tableReferences
+   * Create a new shared table reference builder.
+   *
+   * @param SQLQuery $query The query being built.
+   * @param array|string $tableReferences The table name, table list, or alias map.
    */
   public function __construct(
-    private readonly SQLQuery $query,
-    private readonly array|string $tableReferences
+    protected readonly SQLQuery $query,
+    protected readonly array|string $tableReferences
   ) {
     $queryString = 'FROM ';
     $separate = ', ';
@@ -48,10 +57,37 @@ final class SQLTableReference
   }
 
   /**
-   * @param string|array|FindOptions|FindWhereOptions $condition
-   * @return SQLWhereClause
+   * Add a WHERE clause to the current query.
+   *
+   * @param string|array|FindOptions|FindWhereOptions $condition The condition to compile and append.
+   * @return SQLWhereClause Returns the shared WHERE clause builder.
    */
   public function where(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
+  {
+    return $this->createWhereClause(condition: $condition);
+  }
+
+  /**
+   * Add a HAVING clause to the current query.
+   *
+   * @param string $condition The HAVING condition to append.
+   * @return SQLHavingClause Returns the shared HAVING clause builder.
+   */
+  public function having(string $condition): SQLHavingClause
+  {
+    return $this->createHavingClause(condition: $condition);
+  }
+
+  /**
+   * Create the WHERE clause builder used by this table reference.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed WHERE builders.
+   *
+   * @param string|array|FindOptions|FindWhereOptions $condition The condition to compile and append.
+   * @return SQLWhereClause Returns the WHERE clause builder.
+   */
+  protected function createWhereClause(string|array|FindOptions|FindWhereOptions $condition): SQLWhereClause
   {
     return new SQLWhereClause(
       query: $this->query,
@@ -60,14 +96,34 @@ final class SQLTableReference
   }
 
   /**
-   * @param string $condition
-   * @return SQLHavingClause
+   * Create the HAVING clause builder used by this table reference.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed HAVING builders.
+   *
+   * @param string $condition The HAVING condition to append.
+   * @return SQLHavingClause Returns the HAVING clause builder.
    */
-  public function having(string $condition): SQLHavingClause
+  protected function createHavingClause(string $condition): SQLHavingClause
   {
     return new SQLHavingClause(
       query: $this->query,
       condition: $condition
     );
+  }
+
+  /**
+   * Create the join expression builder used by joinable methods on this table reference.
+   *
+   * Dialect-specific subclasses override this method to keep the fluent
+   * chain on their own typed join-expression builders.
+   *
+   * @param array|string $tableReferences The table name, table list, or alias map.
+   * @param JoinType $joinType The join type to apply.
+   * @return SQLJoinExpression Returns the join-expression builder.
+   */
+  protected function createJoinExpression(array|string $tableReferences, JoinType $joinType): SQLJoinExpression
+  {
+    return new SQLJoinExpression(query: $this->query, joinTableReferences: $tableReferences, joinType: $joinType);
   }
 }

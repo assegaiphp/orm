@@ -42,11 +42,111 @@ class SQLColumnDefinition implements Stringable
     private readonly SQLDialect     $dialect = SQLDialect::MYSQL,
   )
   {
-    $this->queryString = trim(match ($this->dialect) {
-      SQLDialect::POSTGRESQL => $this->buildPostgreSqlDefinition(),
-      SQLDialect::SQLITE => $this->buildSqliteDefinition(),
-      default => $this->buildMySqlDefinition(),
-    });
+    $this->queryString = trim($this->buildDefinition());
+  }
+
+  /**
+   * Create a dialect-specific column-definition builder.
+   *
+   * Internal ORM code should prefer this factory so dialect-specific builders
+   * can evolve without forcing callers back through the generic SQL namespace.
+   *
+   * @param string $name The column name.
+   * @param ColumnType $type The column type.
+   * @param string|int|array|null $lengthOrValues The length, precision, or enum values.
+   * @param mixed|null $defaultValue The default value expression.
+   * @param bool $nullable Whether the column allows NULL.
+   * @param bool $autoIncrement Whether the column auto-increments.
+   * @param string $onUpdate Optional ON UPDATE expression.
+   * @param bool $isUnique Whether the column is unique.
+   * @param string $uniqueKey Optional unique-key name.
+   * @param bool $isPrimaryKey Whether the column is a primary key.
+   * @param string $comment Optional column comment.
+   * @param SQLDialect $dialect The SQL dialect to target.
+   * @return SQLColumnDefinition Returns the dialect-specific column-definition builder.
+   */
+  public static function forDialect(
+    string $name,
+    ColumnType $type = ColumnType::INT,
+    null|string|int|array $lengthOrValues = null,
+    mixed $defaultValue = null,
+    bool $nullable = true,
+    bool $autoIncrement = false,
+    string $onUpdate = "",
+    bool $isUnique = false,
+    string $uniqueKey = "",
+    bool $isPrimaryKey = false,
+    string $comment = "",
+    SQLDialect $dialect = SQLDialect::MYSQL,
+  ): SQLColumnDefinition
+  {
+    return match ($dialect) {
+      SQLDialect::POSTGRESQL => new \Assegai\Orm\Queries\PostgreSql\PostgreSQLColumnDefinition(
+        name: $name,
+        type: $type,
+        lengthOrValues: $lengthOrValues,
+        defaultValue: $defaultValue,
+        nullable: $nullable,
+        autoIncrement: $autoIncrement,
+        onUpdate: $onUpdate,
+        isUnique: $isUnique,
+        uniqueKey: $uniqueKey,
+        isPrimaryKey: $isPrimaryKey,
+        comment: $comment,
+      ),
+      SQLDialect::SQLITE => new \Assegai\Orm\Queries\SQLite\SQLiteColumnDefinition(
+        name: $name,
+        type: $type,
+        lengthOrValues: $lengthOrValues,
+        defaultValue: $defaultValue,
+        nullable: $nullable,
+        autoIncrement: $autoIncrement,
+        onUpdate: $onUpdate,
+        isUnique: $isUnique,
+        uniqueKey: $uniqueKey,
+        isPrimaryKey: $isPrimaryKey,
+        comment: $comment,
+      ),
+      SQLDialect::MSSQL => new \Assegai\Orm\Queries\MsSql\MsSqlColumnDefinition(
+        name: $name,
+        type: $type,
+        lengthOrValues: $lengthOrValues,
+        defaultValue: $defaultValue,
+        nullable: $nullable,
+        autoIncrement: $autoIncrement,
+        onUpdate: $onUpdate,
+        isUnique: $isUnique,
+        uniqueKey: $uniqueKey,
+        isPrimaryKey: $isPrimaryKey,
+        comment: $comment,
+      ),
+      SQLDialect::MARIADB => new \Assegai\Orm\Queries\MariaDb\MariaDbColumnDefinition(
+        name: $name,
+        type: $type,
+        lengthOrValues: $lengthOrValues,
+        defaultValue: $defaultValue,
+        nullable: $nullable,
+        autoIncrement: $autoIncrement,
+        onUpdate: $onUpdate,
+        isUnique: $isUnique,
+        uniqueKey: $uniqueKey,
+        isPrimaryKey: $isPrimaryKey,
+        comment: $comment,
+      ),
+      default => new \Assegai\Orm\Queries\MySql\MySQLColumnDefinition(
+        name: $name,
+        type: $type,
+        lengthOrValues: $lengthOrValues,
+        defaultValue: $defaultValue,
+        nullable: $nullable,
+        autoIncrement: $autoIncrement,
+        onUpdate: $onUpdate,
+        isUnique: $isUnique,
+        uniqueKey: $uniqueKey,
+        isPrimaryKey: $isPrimaryKey,
+        comment: $comment,
+      ),
+    };
   }
 
   /**
@@ -67,11 +167,7 @@ class SQLColumnDefinition implements Stringable
 
   public function getTypeExpression(): string
   {
-    return match ($this->dialect) {
-      SQLDialect::POSTGRESQL => $this->getPostgreSqlType(),
-      SQLDialect::SQLITE => $this->getSqliteType(),
-      default => $this->type->value,
-    };
+    return $this->resolveTypeExpression();
   }
 
   public function getDefaultExpression(): ?string
@@ -103,7 +199,33 @@ class SQLColumnDefinition implements Stringable
     return $this->isPrimaryKey;
   }
 
-  private function buildMySqlDefinition(): string
+  /**
+   * Build the rendered SQL column definition for the active builder.
+   *
+   * Subclasses override this to own the top-level rendering decision while
+   * still reusing the shared helper methods below.
+   *
+   * @return string Returns the rendered SQL column definition.
+   */
+  protected function buildDefinition(): string
+  {
+    return $this->buildMySqlDefinition();
+  }
+
+  /**
+   * Resolve the SQL type expression used by this column-definition builder.
+   *
+   * Subclasses override this when the target dialect needs a different type
+   * mapping strategy from the default SQL-family behavior.
+   *
+   * @return string Returns the SQL type expression.
+   */
+  protected function resolveTypeExpression(): string
+  {
+    return $this->type->value;
+  }
+
+  protected function buildMySqlDefinition(): string
   {
     $queryString = $this->getQuotedColumnName() . ' ';
     $lengthOrValues = $this->getNormalizedLengthOrValues();
@@ -163,7 +285,7 @@ class SQLColumnDefinition implements Stringable
     return $this->normalizeQueryString($queryString);
   }
 
-  private function buildSqliteDefinition(): string
+  protected function buildSqliteDefinition(): string
   {
     $queryString = $this->getQuotedColumnName() . ' ';
 
@@ -187,7 +309,7 @@ class SQLColumnDefinition implements Stringable
     return $this->normalizeQueryString($queryString);
   }
 
-  private function buildPostgreSqlDefinition(): string
+  protected function buildPostgreSqlDefinition(): string
   {
     $queryString = $this->getQuotedColumnName() . ' ';
 
@@ -212,7 +334,31 @@ class SQLColumnDefinition implements Stringable
     return $this->normalizeQueryString($queryString);
   }
 
-  private function getQuotedColumnName(): string
+  protected function buildMsSqlDefinition(): string
+  {
+    $queryString = $this->getQuotedColumnName() . ' ';
+
+    if ($this->autoIncrement && $this->isPrimaryKey && $this->type->isNumeric()) {
+      return $queryString . $this->getMsSqlType() . ' IDENTITY(1,1) PRIMARY KEY';
+    }
+
+    $queryString .= $this->getMsSqlType() . ' ';
+    $queryString .= $this->buildDefaultClause();
+
+    if (!$this->nullable && !$this->isPrimaryKey) {
+      $queryString .= 'NOT NULL ';
+    }
+
+    if ($this->isPrimaryKey) {
+      $queryString .= 'PRIMARY KEY ';
+    } elseif ($this->isUnique) {
+      $queryString .= 'UNIQUE ';
+    }
+
+    return $this->normalizeQueryString($queryString);
+  }
+
+  protected function getQuotedColumnName(): string
   {
     if (empty($this->name)) {
       return '';
@@ -220,24 +366,31 @@ class SQLColumnDefinition implements Stringable
 
     return match ($this->dialect) {
       SQLDialect::POSTGRESQL => "\"{$this->name}\"",
+      SQLDialect::MSSQL => "[{$this->name}]",
       default => "`{$this->name}`",
     };
   }
 
-  private function getNormalizedLengthOrValues(): null|string|int|array
+  protected function getNormalizedLengthOrValues(): null|string|int|array
   {
-    if (!is_null($this->lengthOrValues)) {
+    if (is_string($this->lengthOrValues)) {
+      $trimmedLength = trim($this->lengthOrValues);
+
+      if ($trimmedLength !== '') {
+        return $trimmedLength;
+      }
+    } elseif (!is_null($this->lengthOrValues)) {
       return $this->lengthOrValues;
     }
 
     return match ($this->type) {
-      ColumnType::VARCHAR => '10',
+      ColumnType::VARCHAR => '255',
       ColumnType::DECIMAL => '16,2',
       default => null,
     };
   }
 
-  private function buildEnumTypeDefinition(): string
+  protected function buildEnumTypeDefinition(): string
   {
     $values = is_array($this->lengthOrValues) ? $this->lengthOrValues : [];
     $queryString = $this->type->value . '(';
@@ -249,7 +402,7 @@ class SQLColumnDefinition implements Stringable
     return trim($queryString, ', ') . ') ';
   }
 
-  private function buildDefaultClause(): string
+  protected function buildDefaultClause(): string
   {
     $defaultValue = $this->defaultValue;
 
@@ -264,7 +417,7 @@ class SQLColumnDefinition implements Stringable
     return 'DEFAULT ' . $this->normalizeDefaultValue($defaultValue) . ' ';
   }
 
-  private function normalizeDefaultValue(mixed $defaultValue): string
+  protected function normalizeDefaultValue(mixed $defaultValue): string
   {
     $stringExemptions = ['CURRENT_TIMESTAMP', 'CURRENT_DATE()', 'CURRENT_TIME()', 'JSON_ARRAY()'];
 
@@ -282,7 +435,7 @@ class SQLColumnDefinition implements Stringable
     };
   }
 
-  private function getSqliteType(): string
+  protected function getSqliteType(): string
   {
     return match (true) {
       in_array($this->type, [
@@ -313,7 +466,7 @@ class SQLColumnDefinition implements Stringable
     };
   }
 
-  private function getPostgreSqlType(): string
+  protected function getPostgreSqlType(): string
   {
     return match ($this->type) {
       ColumnType::BOOLEAN => 'BOOLEAN',
@@ -346,7 +499,43 @@ class SQLColumnDefinition implements Stringable
     };
   }
 
-  private function normalizeQueryString(string $queryString): string
+  protected function getMsSqlType(): string
+  {
+    return match ($this->type) {
+      ColumnType::BOOLEAN,
+      ColumnType::BIT => 'BIT',
+      ColumnType::TINYINT,
+      ColumnType::TINYINT_UNSIGNED => 'TINYINT',
+      ColumnType::SMALLINT,
+      ColumnType::SMALLINT_UNSIGNED => 'SMALLINT',
+      ColumnType::INT,
+      ColumnType::INT_UNSIGNED,
+      ColumnType::MEDIUMINT,
+      ColumnType::MEDIUMINT_UNSIGNED => 'INT',
+      ColumnType::BIGINT,
+      ColumnType::BIGINT_UNSIGNED => 'BIGINT',
+      ColumnType::FLOAT => 'REAL',
+      ColumnType::DOUBLE => 'FLOAT',
+      ColumnType::DECIMAL => 'DECIMAL(' . ($this->getNormalizedLengthOrValues() ?: '16,2') . ')',
+      ColumnType::JSON => 'NVARCHAR(MAX)',
+      ColumnType::UUID => 'UNIQUEIDENTIFIER',
+      ColumnType::DATE => 'DATE',
+      ColumnType::TIME => 'TIME',
+      ColumnType::DATETIME,
+      ColumnType::TIMESTAMP => 'DATETIME2',
+      ColumnType::BINARY,
+      ColumnType::BLOB,
+      ColumnType::MEDIUMBLOB,
+      ColumnType::LONGBLOB,
+      ColumnType::TINYBLOB,
+      ColumnType::VARBINARY => 'VARBINARY(MAX)',
+      ColumnType::CHAR => 'CHAR(' . ($this->getNormalizedLengthOrValues() ?: 1) . ')',
+      ColumnType::VARCHAR => 'VARCHAR(' . ($this->getNormalizedLengthOrValues() ?: 255) . ')',
+      default => 'NVARCHAR(MAX)',
+    };
+  }
+
+  protected function normalizeQueryString(string $queryString): string
   {
     $queryString = str_replace('((', '(', $queryString);
     return str_replace('))', ')', $queryString);

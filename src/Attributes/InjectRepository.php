@@ -39,7 +39,7 @@ class InjectRepository
     }
 
     $driver = $entityAttribute->driver;
-    $dataSourceName = $entityAttribute->database ?? OrmRuntime::moduleConfig('data_source') ?? throw new ORMException('No data source name provided');
+    $dataSourceName = $entityAttribute->dataSourceName() ?? OrmRuntime::moduleConfig('data_source') ?? throw new ORMException('No data source name provided');
 
     if (preg_match('/[\w]+:[\w]+/', $dataSourceName)) {
       [$driver, $dataSourceName] = explode(':', $dataSourceName);
@@ -48,6 +48,12 @@ class InjectRepository
 
     if (empty($dataSourceName)) {
       throw new ORMException('No data source name provided');
+    }
+
+    $driver ??= OrmRuntime::resolveDatabaseType($dataSourceName);
+
+    if (!$driver instanceof DataSourceType) {
+      throw new ORMException('No data source type provided for ' . $dataSourceName . '.');
     }
 
     $dataSourceOptions = new DataSourceOptions(

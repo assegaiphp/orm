@@ -1,5 +1,7 @@
 .idea
 .env
+!.env.example
+.env.*
 .vscode
 /.dev/
 /vendor/
