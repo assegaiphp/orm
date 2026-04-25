@@ -7,7 +7,7 @@
   <a href="https://github.com/assegaiphp/orm/actions/workflows/php.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/assegaiphp/orm/php.yml?branch=main&label=tests&style=flat-square"></a>
   <img alt="PHP 8.4+" src="https://img.shields.io/badge/PHP-8.4%2B-777BB4?style=flat-square&logo=php&logoColor=white">
   <a href="https://github.com/assegaiphp/orm/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/assegaiphp/orm?style=flat-square"></a>
-  <img alt="Status 0.9.0 rewrite in progress" src="https://img.shields.io/badge/status-0.9.0%20rewrite%20in%20progress-f59e0b?style=flat-square">
+  <img alt="Status active" src="https://img.shields.io/badge/status-active-10b981?style=flat-square">
 </p>
 
 <p align="center">A standalone ORM for modern PHP applications, with optional AssegaiPHP integration.</p>
