@@ -194,6 +194,47 @@ final class SchemaSqlTest extends TestCase
         );
     }
 
+    public function testMsSqlRenameSourceRespectsConfiguredSchema(): void
+    {
+        $method = new ReflectionMethod(Schema::class, 'getMsSqlRenameSource');
+
+        $sql = $method->invoke(
+            null,
+            'mssql_schema_mocks',
+            new SchemaOptions(
+                dbName: 'assegai_test_db',
+                dialect: SQLDialect::MSSQL,
+                schema: 'reporting',
+            )
+        );
+
+        self::assertSame('[reporting].[mssql_schema_mocks]', $sql);
+    }
+
+    public function testMsSqlRenameSourcePreservesExplicitQualifiedNames(): void
+    {
+        $method = new ReflectionMethod(Schema::class, 'getMsSqlRenameSource');
+
+        $sql = $method->invoke(
+            null,
+            'archive.mssql_schema_mocks',
+            new SchemaOptions(
+                dbName: 'assegai_test_db',
+                dialect: SQLDialect::MSSQL,
+                schema: 'reporting',
+            )
+        );
+
+        self::assertSame('[archive].[mssql_schema_mocks]', $sql);
+    }
+
+    public function testMsSqlRenameTargetUsesOnlyTheObjectName(): void
+    {
+        $method = new ReflectionMethod(Schema::class, 'getMsSqlRenameTarget');
+
+        self::assertSame('renamed_mocks', $method->invoke(null, 'reporting.renamed_mocks'));
+    }
+
     public function testCreateDdlStillSupportsLegacyEntityWithoutRowIdFallback(): void
     {
         $method = new ReflectionMethod(Schema::class, 'getDDLStatementFromEntity');

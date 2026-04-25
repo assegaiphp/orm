@@ -10,6 +10,8 @@ use Assegai\Orm\Queries\Sql\SQLAlterTableOption;
  */
 class MsSqlAlterDefinition extends SQLAlterDefinition
 {
+  private string $tableName = '';
+
   /**
    * Begin an ALTER TABLE statement using MSSQL-specific fluent builders.
    *
@@ -18,6 +20,8 @@ class MsSqlAlterDefinition extends SQLAlterDefinition
    */
   public function table(string $tableName): MsSqlAlterTableOption
   {
+    $this->tableName = $tableName;
+
     return parent::table($tableName);
   }
 
@@ -28,6 +32,6 @@ class MsSqlAlterDefinition extends SQLAlterDefinition
    */
   protected function createAlterTableOption(): SQLAlterTableOption
   {
-    return new MsSqlAlterTableOption(query: $this->query);
+    return new MsSqlAlterTableOption(query: $this->query, tableName: $this->tableName);
   }
 }

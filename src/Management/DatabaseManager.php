@@ -154,6 +154,10 @@ final class DatabaseManager
       {
         $this->terminatePostgreSqlConnections($client, $databaseName);
       }
+      elseif ($dataSource->type === DataSourceType::MSSQL)
+      {
+        $this->terminateMsSqlConnections($dataSource, $client, $databaseName);
+      }
 
       $result = $client->exec(
         self::buildDropDatabaseStatement($dataSource->type, $databaseName)
@@ -335,6 +339,28 @@ final class DatabaseManager
       'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :database AND pid <> pg_backend_pid()'
     );
     $statement->execute(['database' => $databaseName]);
+  }
+
+  private function terminateMsSqlConnections(DataSource $dataSource, PDO $client, string $databaseName): void
+  {
+    if ($dataSource->isConnected()) {
+      $dataSource->disconnect();
+    }
+
+    $statement = $client->exec(self::buildMsSqlTerminateConnectionsStatement($databaseName));
+
+    if ($statement === false) {
+      throw new DataSourceException("Failed to terminate MSSQL connections for database: $databaseName" .
+        PHP_EOL . print_r($client->errorInfo(), true));
+    }
+  }
+
+  private static function buildMsSqlTerminateConnectionsStatement(string $databaseName): string
+  {
+    $quotedDatabaseName = self::quoteDatabaseIdentifier(DataSourceType::MSSQL, $databaseName);
+    $escapedDatabaseName = str_replace("'", "''", $databaseName);
+
+    return "IF DB_ID(N'{$escapedDatabaseName}') IS NOT NULL ALTER DATABASE {$quotedDatabaseName} SET SINGLE_USER WITH ROLLBACK IMMEDIATE";
   }
 
   private static function quoteDatabaseIdentifier(DataSourceType $type, string $databaseName): string

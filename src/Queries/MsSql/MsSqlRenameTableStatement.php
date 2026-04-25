@@ -2,7 +2,9 @@
 
 namespace Assegai\Orm\Queries\MsSql;
 
+use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Queries\Sql\SQLRenameTableStatement;
+use Assegai\Orm\Util\SqlDialectHelper;
 
 /**
  * MSSQL-specific table rename statement.
@@ -16,8 +18,8 @@ class MsSqlRenameTableStatement extends SQLRenameTableStatement
    */
   protected function buildQueryString(): string
   {
-    $oldName = $this->escapeLiteral($this->query->quoteIdentifier($this->oldTableName));
-    $newName = $this->escapeLiteral($this->newTableName);
+    $oldName = $this->escapeLiteral(SqlDialectHelper::quoteCompositeIdentifier($this->oldTableName, SQLDialect::MSSQL));
+    $newName = $this->escapeLiteral(SqlDialectHelper::unqualifyIdentifier($this->newTableName));
 
     return "EXEC sp_rename N'{$oldName}', N'{$newName}', N'OBJECT'";
   }

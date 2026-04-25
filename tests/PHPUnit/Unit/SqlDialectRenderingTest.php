@@ -628,6 +628,33 @@ final class SqlDialectRenderingTest extends TestCase
         self::assertSame('DROP DATABASE [analytics]', $dropQuery->queryString());
     }
 
+    public function testMsSqlAlterBuilderUsesSqlServerSpecificAddColumnSyntax(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $query
+            ->alter()
+            ->table('users')
+            ->addColumn(new SQLColumnDefinition('nickname', ColumnType::VARCHAR, 64, nullable: true, dialect: SQLDialect::MSSQL));
+
+        self::assertSame('ALTER TABLE [users] ADD [nickname] VARCHAR(64) NULL', $query->queryString());
+    }
+
+    public function testMsSqlAlterBuilderUsesSpRenameForColumns(): void
+    {
+        $query = $this->createQuery(SQLDialect::MSSQL);
+
+        $query
+            ->alter()
+            ->table('reporting.users')
+            ->renameColumn('nickname', 'display_name');
+
+        self::assertSame(
+            "EXEC sp_rename N'[reporting].[users].[nickname]', N'display_name', N'COLUMN'",
+            $query->queryString()
+        );
+    }
+
     public function testMySqlSelectHighPriorityCompilesOnlyOnMySqlBuilder(): void
     {
         $query = $this->createQuery(SQLDialect::POSTGRESQL)->switchToMysql();

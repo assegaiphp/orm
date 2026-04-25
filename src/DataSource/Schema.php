@@ -122,11 +122,11 @@ class Schema implements ISchema
   {
     $options ??= new SchemaOptions();
     $fromTable = match ($options->dialect) {
-      SQLDialect::MSSQL => SqlDialectHelper::quoteIdentifier($from, $options->dialect),
+      SQLDialect::MSSQL => self::getMsSqlRenameSource($from, $options),
       default => self::getQualifiedTableName($from, $options),
     };
     $toTable = match ($options->dialect) {
-      SQLDialect::MSSQL => str_replace("'", "''", $to),
+      SQLDialect::MSSQL => self::getMsSqlRenameTarget($to),
       SQLDialect::SQLITE,
       SQLDialect::POSTGRESQL => SqlDialectHelper::quoteIdentifier($to, $options->dialect),
       default => self::getQualifiedTableName($to, $options),
@@ -1336,6 +1336,18 @@ SQL;
   private static function getQualifiedTableName(string $tableName, SchemaOptions $options): string
   {
     return SqlDialectHelper::qualifyTable($tableName, $options->dbName, $options->dialect, $options->schema);
+  }
+
+  private static function getMsSqlRenameSource(string $tableName, SchemaOptions $options): string
+  {
+    $qualified = self::getQualifiedTableName($tableName, $options);
+
+    return str_replace("'", "''", $qualified);
+  }
+
+  private static function getMsSqlRenameTarget(string $tableName): string
+  {
+    return str_replace("'", "''", SqlDialectHelper::unqualifyIdentifier($tableName));
   }
 
   private static function resolveSchemaOptions(object $entityInstance, ?SchemaOptions $options): SchemaOptions

@@ -10,6 +10,7 @@ use Assegai\Orm\Exceptions\DataSourceException;
 use Assegai\Orm\Management\DatabaseManager;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionProperty;
 
 final class DatabaseManagerSqlTest extends TestCase
@@ -51,6 +52,16 @@ final class DatabaseManagerSqlTest extends TestCase
 
         self::assertSame("IF DB_ID(N'assegai_blog') IS NULL CREATE DATABASE [assegai_blog]", $createSql);
         self::assertSame('DROP DATABASE IF EXISTS [assegai_blog]', $dropSql);
+    }
+
+    public function testBuildsMsSqlSessionTerminationStatementBeforeDrop(): void
+    {
+        $method = new ReflectionMethod(DatabaseManager::class, 'buildMsSqlTerminateConnectionsStatement');
+
+        self::assertSame(
+            "IF DB_ID(N'assegai_blog') IS NOT NULL ALTER DATABASE [assegai_blog] SET SINGLE_USER WITH ROLLBACK IMMEDIATE",
+            $method->invoke(null, 'assegai_blog')
+        );
     }
 
     public function testRejectsUnsafeDatabaseNames(): void
