@@ -32,7 +32,7 @@ class BasicTypeConverter
   #[TypeConverter]
   public function fromStringToDateTime(string $dateTime): DateTime
   {
-    $dateTime = preg_replace('/(.*)\(.*\)/', "$1", $dateTime);
+    $dateTime = preg_replace('/(.*)\(.*\)/', '$1', $dateTime);
     return new DateTime($dateTime);
   }
 
