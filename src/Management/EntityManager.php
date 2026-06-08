@@ -69,6 +69,7 @@ use ReflectionProperty;
 use ReflectionUnionType;
 use stdClass;
 use Symfony\Component\Console\Output\ConsoleOutput;
+use Throwable;
 use UnitEnum;
 
 /**
@@ -156,6 +157,18 @@ class EntityManager implements IEntityStoreOwner
         $isDebugMode = filter_var($_ENV['DEBUG_MODE'] ?? false, FILTER_VALIDATE_BOOL);
         $environment = strtoupper($_ENV['ENV'] ?? 'development');
         $this->isDebug = !in_array($environment, ['PROD', 'PRODUCTION']) && $isDebugMode === true;
+    }
+
+    private function newGeneralSqlQueryException(?SQLQuery $query, QueryResultInterface $result): GeneralSQLQueryException
+    {
+        return new GeneralSQLQueryException($query, $this->firstThrowableError($result));
+    }
+
+    private function firstThrowableError(QueryResultInterface $result): ?Throwable
+    {
+        $error = $result->getErrors()[0] ?? null;
+
+        return $error instanceof Throwable ? $error : null;
     }
 
     /**
@@ -1235,7 +1248,7 @@ class EntityManager implements IEntityStoreOwner
             ->execute();
 
         if ($result->isError()) {
-            throw new GeneralSQLQueryException($query, $result->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($query, $result);
         }
 
         return array_map(
@@ -1406,7 +1419,7 @@ class EntityManager implements IEntityStoreOwner
             ->execute();
 
         if ($result->isError()) {
-            throw new GeneralSQLQueryException($query, $result->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($query, $result);
         }
 
         $groupedRows = [];
@@ -1674,7 +1687,7 @@ class EntityManager implements IEntityStoreOwner
         $result = $statement->execute();
 
         if ($result->isError()) {
-            throw new GeneralSQLQueryException($this->query, $result->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($this->query, $result);
         }
 
         return $result->value()[0]?->total ?? 0;
@@ -1731,7 +1744,7 @@ class EntityManager implements IEntityStoreOwner
         $result = $statement->execute();
 
         if ($result->isError()) {
-            throw new GeneralSQLQueryException($this->query, $result->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($this->query, $result);
         }
 
         return new FindResult(raw: $result->getRaw(), data: $result->getData(), errors: $result->getErrors());
@@ -1850,7 +1863,7 @@ class EntityManager implements IEntityStoreOwner
         $raw = $result->getRaw();
 
         if ($result->isError()) {
-            throw new GeneralSQLQueryException($this->query, $result->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($this->query, $result);
         }
 
         $generatedMaps = null;
@@ -2503,7 +2516,7 @@ class EntityManager implements IEntityStoreOwner
             $raw = $result->getRaw();
 
             if ($result->isError()) {
-                throw new GeneralSQLQueryException($this->query, $result->getErrors()[0]);
+                throw $this->newGeneralSqlQueryException($this->query, $result);
             }
 
             $affected = $this->query->getDialect() === SQLDialect::POSTGRESQL
@@ -2569,7 +2582,7 @@ class EntityManager implements IEntityStoreOwner
             $result = $statement->execute();
 
             if ($result->isError()) {
-                throw new GeneralSQLQueryException($this->query, $result->getErrors()[0]);
+                throw $this->newGeneralSqlQueryException($this->query, $result);
             }
 
             // TODO: #88 Verify that delete occurred @amasiye
@@ -2651,7 +2664,7 @@ class EntityManager implements IEntityStoreOwner
         $deletionResult = $statement->execute();
 
         if ($deletionResult->isError()) {
-            throw new GeneralSQLQueryException($this->query, $deletionResult->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($this->query, $deletionResult);
         }
 
         return new DeleteResult(raw: $deletionResult->value(), affected: $this->query->rowCount(), errors: $deletionResult->getErrors());
@@ -2687,7 +2700,7 @@ class EntityManager implements IEntityStoreOwner
         $restoreResult = $statement->execute();
 
         if ($restoreResult->isError()) {
-            throw new GeneralSQLQueryException($this->query, $restoreResult->getErrors()[0]);
+            throw $this->newGeneralSqlQueryException($this->query, $restoreResult);
         }
 
         $generatedMaps = new stdClass();
