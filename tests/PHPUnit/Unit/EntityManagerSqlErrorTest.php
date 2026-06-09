@@ -61,12 +61,17 @@ final class EntityManagerSqlErrorTest extends TestCase
     {
         $syntheticError = new ORMException('General SQL error - Internal server error.');
         $driverError = new PDOException('Driver failed with private connection details.');
+        $driverPayload = [
+            'code' => 'HY000',
+            'info' => ['driver reported execute=false'],
+        ];
 
-        self::withEnvironment('production', function () use ($syntheticError, $driverError): void {
-            $errors = self::publicResultErrors(new SQLQueryResult([], [$syntheticError, $driverError]));
+        self::withEnvironment('production', function () use ($syntheticError, $driverError, $driverPayload): void {
+            $errors = self::publicResultErrors(new SQLQueryResult([], [$syntheticError, $driverError, $driverPayload]));
 
             self::assertSame([$syntheticError], $errors);
             self::assertNotContains($driverError, $errors);
+            self::assertNotContains($driverPayload, $errors);
         });
     }
 
@@ -74,14 +79,30 @@ final class EntityManagerSqlErrorTest extends TestCase
     {
         $syntheticError = new ORMException('General SQL error - Internal server error.');
         $driverError = new PDOException('Driver failed with private connection details.');
+        $driverPayload = [
+            'code' => 'HY000',
+            'info' => ['driver reported execute=false'],
+        ];
+        $connectionErrorInfo = ['HY000', 1, 'private driver detail'];
 
-        self::withEnvironment('production', function () use ($syntheticError, $driverError): void {
-            $result = new SQLQueryResult([], [$syntheticError, $driverError]);
+        self::withEnvironment('production', function () use ($syntheticError, $driverError, $driverPayload, $connectionErrorInfo): void {
+            $result = new SQLQueryResult([], [$syntheticError, $driverError, $driverPayload]);
             $generalSqlError = self::createGeneralSqlQueryException($result);
-            $errors = [$generalSqlError, ...self::publicResultErrors($result)];
+            $errors = [...self::publicDriverErrorPayload($connectionErrorInfo), $generalSqlError, ...self::publicResultErrors($result)];
 
             self::assertSame([$generalSqlError, $syntheticError], $errors);
             self::assertNotContains($driverError, $errors);
+            self::assertNotContains($driverPayload, $errors);
+            self::assertNotContains($connectionErrorInfo, $errors);
+        });
+    }
+
+    public function testDevelopmentPublicDriverErrorPayloadKeepsConnectionDiagnostics(): void
+    {
+        $connectionErrorInfo = ['HY000', 1, 'driver detail'];
+
+        self::withEnvironment('development', function () use ($connectionErrorInfo): void {
+            self::assertSame([$connectionErrorInfo], self::publicDriverErrorPayload($connectionErrorInfo));
         });
     }
 
@@ -115,6 +136,18 @@ final class EntityManagerSqlErrorTest extends TestCase
         $entityManager = $reflection->newInstanceWithoutConstructor();
         $method = $reflection->getMethod('publicResultErrors');
         $errors = $method->invoke($entityManager, $result);
+
+        self::assertIsArray($errors);
+
+        return $errors;
+    }
+
+    private static function publicDriverErrorPayload(mixed $error): array
+    {
+        $reflection = new ReflectionClass(EntityManager::class);
+        $entityManager = $reflection->newInstanceWithoutConstructor();
+        $method = $reflection->getMethod('publicDriverErrorPayload');
+        $errors = $method->invoke($entityManager, $error);
 
         self::assertIsArray($errors);
 

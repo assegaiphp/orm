@@ -189,8 +189,17 @@ class EntityManager implements IEntityStoreOwner
 
         return array_values(array_filter(
             $result->getErrors(),
-            fn(mixed $error): bool => !$error instanceof PDOException
+            fn(mixed $error): bool => $error instanceof Throwable && !$error instanceof PDOException
         ));
+    }
+
+    private function publicDriverErrorPayload(mixed $error): array
+    {
+        if (OrmRuntime::isProduction()) {
+            return [];
+        }
+
+        return [$error];
     }
 
     /**
@@ -2395,7 +2404,7 @@ class EntityManager implements IEntityStoreOwner
         $errors = [];
 
         if ($result->isError()) {
-            $errors[] = $this->query->getConnection()->errorInfo();
+            $errors = [...$errors, ...$this->publicDriverErrorPayload($this->query->getConnection()->errorInfo())];
             $errors[] = $this->newGeneralSqlQueryException($this->query, $result);
             $errors = [...$errors, ...$this->publicResultErrors($result)];
         }
@@ -2503,7 +2512,7 @@ class EntityManager implements IEntityStoreOwner
         $errors = [];
 
         if ($result->isError()) {
-            $errors[] = $this->query->getConnection()->errorInfo();
+            $errors = [...$errors, ...$this->publicDriverErrorPayload($this->query->getConnection()->errorInfo())];
             $errors[] = $this->newGeneralSqlQueryException($this->query, $result);
             $errors = [...$errors, ...$this->publicResultErrors($result)];
         }
@@ -2615,7 +2624,7 @@ class EntityManager implements IEntityStoreOwner
 
         $errors = [];
         if ($result->isError()) {
-            $errors[] = $this->query->getConnection()->errorInfo();
+            $errors = [...$errors, ...$this->publicDriverErrorPayload($this->query->getConnection()->errorInfo())];
             $errors[] = $this->newGeneralSqlQueryException($this->query, $result);
             $errors = [...$errors, ...$this->publicResultErrors($result)];
         }

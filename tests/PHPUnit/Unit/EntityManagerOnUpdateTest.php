@@ -4,6 +4,7 @@ namespace Tests\PHPUnit\Unit;
 
 use Assegai\Orm\Attributes\Columns\Column;
 use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
+use Assegai\Orm\Attributes\Columns\UpdateDateColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
@@ -13,7 +14,6 @@ use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLQuery;
-use Assegai\Orm\Traits\ChangeRecorderTrait;
 use DateTime;
 use DateTimeZone;
 use PDO;
@@ -159,8 +159,6 @@ final class EntityManagerOnUpdateTest extends TestCase
 #[Entity(table: 'on_update_entities')]
 class OnUpdateManagedEntity
 {
-    use ChangeRecorderTrait;
-
     #[PrimaryGeneratedColumn]
     public ?int $id = null;
 
@@ -169,4 +167,7 @@ class OnUpdateManagedEntity
 
     #[Column(type: ColumnType::TEXT, nullable: false)]
     public string $description = '';
+
+    #[UpdateDateColumn]
+    public ?DateTime $updatedAt = null;
 }
