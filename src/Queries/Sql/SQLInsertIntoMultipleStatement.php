@@ -134,6 +134,10 @@ class SQLInsertIntoMultipleStatement
    */
   protected function buildValueExpression(int|string $index, mixed $value): string
   {
+    if ($value instanceof SQLExpression) {
+      return (string)$value;
+    }
+
     if (in_array($index, $this->hashableIndexes, true)) {
       $value = password_hash($value, $this->query->passwordHashAlgorithm());
     }

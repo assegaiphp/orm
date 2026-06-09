@@ -22,7 +22,8 @@ class GeneralSQLQueryException extends ORMException
         $query,
         $code,
         $info
-      )
+      ),
+      $previous
     );
   }
 }

@@ -31,6 +31,10 @@ class SQLAssignmentList
     {
       $identifier = $this->query->quoteIdentifier((string)$key);
 
+      if ($value instanceof SQLExpression) {
+        $queryString .= $identifier . "={$value}{$separator}";
+        continue;
+      }
       if (in_array($key, $this->query->passwordHashFields(), true))
       {
         $value = password_hash($value, $this->query->passwordHashAlgorithm());
