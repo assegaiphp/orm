@@ -161,14 +161,18 @@ class EntityManager implements IEntityStoreOwner
 
     private function newGeneralSqlQueryException(?SQLQuery $query, QueryResultInterface $result): GeneralSQLQueryException
     {
-        return new GeneralSQLQueryException($query, $this->firstThrowableError($result));
+        return new GeneralSQLQueryException($query, $this->previousThrowableError($result));
     }
 
-    private function firstThrowableError(QueryResultInterface $result): ?Throwable
+    private function previousThrowableError(QueryResultInterface $result): ?Throwable
     {
-        $error = $result->getErrors()[0] ?? null;
+        foreach (array_reverse($result->getErrors()) as $error) {
+            if ($error instanceof Throwable) {
+                return $error;
+            }
+        }
 
-        return $error instanceof Throwable ? $error : null;
+        return null;
     }
 
     /**
