@@ -180,6 +180,18 @@ class EntityManager implements IEntityStoreOwner
         return null;
     }
 
+    private function publicResultErrors(QueryResultInterface $result): array
+    {
+        if (!OrmRuntime::isProduction()) {
+            return $result->getErrors();
+        }
+
+        return array_values(array_filter(
+            $result->getErrors(),
+            fn(mixed $error): bool => !$error instanceof PDOException
+        ));
+    }
+
     /**
      * @param string|object $objectOrClass
      * @return bool
@@ -368,10 +380,10 @@ class EntityManager implements IEntityStoreOwner
             if (!headers_sent()) {
                 http_response_code(500);
             }
-            $error = new GeneralSQLQueryException($this->query);
+            $error = $this->newGeneralSqlQueryException($this->query, $result);
             OrmRuntime::log('error', self::LOG_TAG, $error->getMessage());
 
-            return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $raw, generatedMaps: null, errors: [$error, ...$result->getErrors()]);
+            return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $raw, generatedMaps: null, errors: [$error, ...$this->publicResultErrors($result)]);
         }
 
         if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
@@ -433,7 +445,7 @@ class EntityManager implements IEntityStoreOwner
             $error = new GeneralSQLQueryException($this->query);
             OrmRuntime::log('error', self::LOG_TAG, $error->getMessage());
 
-            return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $raw, generatedMaps: null, errors: [$result->getErrors()]);
+            return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $raw, generatedMaps: null, errors: $this->publicResultErrors($result));
         }
 
         $entity = is_array($result->getData()) && array_is_list($result->getData())
@@ -840,7 +852,7 @@ class EntityManager implements IEntityStoreOwner
         $result = $statement->execute();
 
         if ($result->isError()) {
-            return new FindResult(raw: $result->getRaw(), data: $result->value(), errors: [new GeneralSQLQueryException($this->query), ...$result->getErrors()], affected: $result->getTotalAffectedRows());
+            return new FindResult(raw: $result->getRaw(), data: $result->value(), errors: [$this->newGeneralSqlQueryException($this->query, $result), ...$this->publicResultErrors($result)], affected: $result->getTotalAffectedRows());
         }
 
         $loadedRelations = $this->loadRequestedRelations($entityClass, $result->getData(), $findOptions, $availableRelations);
@@ -854,10 +866,10 @@ class EntityManager implements IEntityStoreOwner
                 $total = 0;
             }
 
-            return new FindResult(raw: $result->getRaw(), data: $resultSet, errors: $result->getErrors(), total: $total);
+            return new FindResult(raw: $result->getRaw(), data: $resultSet, errors: $this->publicResultErrors($result), total: $total);
         }
 
-        return new FindResult(raw: $result->getRaw(), data: $resultSet, errors: $result->getErrors());
+        return new FindResult(raw: $result->getRaw(), data: $resultSet, errors: $this->publicResultErrors($result));
     }
 
     /**
@@ -1756,7 +1768,7 @@ class EntityManager implements IEntityStoreOwner
             throw $this->newGeneralSqlQueryException($this->query, $result);
         }
 
-        return new FindResult(raw: $result->getRaw(), data: $result->getData(), errors: $result->getErrors());
+        return new FindResult(raw: $result->getRaw(), data: $result->getData(), errors: $this->publicResultErrors($result));
     }
 
     /**
@@ -2148,7 +2160,7 @@ class EntityManager implements IEntityStoreOwner
                 $result = $this->upsert(entityClass: $entityClass, entityOrEntities: $entity, options: $options);
 
                 if ($result->isError()) {
-                    $errors[] = $result->getErrors();
+                    $errors[] = $this->publicResultErrors($result);
                 }
 
                 $results[] = $result->getData();
@@ -2224,8 +2236,8 @@ class EntityManager implements IEntityStoreOwner
 
         if ($result->isError()) {
             $errors[] = $this->query->getConnection()->errorInfo();
-            $errors[] = new GeneralSQLQueryException($this->query);
-            $errors = [...$errors, ...$result->getErrors()];
+            $errors[] = $this->newGeneralSqlQueryException($this->query, $result);
+            $errors = [...$errors, ...$this->publicResultErrors($result)];
         }
 
         if ($result->isOk()) {
@@ -2335,8 +2347,8 @@ class EntityManager implements IEntityStoreOwner
 
         if ($result->isError()) {
             $errors[] = $this->query->getConnection()->errorInfo();
-            $errors[] = new GeneralSQLQueryException($this->query);
-            $errors = [...$errors, ...$result->getErrors()];
+            $errors[] = $this->newGeneralSqlQueryException($this->query, $result);
+            $errors = [...$errors, ...$this->publicResultErrors($result)];
         }
 
         $identifierValue = $this->extractReturningIdentifier($result->getData(), $primaryKeyField, $primaryColumn)
@@ -2452,8 +2464,8 @@ class EntityManager implements IEntityStoreOwner
         $errors = [];
         if ($result->isError()) {
             $errors[] = $this->query->getConnection()->errorInfo();
-            $errors[] = new GeneralSQLQueryException($this->query);
-            $errors = [...$errors, ...$result->getErrors()];
+            $errors[] = $this->newGeneralSqlQueryException($this->query, $result);
+            $errors = [...$errors, ...$this->publicResultErrors($result)];
         }
 
         $identifierValue = $entityOrEntities->{$primaryKeyField} ?? null;
@@ -2676,7 +2688,7 @@ class EntityManager implements IEntityStoreOwner
             throw $this->newGeneralSqlQueryException($this->query, $deletionResult);
         }
 
-        return new DeleteResult(raw: $deletionResult->value(), affected: $this->query->rowCount(), errors: $deletionResult->getErrors());
+        return new DeleteResult(raw: $deletionResult->value(), affected: $this->query->rowCount(), errors: $this->publicResultErrors($deletionResult));
     }
 
     /**
@@ -2718,7 +2730,7 @@ class EntityManager implements IEntityStoreOwner
             $generatedMaps->$key = $value;
         }
 
-        return new UpdateResult(raw: $restoreResult->value(), affected: $this->query->rowCount(), identifiers: $entity, generatedMaps: $generatedMaps, errors: $restoreResult->getErrors());
+        return new UpdateResult(raw: $restoreResult->value(), affected: $this->query->rowCount(), identifiers: $entity, generatedMaps: $generatedMaps, errors: $this->publicResultErrors($restoreResult));
     }
 
     /**
@@ -2739,7 +2751,7 @@ class EntityManager implements IEntityStoreOwner
     {
         $result = $this->find(entityClass: $entityClass, findOptions: $options);
 
-        return new FindResult($result->getRaw(), $result->getTotal(), $result->getErrors(), $result->getTotalAffectedRows());
+        return new FindResult($result->getRaw(), $result->getTotal(), $this->publicResultErrors($result), $result->getTotalAffectedRows());
     }
 
     /**
@@ -2758,7 +2770,7 @@ class EntityManager implements IEntityStoreOwner
     {
         $result = $this->findBy(entityClass: $entityClass, where: $where);
 
-        return new FindResult($result->getRaw(), $result->getTotal(), $result->getErrors(), $result->getTotalAffectedRows());
+        return new FindResult($result->getRaw(), $result->getTotal(), $this->publicResultErrors($result), $result->getTotalAffectedRows());
     }
 
     /**
