@@ -61,6 +61,7 @@ use DateTimeZone;
 use Exception;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
+use PDOException;
 use PDOStatement;
 use Psr\Log\LoggerInterface;
 use ReflectionClass;
@@ -167,6 +168,10 @@ class EntityManager implements IEntityStoreOwner
     private function previousThrowableError(QueryResultInterface $result): ?Throwable
     {
         foreach (array_reverse($result->getErrors()) as $error) {
+            if (OrmRuntime::isProduction() && $error instanceof PDOException) {
+                continue;
+            }
+
             if ($error instanceof Throwable) {
                 return $error;
             }

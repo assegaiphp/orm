@@ -25,9 +25,24 @@ final class EntityManagerSqlErrorTest extends TestCase
     {
         $syntheticError = new ORMException('General SQL error.');
         $driverError = new PDOException('Driver failed.');
-        $exception = self::createGeneralSqlQueryException(new SQLQueryResult([], [$syntheticError, $driverError]));
 
-        self::assertSame($driverError, $exception->getPrevious());
+        self::withEnvironment('development', function () use ($syntheticError, $driverError): void {
+            $exception = self::createGeneralSqlQueryException(new SQLQueryResult([], [$syntheticError, $driverError]));
+
+            self::assertSame($driverError, $exception->getPrevious());
+        });
+    }
+
+    public function testProductionSqlErrorsPreserveSanitizedOrmExceptionInsteadOfDriverException(): void
+    {
+        $syntheticError = new ORMException('General SQL error - Internal server error.');
+        $driverError = new PDOException('Driver failed with private connection details.');
+
+        self::withEnvironment('production', function () use ($syntheticError, $driverError): void {
+            $exception = self::createGeneralSqlQueryException(new SQLQueryResult([], [$syntheticError, $driverError]));
+
+            self::assertSame($syntheticError, $exception->getPrevious());
+        });
     }
 
     public function testNonThrowableSqlErrorShapesAreNotPassedAsPreviousExceptions(): void
@@ -52,5 +67,32 @@ final class EntityManagerSqlErrorTest extends TestCase
         self::assertInstanceOf(GeneralSQLQueryException::class, $exception);
 
         return $exception;
+    }
+
+    private static function withEnvironment(string $environment, callable $callback): void
+    {
+        $hadEnv = array_key_exists('ENV', $_ENV);
+        $previousEnv = $_ENV['ENV'] ?? null;
+        $hadServerEnv = array_key_exists('ENV', $_SERVER);
+        $previousServerEnv = $_SERVER['ENV'] ?? null;
+
+        $_ENV['ENV'] = $environment;
+        unset($_SERVER['ENV']);
+
+        try {
+            $callback();
+        } finally {
+            if ($hadEnv) {
+                $_ENV['ENV'] = $previousEnv;
+            } else {
+                unset($_ENV['ENV']);
+            }
+
+            if ($hadServerEnv) {
+                $_SERVER['ENV'] = $previousServerEnv;
+            } else {
+                unset($_SERVER['ENV']);
+            }
+        }
     }
 }
