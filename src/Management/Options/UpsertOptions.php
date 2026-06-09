@@ -37,6 +37,7 @@ readonly class UpsertOptions
             conflictPaths: $options['conflictPaths'] ?? [],
             skipUpdateIfNoValuesChanged: $options['skipUpdateIfNoValuesChanged'] ?? true,
             upsertType: $options['upsertType'] ?? UpsertType::UPSERT,
+            readonlyColumns: $options['readonlyColumns'] ?? null,
         );
     }
 }

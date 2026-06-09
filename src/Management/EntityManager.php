@@ -43,6 +43,7 @@ use Assegai\Orm\Metadata\RelationPropertyMetadata;
 use Assegai\Orm\Queries\QueryBuilder\Results\DeleteResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Assegai\Orm\Queries\QueryBuilder\Results\UpdateResult;
+use Assegai\Orm\Queries\Sql\SQLExpression;
 use Assegai\Orm\Queries\Sql\SQLQuery;
 use Assegai\Orm\Queries\Sql\SQLQueryResult;
 use Assegai\Orm\Relations\RelationOptions;
@@ -654,6 +655,163 @@ class EntityManager implements IEntityStoreOwner
     {
         $parts = explode('.', $column);
         return end($parts);
+    }
+
+    /**
+     * Adds ORM-managed ON UPDATE assignments for columns that were not explicitly assigned.
+     *
+     * @param object $entity The entity whose column metadata should be inspected.
+     * @param array<string, mixed> $assignmentList Existing update assignments keyed by column name.
+     * @return array<string, mixed>
+     */
+    private function applyOnUpdateColumnAssignments(object $entity, array $assignmentList): array
+    {
+        if (empty($assignmentList)) {
+            return $assignmentList;
+        }
+
+        $assignedColumns = $this->columnNameLookup(array_keys($assignmentList));
+
+        foreach ($this->getOnUpdateColumnExpressions($entity) as $columnName => $expression) {
+            if (isset($assignedColumns[$this->normalizeColumnNameForComparison($columnName)])) {
+                continue;
+            }
+
+            $assignmentList[$columnName] = $expression;
+        }
+
+        return $assignmentList;
+    }
+
+    /**
+     * @param object $entity The entity whose column metadata should be inspected.
+     * @param string[] $updateColumns Columns that should use the inserted row values on conflict.
+     * @param string[] $conflictPaths Conflict target columns that should not be rewritten by this fallback.
+     * @param string $sourcePrefix Prefix used by the dialect to reference the proposed insert row.
+     * @return string[]
+     */
+    private function buildExcludedUpsertAssignments(
+        object $entity,
+        array $updateColumns,
+        array $conflictPaths,
+        string $sourcePrefix,
+    ): array
+    {
+        $assignmentList = [];
+        $assignedColumns = [];
+        $conflictColumns = $this->columnNameLookup($conflictPaths);
+
+        foreach ($updateColumns as $column) {
+            $column = $this->stripTableName($column);
+            $quotedColumn = SqlIdentifier::quote($column, $this->query->getDialect());
+            $assignmentList[] = "$quotedColumn=$sourcePrefix.$quotedColumn";
+            $assignedColumns[$this->normalizeColumnNameForComparison($column)] = true;
+        }
+
+        foreach ($this->getOnUpdateColumnExpressions($entity) as $columnName => $expression) {
+            $normalizedColumnName = $this->normalizeColumnNameForComparison($columnName);
+
+            if (isset($assignedColumns[$normalizedColumnName]) || isset($conflictColumns[$normalizedColumnName])) {
+                continue;
+            }
+
+            $assignmentList[] = SqlIdentifier::quote($columnName, $this->query->getDialect()) . "=$expression";
+        }
+
+        return $assignmentList;
+    }
+
+    /**
+     * @param object $entity The entity whose column metadata should be inspected.
+     * @param string[] $updateColumns Columns that should use VALUES(column) on duplicate key.
+     * @param string $primaryColumn The primary key column used for LAST_INSERT_ID preservation.
+     * @return string[]
+     */
+    private function buildMySqlUpsertAssignments(object $entity, array $updateColumns, string $primaryColumn): array
+    {
+        $assignmentList = [];
+        $assignedColumns = [];
+
+        foreach (array_values($updateColumns) as $column) {
+            $column = $this->stripTableName($column);
+            $quotedColumn = $this->query->quoteIdentifier($column);
+            $assignmentList[] = "$quotedColumn=VALUES($quotedColumn)";
+            $assignedColumns[$this->normalizeColumnNameForComparison($column)] = true;
+        }
+
+        $quotedPrimaryColumn = $this->query->quoteIdentifier($primaryColumn);
+        array_unshift($assignmentList, "$quotedPrimaryColumn=LAST_INSERT_ID($quotedPrimaryColumn)");
+        $assignedColumns[$this->normalizeColumnNameForComparison($primaryColumn)] = true;
+
+        foreach ($this->getOnUpdateColumnExpressions($entity) as $columnName => $expression) {
+            if (isset($assignedColumns[$this->normalizeColumnNameForComparison($columnName)])) {
+                continue;
+            }
+
+            $assignmentList[] = $this->query->quoteIdentifier($columnName) . "=$expression";
+        }
+
+        return $assignmentList;
+    }
+
+    /**
+     * @param object $entity The entity whose column metadata should be inspected.
+     * @return array<string, SQLExpression>
+     */
+    private function getOnUpdateColumnExpressions(object $entity): array
+    {
+        $expressions = [];
+        $reflectionClass = new ReflectionClass($entity);
+
+        foreach ($reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            foreach ($property->getAttributes() as $attribute) {
+                $attributeInstance = $attribute->newInstance();
+
+                if (!$attributeInstance instanceof Column || !$attributeInstance->canUpdate) {
+                    continue;
+                }
+
+                $onUpdate = trim($attributeInstance->onUpdate);
+
+                if ($onUpdate === '') {
+                    continue;
+                }
+
+                $columnName = $attributeInstance->name ?: strtosnake($property->getName());
+                $expressions[$columnName] = new SQLExpression($this->normalizeOnUpdateExpression($onUpdate));
+            }
+        }
+
+        return $expressions;
+    }
+
+    /**
+     * @param string[] $columns
+     * @return array<string, true>
+     */
+    private function columnNameLookup(array $columns): array
+    {
+        $lookup = [];
+
+        foreach ($columns as $column) {
+            $lookup[$this->normalizeColumnNameForComparison((string)$column)] = true;
+        }
+
+        return $lookup;
+    }
+
+    private function normalizeColumnNameForComparison(string $column): string
+    {
+        return strtolower(str_replace(['`', '"', '[', ']'], '', $this->stripTableName($column)));
+    }
+
+    private function normalizeOnUpdateExpression(string $expression): string
+    {
+        return match (strtoupper($expression)) {
+            'CURRENT_DATE()' => 'CURRENT_DATE',
+            'CURRENT_TIME()' => 'CURRENT_TIME',
+            default => $expression,
+        };
     }
 
     private function buildReturningProjection(object $entity): string
@@ -1860,6 +2018,8 @@ class EntityManager implements IEntityStoreOwner
             }
         }
 
+        $assignmentList = $this->applyOnUpdateColumnAssignments($entityInstance, $assignmentList);
+
         if (empty($assignmentList)) {
             return new UpdateResult(null, 0, $partialEntity, new stdClass());
         }
@@ -2217,7 +2377,7 @@ class EntityManager implements IEntityStoreOwner
         $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
         $placeholders = array_fill(0, count($values), '?');
         $valueList = implode(', ', $placeholders);
-        $assignmentList = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()) . '=excluded.' . SqlIdentifier::quote($column, $this->query->getDialect()), $updateColumns));
+        $assignmentList = implode(', ', $this->buildExcludedUpsertAssignments($entity, $updateColumns, $conflictPaths, 'excluded'));
         $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
 
         $queryString = 'INSERT INTO ' . $this->query->quoteIdentifier($tableName) . " ($quotedColumns) VALUES ($valueList) ON CONFLICT ($quotedConflictPaths) $conflictAction";
@@ -2322,10 +2482,7 @@ class EntityManager implements IEntityStoreOwner
         $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
         $placeholders = array_fill(0, count($values), '?');
         $valueList = implode(', ', $placeholders);
-        $assignmentList = implode(', ', array_map(
-            fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()) . '=excluded.' . SqlIdentifier::quote($column, $this->query->getDialect()),
-            $updateColumns
-        ));
+        $assignmentList = implode(', ', $this->buildExcludedUpsertAssignments($entity, $updateColumns, $conflictPaths, 'excluded'));
         $conflictAction = empty($assignmentList) ? 'DO NOTHING' : "DO UPDATE SET $assignmentList";
         $returning = $this->query->quoteIdentifier($primaryColumn) . ' AS ' . $this->query->quoteIdentifier($primaryKeyField);
 
@@ -2445,12 +2602,7 @@ class EntityManager implements IEntityStoreOwner
         string        $primaryColumn,
     ): InsertResult
     {
-        $assignmentList = array_map(function ($column): string {
-            $column = $this->stripTableName($column);
-            return "$column=VALUES($column)";
-        }, array_values($updateColumns));
-
-        array_unshift($assignmentList, "$primaryColumn=LAST_INSERT_ID($primaryColumn)");
+        $assignmentList = $this->buildMySqlUpsertAssignments($entityOrEntities, $updateColumns, $primaryColumn);
 
         $this->query->insertInto(tableName: $tableName)->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);
 
