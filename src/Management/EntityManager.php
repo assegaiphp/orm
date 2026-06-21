@@ -1600,11 +1600,13 @@ class EntityManager implements IEntityStoreOwner
     private function resolveOneToManyReferenceProperty(RelationPropertyMetadata $relationProperty, JoinColumn $joinColumn): string
     {
         $entityClass = $relationProperty->reflectionProperty->getDeclaringClass()->getName();
-        $referencedColumnName = $joinColumn->effectiveReferencedColumnName ?? $joinColumn->referencedColumnName ?? 'id';
-        $resolvedProperty = $this->resolveColumnPropertyName($entityClass, $referencedColumnName);
 
-        if ($resolvedProperty !== null) {
-            return $resolvedProperty;
+        if ($joinColumn->referencedColumnName !== null && $joinColumn->referencedColumnName !== '') {
+            $resolvedProperty = $this->resolveColumnPropertyName($entityClass, $joinColumn->referencedColumnName);
+
+            if ($resolvedProperty !== null) {
+                return $resolvedProperty;
+            }
         }
 
         $configuredReference = $relationProperty->relationAttribute->referencedProperty ?? null;
@@ -1615,6 +1617,13 @@ class EntityManager implements IEntityStoreOwner
             $this->isMappedColumnProperty($entityClass, $configuredReference)
         ) {
             return $configuredReference;
+        }
+
+        $referencedColumnName = $joinColumn->effectiveReferencedColumnName ?? 'id';
+        $resolvedProperty = $this->resolveColumnPropertyName($entityClass, $referencedColumnName);
+
+        if ($resolvedProperty !== null) {
+            return $resolvedProperty;
         }
 
         return 'id';

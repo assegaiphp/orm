@@ -114,3 +114,33 @@ class RelationIssue
   #[JoinColumn(name: 'publisher_code', referencedColumnName: 'code')]
   public ?RelationPublisher $publisher = null;
 }
+
+#[Entity(table: 'relation_legacy_parents', database: 'relation-test', driver: DataSourceType::SQLITE)]
+class RelationLegacyParent
+{
+  #[PrimaryGeneratedColumn]
+  public ?int $id = null;
+
+  #[Column(type: ColumnType::VARCHAR, nullable: false)]
+  public string $uuid = '';
+
+  #[Column(type: ColumnType::VARCHAR, nullable: false)]
+  public string $name = '';
+
+  #[OneToMany(RelationLegacyChild::class, 'uuid', 'parent')]
+  public array $children = [];
+}
+
+#[Entity(table: 'relation_legacy_children', database: 'relation-test', driver: DataSourceType::SQLITE)]
+class RelationLegacyChild
+{
+  #[PrimaryGeneratedColumn]
+  public ?int $id = null;
+
+  #[Column(type: ColumnType::VARCHAR, nullable: false)]
+  public string $label = '';
+
+  #[ManyToOne(type: RelationLegacyParent::class)]
+  #[JoinColumn(name: 'parent_uuid')]
+  public ?RelationLegacyParent $parent = null;
+}
