@@ -149,6 +149,7 @@ class RelationsCest
 
     $I->assertSame('Tech Press', $publisher->name);
     $I->assertFalse(array_key_exists('code', get_object_vars($publisher)));
+    $I->assertFalse(array_key_exists('publicCode', get_object_vars($publisher)));
     $I->assertCount(2, $publisher->issues);
     $titles = array_map(fn(object $item) => $item->title, $publisher->issues);
     sort($titles);
@@ -156,7 +157,8 @@ class RelationsCest
 
     $I->assertSame('Framework Notes', $issue->title);
     $I->assertNotNull($issue->publisher);
-    $I->assertSame('tech', $issue->publisher->code);
+    $I->assertFalse(array_key_exists('code', get_object_vars($issue->publisher)));
+    $I->assertSame('tech', $issue->publisher->publicCode);
     $I->assertSame('Tech Press', $issue->publisher->name);
   }
 
@@ -168,6 +170,24 @@ class RelationsCest
     )->getData();
 
     $I->assertSame('Legacy Alpha', $parent->name);
+    $I->assertFalse(array_key_exists('uuid', get_object_vars($parent)));
+    $I->assertFalse(array_key_exists('publicUuid', get_object_vars($parent)));
+    $I->assertCount(2, $parent->children);
+
+    $labels = array_map(fn(object $item) => $item->label, $parent->children);
+    sort($labels);
+    $I->assertSame(['First Child', 'Second Child'], array_values($labels));
+  }
+
+  public function loadsLegacyOneToManyReferencedPropertyFromSelectedColumnAlias(UnitTester $I): void
+  {
+    $parent = $this->manager->findOne(
+      RelationLegacyParent::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['children'])
+    )->getData();
+
+    $I->assertSame('Legacy Alpha', $parent->name);
+    $I->assertSame('parent-alpha', $parent->publicUuid);
     $I->assertFalse(array_key_exists('uuid', get_object_vars($parent)));
     $I->assertCount(2, $parent->children);
 

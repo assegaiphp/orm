@@ -91,7 +91,7 @@ class RelationPublisher
   #[PrimaryGeneratedColumn]
   public ?int $id = null;
 
-  #[Column(type: ColumnType::VARCHAR, nullable: false)]
+  #[Column(alias: 'publicCode', type: ColumnType::VARCHAR, nullable: false)]
   public string $code = '';
 
   #[Column(type: ColumnType::VARCHAR, nullable: false)]
@@ -121,7 +121,7 @@ class RelationLegacyParent
   #[PrimaryGeneratedColumn]
   public ?int $id = null;
 
-  #[Column(type: ColumnType::VARCHAR, nullable: false)]
+  #[Column(alias: 'publicUuid', type: ColumnType::VARCHAR, nullable: false)]
   public string $uuid = '';
 
   #[Column(type: ColumnType::VARCHAR, nullable: false)]
