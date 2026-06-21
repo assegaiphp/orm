@@ -7,52 +7,60 @@ use Assegai\Orm\Relations\RelationOptions;
 use Attribute;
 
 /**
- * A one-to-many relation means "this entity owns a list of those entities".
+ * A one-to-many relation means "this entity has a collection of related entities".
  *
- * Example:
- * `OrganizationEntity` can have many `RestaurantEntity` records.
+ * The foreign key lives on the related entity's ManyToOne side. In most cases the
+ * inverse side is enough here; the referenced column is resolved from JoinColumn
+ * metadata on the owning side.
  *
  * ```php
- * #[OneToMany(RestaurantEntity::class, 'id', 'organization')]
- * public ?array $restaurants = null;
+ * #[OneToMany(type: RestaurantEntity::class, inverseSide: 'organization')]
+ * public array $restaurants = [];
  * ```
- *
- * Read that example like this:
- * - `RestaurantEntity::class`: each item in the list is a restaurant
- * - `'id'`: use the organization's `id` when matching child rows
- * - `'organization'`: each restaurant points back through its `organization` property
  */
 #[Attribute(Attribute::TARGET_PROPERTY)]
 class OneToMany
 {
   /**
+   * @var string|null Legacy override for the local property to match against. New code should omit this.
+   */
+  public readonly ?string $referencedProperty;
+
+  /**
+   * @var string|null Property on the related entity that points back to this entity.
+   */
+  public readonly ?string $inverseSide;
+
+  /**
    * OneToMany constructor.
    *
    * @param class-string $type The entity class for the items in this collection.
-   * Example: if this property stores restaurants, use `RestaurantEntity::class`.
-   * @param string $referencedProperty The property on the current entity that Assegai should use
-   * when looking for children. In plain terms: "which value from this parent object should be matched
-   * against the child rows?" Most of the time this is simply `'id'`.
-   * Example: `#[OneToMany(RestaurantEntity::class, 'id', 'organization')]`
-   * means "take `OrganizationEntity::$id` and use it to find matching restaurants".
-   * @param string $inverseSide The property on the child entity that points back to this parent.
-   * Example: if `RestaurantEntity` has `public ?OrganizationEntity $organization = null;`
-   * then the inverse side is `'organization'`.
+   * @param string|null $referencedProperty Legacy local property override. If $inverseSide is omitted,
+   * this positional argument is treated as the inverse side for TypeORM-style usage.
+   * @param string|null $inverseSide The property on the child entity that points back to this parent.
+   * When omitted, Assegai will infer it if the target entity has exactly one ManyToOne back to this entity.
    * @param string|null $name Optional custom relation name. Most applications can leave this as `null`.
    * @param string|null $alias Optional alias for custom query or mapping scenarios.
-   * Most applications can leave this as `null`.
    * @param RelationOptions|null $options Extra relation behavior such as excluded fields.
    * @throws ClassNotFoundException
    */
   public function __construct(
     public readonly string $type,
-    public readonly string $referencedProperty,
-    public readonly string $inverseSide,
+    ?string $referencedProperty = null,
+    ?string $inverseSide = null,
     public readonly ?string $name = null,
     public readonly ?string $alias = null,
     public ?RelationOptions $options = null
   )
   {
+    if ($inverseSide === null && $referencedProperty !== null) {
+      $this->referencedProperty = null;
+      $this->inverseSide = $referencedProperty;
+    } else {
+      $this->referencedProperty = $referencedProperty;
+      $this->inverseSide = $inverseSide;
+    }
+
     if (is_null($this->options)) {
       $this->options = new RelationOptions();
     }

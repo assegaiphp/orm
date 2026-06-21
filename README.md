@@ -205,7 +205,7 @@ Relations follow the same ownership ideas you would expect from TypeORM:
 - `ManyToOne` and `OneToMany`: the foreign key lives on the `ManyToOne` side
 - `ManyToMany`: the owner side has `#[JoinTable(...)]`
 
-Load relations explicitly in `find()` and `findOne()` calls, and prefer writing through the owner side of the relation.
+Load relations explicitly in `find()` and `findOne()` calls, and prefer writing through the owner side of the relation. `OneToMany` collections do not need a reference-column argument; the ORM derives that from the owning `ManyToOne`/`JoinColumn` metadata.
 
 If you want to use SQLite directly through the ORM, create a `DataSource`, ensure the table exists, and then work with
 the repository:
