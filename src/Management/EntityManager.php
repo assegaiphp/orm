@@ -13,6 +13,7 @@ use Assegai\Orm\Attributes\Columns\URLColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Attributes\Relations\JoinColumn;
 use Assegai\Orm\Attributes\Relations\JoinTable;
+use Assegai\Orm\Attributes\Relations\ManyToOne;
 use Assegai\Orm\Attributes\Relations\OneToOne;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Enumerations\RelationType;
@@ -65,6 +66,7 @@ use NumberFormatter;
 use PDOException;
 use PDOStatement;
 use Psr\Log\LoggerInterface;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
@@ -1156,15 +1158,15 @@ class EntityManager implements IEntityStoreOwner
                         propertyName: $relationProperty->name,
                         joinColumn: $relationProperty->joinColumn
                     )
-                    : $this->appendPropertyColumnSelection(
+                    : $this->appendRequiredPropertyColumnSelection(
                         columns: $columns,
                         entity: $entity,
                         propertyName: 'id'
                     ),
-                RelationType::ONE_TO_MANY => $this->appendPropertyColumnSelection(
+                RelationType::ONE_TO_MANY => $this->appendRequiredPropertyColumnSelection(
                     columns: $columns,
                     entity: $entity,
-                    propertyName: $relationProperty->relationAttribute->referencedProperty ?? 'id'
+                    propertyName: $this->resolveOneToManyReferencePropertyForRelation($relationProperty)
                 ),
                 RelationType::MANY_TO_ONE => $this->appendJoinColumnSelection(
                     columns: $columns,
@@ -1173,7 +1175,7 @@ class EntityManager implements IEntityStoreOwner
                     joinColumn: $relationProperty->joinColumn
                     ?? $this->entityInspector->getJoinColumnAttribute($entity::class, $relationProperty->name)
                 ),
-                RelationType::MANY_TO_MANY => $this->appendPropertyColumnSelection(
+                RelationType::MANY_TO_MANY => $this->appendRequiredPropertyColumnSelection(
                     columns: $columns,
                     entity: $entity,
                     propertyName: 'id'
@@ -1242,10 +1244,48 @@ class EntityManager implements IEntityStoreOwner
             }
 
             $tableName = $this->entityInspector->getTableName($entity);
-            $columnName = $attributeInstance->name ?? $propertyName;
+            $columnName = $attributeInstance->name ?: strtosnake($propertyName);
             $columnAlias = $attributeInstance->alias ?: ($attributeInstance->name ? $propertyName : null);
 
             return $this->appendColumnSelection($columns, $columnAlias, "$tableName.$columnName");
+        }
+
+        return $columns;
+    }
+
+    /**
+     * Required relation keys may be hidden from the final payload. Select them
+     * under the entity property name unless a public result key is already selected.
+     *
+     * @param array<int|string, string> $columns
+     * @return array<int|string, string>
+     */
+    private function appendRequiredPropertyColumnSelection(array $columns, object $entity, string $propertyName): array
+    {
+        if (!property_exists($entity, $propertyName)) {
+            return $columns;
+        }
+
+        foreach ($this->resolveColumnReadKeys($entity::class, $propertyName) as $readKey) {
+            if (array_key_exists($readKey, $columns)) {
+                return $columns;
+            }
+        }
+
+        $reflectionProperty = new ReflectionProperty($entity, $propertyName);
+
+        foreach ($reflectionProperty->getAttributes() as $attribute) {
+            $attributeInstance = $attribute->newInstance();
+
+            if (!$attributeInstance instanceof Column) {
+                continue;
+            }
+
+            $tableName = $this->entityInspector->getTableName($entity);
+            $columnName = $attributeInstance->name ?: strtosnake($propertyName);
+            $columns[$propertyName] = "$tableName.$columnName";
+
+            return $columns;
         }
 
         return $columns;
@@ -1315,7 +1355,7 @@ class EntityManager implements IEntityStoreOwner
             return [];
         }
 
-        $localIds = $this->extractScalarValues($rows, 'id');
+        $localIds = $this->extractScalarValues($rows, $this->resolveColumnReadKeys($entityClass, 'id'));
         if (empty($localIds)) {
             return [];
         }
@@ -1370,12 +1410,15 @@ class EntityManager implements IEntityStoreOwner
             entityClass: $targetClass,
             conditionColumn: $referenceColumn,
             conditionValues: $foreignKeys,
-            excludeColumns: $this->resolveRelationExcludeColumns($relationProperty, $findOptions)
+            excludeColumns: $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
+            additionalColumns: ['__relation_reference_key' => $referenceColumn]
         );
 
         $groupedRows = [];
         foreach ($relatedRows as $relatedRow) {
-            $key = $relatedRow->{$referenceColumn} ?? null;
+            $key = $relatedRow->__relation_reference_key ?? null;
+            unset($relatedRow->__relation_reference_key);
+
             if ($key !== null) {
                 $groupedRows[$key] = $relatedRow;
             }
@@ -1386,14 +1429,17 @@ class EntityManager implements IEntityStoreOwner
 
     /**
      * @param object[] $rows
+     * @param string|list<string> $properties
      * @return list<mixed>
      */
-    private function extractScalarValues(array $rows, string $property): array
+    private function extractScalarValues(array $rows, string|array $properties): array
     {
         $values = [];
+        $properties = is_array($properties) ? $properties : [$properties];
 
         foreach ($rows as $row) {
-            $value = $row->{$property} ?? null;
+            $value = $this->readFirstAvailableProperty($row, $properties);
+
             if ($value !== null && $value !== '') {
                 $values[] = $value;
             }
@@ -1403,23 +1449,43 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /**
+     * @param list<string> $properties
+     */
+    private function readFirstAvailableProperty(object $row, array $properties): mixed
+    {
+        foreach ($properties as $property) {
+            if (property_exists($row, $property)) {
+                return $row->{$property};
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @param string[] $excludeColumns
      * @param string[] $relations
+     * @param array<string, string> $additionalColumns
      * @return object[]
      * @throws ClassNotFoundException
      * @throws GeneralSQLQueryException
      * @throws ORMException
      * @throws ReflectionException
      */
-    private function fetchEntityRows(string $entityClass, string $conditionColumn, array $conditionValues, array $excludeColumns = ['password'], array $relations = []): array
+    private function fetchEntityRows(string $entityClass, string $conditionColumn, array $conditionValues, array $excludeColumns = ['password'], array $relations = [], array $additionalColumns = []): array
     {
         if (empty($conditionValues)) {
             return [];
         }
 
         $entity = $this->create($entityClass);
-        $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
         $tableName = $this->entityInspector->getTableName($entity);
+        $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
+
+        foreach ($additionalColumns as $alias => $columnName) {
+            $columns[$alias] = str_contains($columnName, '.') ? $columnName : "$tableName.$columnName";
+        }
+
         $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
         $statement = $query
             ->select()
@@ -1515,31 +1581,43 @@ class EntityManager implements IEntityStoreOwner
     private function loadOneToManyRelation(array $rows, RelationPropertyMetadata $relationProperty, FindOptions $findOptions): array
     {
         $targetClass = $relationProperty->getEntityClass();
-        $referenceProperty = $relationProperty->relationAttribute->referencedProperty ?? 'id';
-        $inverseProperty = $relationProperty->relationAttribute->inverseSide ?? null;
 
-        if (!$targetClass || !$inverseProperty) {
+        if (!$targetClass) {
             return [];
         }
 
-        $localKeys = $this->extractScalarValues($rows, $referenceProperty);
-        if (empty($localKeys)) {
+        $inverseProperty = $relationProperty->relationAttribute->inverseSide
+            ?? $this->resolveOneToManyInverseProperty($relationProperty);
+
+        if (!$inverseProperty) {
             return [];
         }
 
         $joinColumn = $this->entityInspector->getJoinColumnAttribute($targetClass, $inverseProperty);
+        $referenceProperty = $this->resolveOneToManyReferenceProperty($relationProperty, $joinColumn);
+
+        $referenceKeys = $this->resolveColumnReadKeys(
+            $relationProperty->reflectionProperty->getDeclaringClass()->getName(),
+            $referenceProperty
+        );
+        $localKeys = $this->extractScalarValues($rows, $referenceKeys);
+        if (empty($localKeys)) {
+            return [];
+        }
+
+        $joinColumnName = $joinColumn->effectiveColumnName ?? $joinColumn->name ?? 'id';
         $relatedRows = $this->fetchEntityRows(
             entityClass: $targetClass,
-            conditionColumn: $joinColumn->effectiveColumnName ?? $joinColumn->name ?? 'id',
+            conditionColumn: $joinColumnName,
             conditionValues: $localKeys,
             excludeColumns: $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
-            relations: [$inverseProperty]
+            additionalColumns: ['__relation_owner_key' => $joinColumnName]
         );
 
         $groupedRows = [];
         foreach ($relatedRows as $relatedRow) {
-            $ownerKey = $relatedRow->{$inverseProperty} ?? null;
-            unset($relatedRow->{$inverseProperty});
+            $ownerKey = $relatedRow->__relation_owner_key ?? null;
+            unset($relatedRow->__relation_owner_key, $relatedRow->{$inverseProperty});
 
             if ($ownerKey === null) {
                 continue;
@@ -1550,6 +1628,172 @@ class EntityManager implements IEntityStoreOwner
         }
 
         return $groupedRows;
+    }
+
+    /**
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function resolveOneToManyReferencePropertyForRelation(RelationPropertyMetadata $relationProperty): string
+    {
+        $targetClass = $relationProperty->getEntityClass();
+
+        if (!$targetClass) {
+            return $relationProperty->relationAttribute->referencedProperty ?? 'id';
+        }
+
+        $inverseProperty = $relationProperty->relationAttribute->inverseSide
+            ?? $this->resolveOneToManyInverseProperty($relationProperty);
+
+        if (!$inverseProperty) {
+            return $relationProperty->relationAttribute->referencedProperty ?? 'id';
+        }
+
+        $joinColumn = $this->entityInspector->getJoinColumnAttribute($targetClass, $inverseProperty);
+
+        return $this->resolveOneToManyReferenceProperty($relationProperty, $joinColumn);
+    }
+
+    /**
+     * The owning ManyToOne side defines the database reference.
+     *
+     * @throws ReflectionException
+     */
+    private function resolveOneToManyReferenceProperty(RelationPropertyMetadata $relationProperty, JoinColumn $joinColumn): string
+    {
+        $entityClass = $relationProperty->reflectionProperty->getDeclaringClass()->getName();
+
+        if ($joinColumn->referencedColumnName !== null && $joinColumn->referencedColumnName !== '') {
+            $resolvedProperty = $this->resolveColumnPropertyName($entityClass, $joinColumn->referencedColumnName);
+
+            if ($resolvedProperty !== null) {
+                return $resolvedProperty;
+            }
+        }
+
+        $configuredReference = $relationProperty->relationAttribute->referencedProperty ?? null;
+
+        if (
+            is_string($configuredReference) &&
+            $configuredReference !== '' &&
+            $this->isMappedColumnProperty($entityClass, $configuredReference)
+        ) {
+            return $configuredReference;
+        }
+
+        $referencedColumnName = $joinColumn->effectiveReferencedColumnName ?? 'id';
+        $resolvedProperty = $this->resolveColumnPropertyName($entityClass, $referencedColumnName);
+
+        if ($resolvedProperty !== null) {
+            return $resolvedProperty;
+        }
+
+        return 'id';
+    }
+
+    /**
+     * @throws ReflectionException
+     */
+    private function resolveOneToManyInverseProperty(RelationPropertyMetadata $relationProperty): ?string
+    {
+        $targetClass = $relationProperty->getEntityClass();
+
+        if (!$targetClass) {
+            return null;
+        }
+
+        $entityClass = $relationProperty->reflectionProperty->getDeclaringClass()->getName();
+        $targetReflection = new ReflectionClass($targetClass);
+        $matches = [];
+
+        foreach ($targetReflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            $manyToOneAttributes = $property->getAttributes(ManyToOne::class);
+
+            if (empty($manyToOneAttributes)) {
+                continue;
+            }
+
+            /** @var ManyToOne $attribute */
+            $attribute = $manyToOneAttributes[0]->newInstance();
+
+            if ($attribute->type === $entityClass) {
+                $matches[] = $property->getName();
+            }
+        }
+
+        return count($matches) === 1 ? $matches[0] : null;
+    }
+
+    /**
+     * @throws ReflectionException
+     */
+    private function isMappedColumnProperty(string $entityClass, string $propertyName): bool
+    {
+        if (!property_exists($entityClass, $propertyName)) {
+            return false;
+        }
+
+        $property = new ReflectionProperty($entityClass, $propertyName);
+
+        return !empty($property->getAttributes(Column::class, ReflectionAttribute::IS_INSTANCEOF));
+    }
+
+    /**
+     * @throws ReflectionException
+     */
+    private function resolveColumnPropertyName(string $entityClass, string $columnName): ?string
+    {
+        $reflectionClass = new ReflectionClass($entityClass);
+
+        foreach ($reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            $columnAttributes = $property->getAttributes(Column::class, ReflectionAttribute::IS_INSTANCEOF);
+
+            if (empty($columnAttributes)) {
+                continue;
+            }
+
+            /** @var Column $column */
+            $column = $columnAttributes[0]->newInstance();
+            $propertyName = $property->getName();
+
+            $mappedColumnName = $column->name ?: strtosnake($propertyName);
+
+            if ($propertyName === $columnName || $mappedColumnName === $columnName) {
+                return $propertyName;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Returns the row keys that can contain a selected entity property.
+     *
+     * @return list<string>
+     * @throws ReflectionException
+     */
+    private function resolveColumnReadKeys(string $entityClass, string $propertyName): array
+    {
+        $keys = [$propertyName];
+
+        if (!property_exists($entityClass, $propertyName)) {
+            return $keys;
+        }
+
+        $property = new ReflectionProperty($entityClass, $propertyName);
+
+        foreach ($property->getAttributes(Column::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+            /** @var Column $column */
+            $column = $attribute->newInstance();
+
+            if ($column->alias !== '') {
+                $keys[] = $column->alias;
+            }
+
+            break;
+        }
+
+        return array_values(array_unique($keys));
     }
 
     /**
@@ -1567,7 +1811,7 @@ class EntityManager implements IEntityStoreOwner
             return [];
         }
 
-        $localIds = $this->extractScalarValues($rows, 'id');
+        $localIds = $this->extractScalarValues($rows, $this->resolveColumnReadKeys($entityClass, 'id'));
         if (empty($localIds)) {
             return [];
         }
@@ -1760,10 +2004,10 @@ class EntityManager implements IEntityStoreOwner
 
         $entity = is_array($entity) ? (object)$entity : $entity;
         $relationValue = match ($relationInfo->getRelationType()) {
-            RelationType::ONE_TO_ONE => $this->resolveOneToOneRelationValue($entity, $relationInfo, $loadedRelations[$relationName] ?? []),
+            RelationType::ONE_TO_ONE => $this->resolveOneToOneRelationValue($entityClass, $entity, $relationInfo, $loadedRelations[$relationName] ?? []),
             RelationType::ONE_TO_MANY => $this->resolveOneToManyRelationValue($entity, $relationInfo, $loadedRelations[$relationName] ?? []),
             RelationType::MANY_TO_ONE => $this->resolveManyToOneRelationValue($entity, $relationInfo, $loadedRelations[$relationName] ?? []),
-            RelationType::MANY_TO_MANY => $this->resolveManyToManyRelationValue($entity, $loadedRelations[$relationName] ?? []),
+            RelationType::MANY_TO_MANY => $this->resolveManyToManyRelationValue($entityClass, $entity, $loadedRelations[$relationName] ?? []),
             default => null,
         };
 
@@ -1771,11 +2015,11 @@ class EntityManager implements IEntityStoreOwner
         return $entity;
     }
 
-    private function resolveOneToOneRelationValue(object $entity, RelationPropertyMetadata $relationInfo, array $loadedRelations): ?object
+    private function resolveOneToOneRelationValue(string $entityClass, object $entity, RelationPropertyMetadata $relationInfo, array $loadedRelations): ?object
     {
         $relationKey = $relationInfo->joinColumn
             ? ($entity->{$relationInfo->name} ?? null)
-            : ($entity->id ?? null);
+            : $this->readFirstAvailableProperty($entity, $this->resolveColumnReadKeys($entityClass, 'id'));
 
         if ($relationKey === null) {
             return null;
@@ -1784,10 +2028,17 @@ class EntityManager implements IEntityStoreOwner
         return $loadedRelations[$relationKey] ?? null;
     }
 
+    /**
+     * @throws ORMException
+     * @throws ReflectionException
+     */
     private function resolveOneToManyRelationValue(object $entity, RelationPropertyMetadata $relationInfo, array $loadedRelations): array
     {
-        $referenceProperty = $relationInfo->relationAttribute->referencedProperty ?? 'id';
-        $referenceValue = $entity->{$referenceProperty} ?? null;
+        $referenceProperty = $this->resolveOneToManyReferencePropertyForRelation($relationInfo);
+        $referenceValue = $this->readFirstAvailableProperty(
+            $entity,
+            $this->resolveColumnReadKeys($relationInfo->reflectionProperty->getDeclaringClass()->getName(), $referenceProperty)
+        );
 
         if ($referenceValue === null) {
             return [];
@@ -1807,9 +2058,9 @@ class EntityManager implements IEntityStoreOwner
         return $loadedRelations[$foreignKey] ?? null;
     }
 
-    private function resolveManyToManyRelationValue(object $entity, array $loadedRelations): array
+    private function resolveManyToManyRelationValue(string $entityClass, object $entity, array $loadedRelations): array
     {
-        $referenceValue = $entity->id ?? null;
+        $referenceValue = $this->readFirstAvailableProperty($entity, $this->resolveColumnReadKeys($entityClass, 'id'));
 
         if ($referenceValue === null) {
             return [];

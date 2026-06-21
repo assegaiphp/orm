@@ -9,7 +9,11 @@ use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Options\FindOneOptions;
 use Assegai\Orm\Management\Options\InsertOptions;
 use Tests\SQLite\Fixtures\RelationAuthor;
+use Tests\SQLite\Fixtures\RelationIssue;
+use Tests\SQLite\Fixtures\RelationLegacyChild;
+use Tests\SQLite\Fixtures\RelationLegacyParent;
 use Tests\SQLite\Fixtures\RelationPost;
+use Tests\SQLite\Fixtures\RelationPublisher;
 use Tests\SQLite\Fixtures\RelationProfile;
 use Tests\SQLite\Fixtures\RelationTag;
 use Tests\SQLite\Fixtures\RelationUser;
@@ -35,6 +39,10 @@ class RelationsCest
         RelationAuthor::class,
         RelationPost::class,
         RelationTag::class,
+        RelationPublisher::class,
+        RelationIssue::class,
+        RelationLegacyParent::class,
+        RelationLegacyChild::class,
       ],
       name: $this->dbPath,
       type: DataSourceType::SQLITE,
@@ -44,6 +52,10 @@ class RelationsCest
     $db = $this->dataSource->getClient();
 
     $db->exec('DROP TABLE IF EXISTS relation_posts_tags');
+    $db->exec('DROP TABLE IF EXISTS relation_issues');
+    $db->exec('DROP TABLE IF EXISTS relation_legacy_children');
+    $db->exec('DROP TABLE IF EXISTS relation_legacy_parents');
+    $db->exec('DROP TABLE IF EXISTS relation_publishers');
     $db->exec('DROP TABLE IF EXISTS relation_posts');
     $db->exec('DROP TABLE IF EXISTS relation_tags');
     $db->exec('DROP TABLE IF EXISTS relation_authors');
@@ -56,6 +68,10 @@ class RelationsCest
     $db->exec('CREATE TABLE relation_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL)');
     $db->exec('CREATE TABLE relation_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, author_id INTEGER)');
     $db->exec('CREATE TABLE relation_posts_tags (post_id INTEGER NOT NULL, tag_id INTEGER NOT NULL)');
+    $db->exec('CREATE TABLE relation_publishers (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, name TEXT NOT NULL)');
+    $db->exec('CREATE TABLE relation_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, publisher_code TEXT NOT NULL)');
+    $db->exec('CREATE TABLE relation_legacy_parents (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL, name TEXT NOT NULL)');
+    $db->exec('CREATE TABLE relation_legacy_children (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL, parent_uuid TEXT NOT NULL)');
 
     $db->exec("INSERT INTO relation_profiles (id, bio) VALUES (1, 'Builder'), (2, 'Explorer')");
     $db->exec("INSERT INTO relation_users (id, name, profileId) VALUES (1, 'Alice', 1), (2, 'Bob', 2)");
@@ -63,6 +79,10 @@ class RelationsCest
     $db->exec("INSERT INTO relation_tags (id, label) VALUES (1, 'php'), (2, 'orm'), (3, 'nest')");
     $db->exec("INSERT INTO relation_posts (id, title, author_id) VALUES (1, 'Hello ORM', 1), (2, 'Deep Dive', 1), (3, 'Other Post', 2)");
     $db->exec('INSERT INTO relation_posts_tags (post_id, tag_id) VALUES (1, 1), (1, 2), (2, 2), (2, 3)');
+    $db->exec("INSERT INTO relation_publishers (id, code, name) VALUES (1, 'tech', 'Tech Press'), (2, 'news', 'News Desk')");
+    $db->exec("INSERT INTO relation_issues (id, title, publisher_code) VALUES (1, 'Framework Notes', 'tech'), (2, 'ORM Notes', 'tech'), (3, 'Daily Brief', 'news')");
+    $db->exec("INSERT INTO relation_legacy_parents (id, uuid, name) VALUES (1, 'parent-alpha', 'Legacy Alpha'), (2, 'parent-beta', 'Legacy Beta')");
+    $db->exec("INSERT INTO relation_legacy_children (id, label, parent_uuid) VALUES (1, 'First Child', 'parent-alpha'), (2, 'Second Child', 'parent-alpha'), (3, 'Other Child', 'parent-beta')");
   }
 
   public function _after(UnitTester $I): void
@@ -113,6 +133,67 @@ class RelationsCest
     $titles = array_map(fn(object $item) => $item->title, $author->posts);
     sort($titles);
     $I->assertSame(['Deep Dive', 'Hello ORM'], array_values($titles));
+  }
+
+  public function loadsOneToManyRelationsFromOwningReferencedColumn(UnitTester $I): void
+  {
+    $publisher = $this->manager->findOne(
+      RelationPublisher::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['issues'], exclude: ['code'])
+    )->getData();
+
+    $issue = $this->manager->findOne(
+      RelationIssue::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['publisher'])
+    )->getData();
+
+    $I->assertSame('Tech Press', $publisher->name);
+    $I->assertFalse(array_key_exists('code', get_object_vars($publisher)));
+    $I->assertFalse(array_key_exists('publicCode', get_object_vars($publisher)));
+    $I->assertCount(2, $publisher->issues);
+    $titles = array_map(fn(object $item) => $item->title, $publisher->issues);
+    sort($titles);
+    $I->assertSame(['Framework Notes', 'ORM Notes'], array_values($titles));
+
+    $I->assertSame('Framework Notes', $issue->title);
+    $I->assertNotNull($issue->publisher);
+    $I->assertFalse(array_key_exists('code', get_object_vars($issue->publisher)));
+    $I->assertSame('tech', $issue->publisher->publicCode);
+    $I->assertSame('Tech Press', $issue->publisher->name);
+  }
+
+  public function honorsLegacyOneToManyReferencedPropertyWhenJoinColumnUsesDefaultReference(UnitTester $I): void
+  {
+    $parent = $this->manager->findOne(
+      RelationLegacyParent::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['children'], exclude: ['uuid'])
+    )->getData();
+
+    $I->assertSame('Legacy Alpha', $parent->name);
+    $I->assertFalse(array_key_exists('uuid', get_object_vars($parent)));
+    $I->assertFalse(array_key_exists('publicUuid', get_object_vars($parent)));
+    $I->assertCount(2, $parent->children);
+
+    $labels = array_map(fn(object $item) => $item->label, $parent->children);
+    sort($labels);
+    $I->assertSame(['First Child', 'Second Child'], array_values($labels));
+  }
+
+  public function loadsLegacyOneToManyReferencedPropertyFromSelectedColumnAlias(UnitTester $I): void
+  {
+    $parent = $this->manager->findOne(
+      RelationLegacyParent::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['children'])
+    )->getData();
+
+    $I->assertSame('Legacy Alpha', $parent->name);
+    $I->assertSame('parent-alpha', $parent->publicUuid);
+    $I->assertFalse(array_key_exists('uuid', get_object_vars($parent)));
+    $I->assertCount(2, $parent->children);
+
+    $labels = array_map(fn(object $item) => $item->label, $parent->children);
+    sort($labels);
+    $I->assertSame(['First Child', 'Second Child'], array_values($labels));
   }
 
   public function loadsManyToManyRelationsOnOwnerAndInverseSides(UnitTester $I): void
