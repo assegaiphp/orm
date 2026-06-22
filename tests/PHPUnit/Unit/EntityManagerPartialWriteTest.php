@@ -190,6 +190,24 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
+    public function testRelationIdAliasClearHonorsColumnNameWriteNullOptIn(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+        $this->insertCatalogListing('Column Opt In Workbench', 42);
+
+        $payload = new CatalogListingRelationPatch();
+        $result = $this->createManager(CatalogListingEntity::class)->update(
+            CatalogListingEntity::class,
+            $payload,
+            ['name' => 'Column Opt In Workbench'],
+            new UpdateOptions(writeNulls: ['category_id']),
+        );
+
+        self::assertTrue($result->isOk());
+        self::assertNull($this->fetchCatalogListing('Column Opt In Workbench')['category_id']);
+        self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
+    }
+
     public function testRepositoryInsertAcceptsRelationIdAliasWithoutPublicScalarProperty(): void
     {
         $this->insertCategory(42, 'Hardware');
@@ -265,6 +283,25 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertTrue($result->isOk());
         self::assertSame('Cordless Jigsaw Kit', $result->generatedMaps->name ?? null);
         self::assertSame(42, $this->fetchCatalogListing('Cordless Jigsaw Kit')['category_id']);
+    }
+
+    public function testUpsertConflictPathsResolveRelationIdAliases(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+        $this->dataSource->getClient()->exec(
+            'CREATE UNIQUE INDEX catalog_listings_category_id_unique ON catalog_listings (category_id)'
+        );
+
+        $result = $this->createManager(CatalogListingEntity::class)->upsert(
+            CatalogListingEntity::class,
+            ['name' => 'Category Conflict Router', 'categoryId' => 42],
+            ['categoryId'],
+        );
+
+        self::assertTrue($result->isOk());
+        self::assertStringContainsString('"category_id"', $result->getRaw());
+        self::assertStringNotContainsString('"categoryId"', $result->getRaw());
+        self::assertSame(42, $this->fetchCatalogListing('Category Conflict Router')['category_id']);
     }
 
     public function testInsertDedupeAllowsScalarAndRelationToShareAJoinColumn(): void

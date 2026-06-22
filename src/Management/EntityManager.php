@@ -2249,7 +2249,9 @@ class EntityManager implements IEntityStoreOwner
             $columnName = $this->getColumnNameFromProperty($entityInstance, $prop);
 
             if ($this->mapContainsColumnName($columnMap, $columnName)) {
-                if (is_null($value) && !$this->shouldWriteNullAssignment($partialEntity, $prop, $columnName, $options)) {
+                $writeColumnName = $this->resolveMappedWriteColumnName($columnMap, $relationProperties, $columnName);
+
+                if (is_null($value) && !$this->shouldWriteNullAssignment($partialEntity, $prop, $writeColumnName, $options)) {
                     continue;
                 }
 
@@ -2265,24 +2267,18 @@ class EntityManager implements IEntityStoreOwner
                     $value = json_encode($value);
                 }
 
-                if (isset($columnMap[$columnName])) {
-                    if (isset($relationProperties[$columnName])) {
-                        assert($relationProperties[$columnName] instanceof RelationPropertyMetadata);
+                if (isset($relationProperties[$columnName])) {
+                    assert($relationProperties[$columnName] instanceof RelationPropertyMetadata);
 
-                        if (
-                            is_object($value) &&
-                            property_exists($value, $relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName)
-                        ) {
-                            $value = $value->{$relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName};
-                        }
-
-                        $columnName = $relationProperties[$columnName]->joinColumn->effectiveColumnName;
-                    } else {
-                        $columnName = $this->getUnqualifiedColumnName($columnMap[$columnName]);
+                    if (
+                        is_object($value) &&
+                        property_exists($value, $relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName)
+                    ) {
+                        $value = $value->{$relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName};
                     }
                 }
 
-                $this->putAssignmentValue($assignmentList, $columnName, $value);
+                $this->putAssignmentValue($assignmentList, $writeColumnName, $value);
             }
         }
 
@@ -2426,6 +2422,24 @@ class EntityManager implements IEntityStoreOwner
         /** @var Column $column */
         $column = $columnAttribute->newInstance();
         return empty($column->name) ? strtosnake($prop) : $column->name;
+    }
+
+    /**
+     * @param array<int|string, string> $columnMap
+     * @param array<string, RelationPropertyMetadata> $relationProperties
+     */
+    private function resolveMappedWriteColumnName(array $columnMap, array $relationProperties, string $columnName): string
+    {
+        if (isset($relationProperties[$columnName])) {
+            assert($relationProperties[$columnName] instanceof RelationPropertyMetadata);
+            return $relationProperties[$columnName]->joinColumn->effectiveColumnName;
+        }
+
+        if (isset($columnMap[$columnName])) {
+            return $this->getUnqualifiedColumnName($columnMap[$columnName]);
+        }
+
+        return $columnName;
     }
 
     /**
@@ -3074,6 +3088,11 @@ class EntityManager implements IEntityStoreOwner
             }
 
             $columnMap[$columnName] = $columnName;
+        }
+
+        foreach ($this->getRelationIdWriteColumnMetadataMap($entity) as $alias => $metadata) {
+            $columnMap[$alias] = $metadata['column'];
+            $columnMap[$metadata['column']] = $metadata['column'];
         }
 
         $resolved = array_map(function (string $conflictPath) use ($columnMap): string {
