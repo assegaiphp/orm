@@ -2418,6 +2418,7 @@ class EntityManager implements IEntityStoreOwner
         }
 
         $columnMap = $this->entityInspector->getColumns(entity: $entityInstance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
+        $relationIdColumns = $this->getRelationIdWriteColumnMetadataMap($entityInstance, $options->readonlyColumns ?? $this->readonlyColumns);
         $columnMap = $this->appendRelationIdWriteColumnMap($entityInstance, $columnMap, $options->readonlyColumns ?? $this->readonlyColumns);
 
         foreach ($partialEntity as $prop => $value) {
@@ -2437,6 +2438,14 @@ class EntityManager implements IEntityStoreOwner
 
                 if ($value instanceof DateTime) {
                     $value = $this->entityInspector->convertDateTimeToString($value, $prop, $columnOptions);
+                }
+
+                if (
+                    isset($relationIdColumns[$columnName]) &&
+                    $this->normalizeColumnNameForComparison($writeColumnName) ===
+                    $this->normalizeColumnNameForComparison($relationIdColumns[$columnName]['qualifiedColumn'])
+                ) {
+                    $value = $this->normalizeRelationIdWriteValue($value, $relationIdColumns[$columnName]['referencedColumn']);
                 }
 
                 if ($value instanceof stdClass) {
@@ -3279,8 +3288,8 @@ class EntityManager implements IEntityStoreOwner
         }
 
         foreach ($this->getRelationIdWriteColumnMetadataMap($entity) as $alias => $metadata) {
-            $columnMap[$alias] = $metadata['column'];
-            $columnMap[$metadata['column']] = $metadata['column'];
+            $columnMap[$alias] ??= $metadata['column'];
+            $columnMap[$metadata['column']] ??= $metadata['column'];
         }
 
         $resolved = array_map(function (string $conflictPath) use ($columnMap): string {

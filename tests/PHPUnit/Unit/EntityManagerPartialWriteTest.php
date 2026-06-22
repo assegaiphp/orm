@@ -136,6 +136,24 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
+    public function testRelationIdAliasUpdateNormalizesRelatedObjectValue(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+        $this->insertCatalogListing('Object Alias Update', null);
+
+        $category = new CatalogCategoryEntity();
+        $category->id = 42;
+
+        $result = $this->createManager(CatalogListingEntity::class)->update(
+            CatalogListingEntity::class,
+            ['categoryId' => $category],
+            ['name' => 'Object Alias Update'],
+        );
+
+        self::assertTrue($result->isOk());
+        self::assertSame(42, $this->fetchCatalogListing('Object Alias Update')['category_id']);
+    }
+
     public function testArrayPayloadIdStaysReadonlyWhenRelationIdAliasExists(): void
     {
         $this->insertCategory(42, 'Hardware');
@@ -379,6 +397,26 @@ final class EntityManagerPartialWriteTest extends TestCase
 
         $row = $this->fetchAliasCollisionListing('Alias Collision Upsert');
         self::assertTrue($result->isOk());
+        self::assertSame(7, (int)$row['category_code']);
+        self::assertNull($row['category_id']);
+    }
+
+    public function testUpsertConflictPathPrefersDeclaredColumnOverGeneratedRelationAlias(): void
+    {
+        $this->dataSource->getClient()->exec(
+            'CREATE UNIQUE INDEX catalog_listing_alias_collision_category_code_unique ON catalog_listing_alias_collisions (category_code)'
+        );
+
+        $result = $this->createManager(CatalogListingWithAliasCollisionEntity::class)->upsert(
+            CatalogListingWithAliasCollisionEntity::class,
+            ['name' => 'Alias Collision Conflict Path', 'categoryId' => 7],
+            ['categoryId'],
+        );
+
+        $row = $this->fetchAliasCollisionListing('Alias Collision Conflict Path');
+        self::assertTrue($result->isOk());
+        self::assertStringContainsString('ON CONFLICT ("category_code")', $result->getRaw());
+        self::assertStringNotContainsString('ON CONFLICT ("category_id")', $result->getRaw());
         self::assertSame(7, (int)$row['category_code']);
         self::assertNull($row['category_id']);
     }
