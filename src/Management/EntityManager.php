@@ -339,7 +339,6 @@ class EntityManager implements IEntityStoreOwner
      * Executes a fast and efficient `INSERT` query.
      * Does not check if the entity exist in the database, so the query will fail if
      * duplicate entity is being inserted.
-     * You can execute bulk inserts using this method.
      *
      * @template TEntity of object
      * @param class-string<TEntity> $entityClass The entity class name.
@@ -353,10 +352,6 @@ class EntityManager implements IEntityStoreOwner
      */
     public function insert(string $entityClass, array|object $entity, ?InsertOptions $options = null): InsertResult
     {
-        if (is_array($entity) && array_is_list($entity)) {
-            return $this->insertMany(entityClass: $entityClass, entities: $entity, options: $options);
-        }
-
         # Check if the entity matches the given entity class
         if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
             return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $this->query->queryString(), generatedMaps: null, errors: [new ORMException("Entity does not match the given entity class.")]);
@@ -487,63 +482,6 @@ class EntityManager implements IEntityStoreOwner
         $identifiers = is_array($entity) ? (object)$entity : $entity;
 
         return new InsertResult(identifiers: $identifiers, raw: $raw, generatedMaps: $generatedMaps, affected: $affected);
-    }
-
-    /**
-     * @param list<mixed> $entities
-     * @throws ClassNotFoundException
-     * @throws GeneralSQLQueryException
-     * @throws ORMException
-     * @throws ReflectionException
-     */
-    private function insertMany(string $entityClass, array $entities, ?InsertOptions $options = null): InsertResult
-    {
-        foreach ($entities as $entity) {
-            if (!is_array($entity) && !is_object($entity)) {
-                return new InsertResult(
-                    identifiers: (object)['results' => []],
-                    raw: $this->query->queryString(),
-                    generatedMaps: null,
-                    errors: [new ORMException("Entity does not match the given entity class.")],
-                );
-            }
-
-            if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
-                return new InsertResult(
-                    identifiers: (object)['results' => []],
-                    raw: $this->query->queryString(),
-                    generatedMaps: null,
-                    errors: [new ORMException("Entity does not match the given entity class.")],
-                );
-            }
-        }
-
-        $identifiers = [];
-        $generatedMaps = [];
-        $errors = [];
-        $affected = 0;
-        $raw = $this->query->queryString();
-
-        foreach ($entities as $entity) {
-            $result = $this->insert(entityClass: $entityClass, entity: $entity, options: $options);
-            $raw = $result->getRaw();
-            $affected += $result->getTotalAffectedRows();
-
-            if ($result->isError()) {
-                $errors = [...$errors, ...$this->publicResultErrors($result)];
-            }
-
-            $identifiers[] = $result->getIdentifiers();
-            $generatedMaps[] = $result->getGeneratedMaps();
-        }
-
-        return new InsertResult(
-            identifiers: (object)['results' => $identifiers],
-            raw: $raw,
-            generatedMaps: (object)['results' => $generatedMaps],
-            errors: $errors,
-            affected: $affected,
-        );
     }
 
     /**
@@ -2386,7 +2324,8 @@ class EntityManager implements IEntityStoreOwner
         }
 
         if (!$generatedMaps) {
-            $updatedEntity = $this->findOne(entityClass: $entityClass, options: new FindOptions(where: $conditions));
+            $readbackConditions = $this->normalizeWriteConditionsForReadback($conditions, $entityInstance);
+            $updatedEntity = $this->findOne(entityClass: $entityClass, options: new FindOptions(where: $readbackConditions));
             $generatedMaps = $updatedEntity->getData() ?? new stdClass();
         }
 
@@ -2404,6 +2343,32 @@ class EntityManager implements IEntityStoreOwner
         }
 
         return new UpdateResult(raw: $raw, affected: $affected, identifiers: $identifiers, generatedMaps: $generatedMaps);
+    }
+
+    /**
+     * @return string|array<string|int, mixed>
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function normalizeWriteConditionsForReadback(string|object|array $conditions, object $entity): string|array
+    {
+        if (is_string($conditions)) {
+            return $conditions;
+        }
+
+        $normalizedConditions = [];
+
+        foreach ((array)$conditions as $key => $value) {
+            if (!is_string($key)) {
+                $normalizedConditions[$key] = $value;
+                continue;
+            }
+
+            $normalizedConditions[$this->getWriteColumnNameFromProperty($entity, $key)] = $value;
+        }
+
+        return $normalizedConditions;
     }
 
     /**

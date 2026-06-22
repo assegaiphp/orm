@@ -207,33 +207,28 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
-    public function testInsertAcceptsListArrayRows(): void
-    {
-        $this->insertCategory(42, 'Hardware');
-
-        $result = $this->createManager(CatalogListingEntity::class)->insert(
-            CatalogListingEntity::class,
-            [
-                ['name' => 'Bulk Cordless Saw', 'categoryId' => 42],
-                ['name' => 'Bulk Bench Plane', 'category_id' => 42],
-            ],
-        );
-
-        self::assertTrue($result->isOk());
-        self::assertSame(2, $result->getTotalAffectedRows());
-        self::assertSame(42, $this->fetchCatalogListing('Bulk Cordless Saw')['category_id']);
-        self::assertSame(42, $this->fetchCatalogListing('Bulk Bench Plane')['category_id']);
-    }
-
-    public function testInsertRejectsListRowsWithNumericKeys(): void
+    public function testInsertRejectsListArrayRows(): void
     {
         $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
             NullableCatalogItemEntity::class,
-            [['Numeric Key Item']],
+            [['name' => 'Bulk Widget']],
         );
 
         self::assertTrue($result->isError());
         self::assertInstanceOf(ORMException::class, $result->getErrors()[0] ?? null);
+        self::assertFalse($this->catalogItemExistsByName('Bulk Widget'));
+    }
+
+    public function testInsertRejectsMixedNumericKeyPayload(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Numeric Key Item', 0 => 'ignored'],
+        );
+
+        self::assertTrue($result->isError());
+        self::assertInstanceOf(ORMException::class, $result->getErrors()[0] ?? null);
+        self::assertFalse($this->catalogItemExistsByName('Numeric Key Item'));
     }
 
     public function testSqliteUpsertAcceptsRelationIdAliasWithoutPublicScalarProperty(): void
@@ -254,6 +249,22 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertStringContainsString('"category_id"', $result->getRaw());
         self::assertSame(42, $this->fetchCatalogListing('Cordless Router')['category_id']);
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
+    }
+
+    public function testUpdateReadbackNormalizesRelationIdAliasConditions(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+        $this->insertCatalogListing('Cordless Jigsaw', 42);
+
+        $result = $this->createManager(CatalogListingEntity::class)->update(
+            CatalogListingEntity::class,
+            ['name' => 'Cordless Jigsaw Kit'],
+            ['categoryId' => 42],
+        );
+
+        self::assertTrue($result->isOk());
+        self::assertSame('Cordless Jigsaw Kit', $result->generatedMaps->name ?? null);
+        self::assertSame(42, $this->fetchCatalogListing('Cordless Jigsaw Kit')['category_id']);
     }
 
     public function testInsertDedupeAllowsScalarAndRelationToShareAJoinColumn(): void
@@ -436,6 +447,16 @@ final class EntityManagerPartialWriteTest extends TestCase
         $statement->execute([$name]);
 
         return $statement->fetch(PDO::FETCH_ASSOC);
+    }
+
+    private function catalogItemExistsByName(string $name): bool
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'SELECT COUNT(*) FROM nullable_catalog_items WHERE name = ?'
+        );
+        $statement->execute([$name]);
+
+        return (int)$statement->fetchColumn() > 0;
     }
 
     private function catalogListingExistsById(int $id): bool
