@@ -265,6 +265,41 @@ final class EntityManagerPartialWriteTest extends TestCase
         );
     }
 
+    public function testConflictingScalarAndRawRelationAliasInsertWritesFailClearly(): void
+    {
+        $payload = [
+            'name' => 'Conflicted Alias Insert',
+            'categoryId' => 7,
+            'category_id' => 42,
+        ];
+
+        $this->expectException(ORMException::class);
+        $this->expectExceptionMessage('category_id is mapped more than once');
+
+        $this->createManager(CatalogListingWithScalarEntity::class)->insert(
+            CatalogListingWithScalarEntity::class,
+            $payload,
+        );
+    }
+
+    public function testConflictingScalarAndRawRelationAliasUpsertWritesFailClearly(): void
+    {
+        $payload = [
+            'name' => 'Conflicted Alias Upsert',
+            'categoryId' => 7,
+            'category_id' => 42,
+        ];
+
+        $this->expectException(ORMException::class);
+        $this->expectExceptionMessage('category_id is mapped more than once');
+
+        $this->createManager(CatalogListingWithScalarEntity::class)->upsert(
+            CatalogListingWithScalarEntity::class,
+            $payload,
+            ['name'],
+        );
+    }
+
     /**
      * @param class-string $entityClass
      */

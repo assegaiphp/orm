@@ -2501,6 +2501,7 @@ class EntityManager implements IEntityStoreOwner
         array $columns,
         array $values,
         array $exclude = [],
+        bool $includeValues = true,
     ): array
     {
         $relationIdColumns = $this->getRelationIdWriteColumnMetadataMap($entity, $exclude);
@@ -2512,8 +2513,24 @@ class EntityManager implements IEntityStoreOwner
             }
 
             $metadata = $relationIdColumns[$propertyName];
+            $normalizedValue = $this->normalizeRelationIdWriteValue($value, $metadata['referencedColumn']);
+            $existingColumnIndex = array_search($propertyName, array_keys($columns), true);
             $columns[$propertyName] = $metadata['qualifiedColumn'];
-            $values[] = $this->normalizeRelationIdWriteValue($value, $metadata['referencedColumn']);
+
+            if (!$includeValues) {
+                continue;
+            }
+
+            if ($existingColumnIndex !== false) {
+                $valueKeys = array_keys($values);
+
+                if (array_key_exists($existingColumnIndex, $valueKeys)) {
+                    $values[$valueKeys[$existingColumnIndex]] = $normalizedValue;
+                    continue;
+                }
+            }
+
+            $values[] = $normalizedValue;
         }
 
         return [$columns, $values];
@@ -2904,7 +2921,7 @@ class EntityManager implements IEntityStoreOwner
                 : UpsertOptions::fromArray($options);
         }
 
-        if (is_array($entityOrEntities)) {
+        if (is_array($entityOrEntities) && array_is_list($entityOrEntities)) {
             $results = [];
             $errors = [];
             foreach ($entityOrEntities as $entity) {
@@ -2920,7 +2937,7 @@ class EntityManager implements IEntityStoreOwner
             $generatedMaps = new stdClass();
             $generatedMaps->results = $results;
 
-            return new UpdateResult(raw: $this->query->queryString(), affected: $this->query->rowCount(), identifiers: $entityOrEntities, generatedMaps: $generatedMaps, errors: $errors);
+            return new UpdateResult(raw: $this->query->queryString(), affected: $this->query->rowCount(), identifiers: (object)$entityOrEntities, generatedMaps: $generatedMaps, errors: $errors);
         }
 
         $this->validateEntityName(entityClass: $entityClass);
@@ -2940,7 +2957,7 @@ class EntityManager implements IEntityStoreOwner
         $values = $this->entityInspector->getValues(entity: $entity);
         [$columns, $values] = $this->appendRelationIdWriteColumnsAndValues($entity, $entityOrEntities, $columns, $values);
         [$columns, $values] = $this->deduplicateWriteColumnsAndValues($columns, $values);
-        [$updateColumns] = $this->appendRelationIdWriteColumnsAndValues($entity, $entityOrEntities, $updateColumns, [], $options->readonlyColumns ?? $this->readonlyColumns);
+        [$updateColumns] = $this->appendRelationIdWriteColumnsAndValues($entity, $entityOrEntities, $updateColumns, [], $options->readonlyColumns ?? $this->readonlyColumns, includeValues: false);
         $tableName = $this->entityInspector->getTableName(entity: $entity);
 
         return match ($this->query->getDialect()) {
