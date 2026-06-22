@@ -353,9 +353,13 @@ class EntityManager implements IEntityStoreOwner
      */
     public function insert(string $entityClass, array|object $entity, ?InsertOptions $options = null): InsertResult
     {
+        if (is_array($entity) && array_is_list($entity)) {
+            return $this->insertMany(entityClass: $entityClass, entities: $entity, options: $options);
+        }
+
         # Check if the entity matches the given entity class
         if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
-            return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: null, errors: [new ORMException("Entity does not match the given entity class.")]);
+            return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $this->query->queryString(), generatedMaps: null, errors: [new ORMException("Entity does not match the given entity class.")]);
         }
 
         $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
@@ -389,6 +393,7 @@ class EntityManager implements IEntityStoreOwner
 
         $result = $this->query->execute();
         $raw = $result->getRaw();
+        $affected = $this->query->rowCount() ?? 0;
 
         if ($result->isError()) {
             if (!headers_sent()) {
@@ -414,7 +419,7 @@ class EntityManager implements IEntityStoreOwner
                 raw: $raw,
                 generatedMaps: $generatedMaps,
                 errors: [],
-                affected: $this->query->rowCount() ?? 0,
+                affected: $affected,
             );
         }
 
@@ -481,7 +486,64 @@ class EntityManager implements IEntityStoreOwner
 
         $identifiers = is_array($entity) ? (object)$entity : $entity;
 
-        return new InsertResult(identifiers: $identifiers, raw: $raw, generatedMaps: $generatedMaps);
+        return new InsertResult(identifiers: $identifiers, raw: $raw, generatedMaps: $generatedMaps, affected: $affected);
+    }
+
+    /**
+     * @param list<mixed> $entities
+     * @throws ClassNotFoundException
+     * @throws GeneralSQLQueryException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function insertMany(string $entityClass, array $entities, ?InsertOptions $options = null): InsertResult
+    {
+        foreach ($entities as $entity) {
+            if (!is_array($entity) && !is_object($entity)) {
+                return new InsertResult(
+                    identifiers: (object)['results' => []],
+                    raw: $this->query->queryString(),
+                    generatedMaps: null,
+                    errors: [new ORMException("Entity does not match the given entity class.")],
+                );
+            }
+
+            if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
+                return new InsertResult(
+                    identifiers: (object)['results' => []],
+                    raw: $this->query->queryString(),
+                    generatedMaps: null,
+                    errors: [new ORMException("Entity does not match the given entity class.")],
+                );
+            }
+        }
+
+        $identifiers = [];
+        $generatedMaps = [];
+        $errors = [];
+        $affected = 0;
+        $raw = $this->query->queryString();
+
+        foreach ($entities as $entity) {
+            $result = $this->insert(entityClass: $entityClass, entity: $entity, options: $options);
+            $raw = $result->getRaw();
+            $affected += $result->getTotalAffectedRows();
+
+            if ($result->isError()) {
+                $errors = [...$errors, ...$this->publicResultErrors($result)];
+            }
+
+            $identifiers[] = $result->getIdentifiers();
+            $generatedMaps[] = $result->getGeneratedMaps();
+        }
+
+        return new InsertResult(
+            identifiers: (object)['results' => $identifiers],
+            raw: $raw,
+            generatedMaps: (object)['results' => $generatedMaps],
+            errors: $errors,
+            affected: $affected,
+        );
     }
 
     /**
@@ -2311,6 +2373,7 @@ class EntityManager implements IEntityStoreOwner
 
         $result = $this->query->execute();
         $raw = $result->getRaw();
+        $affected = $this->query->rowCount() ?? 0;
 
         if ($result->isError()) {
             throw $this->newGeneralSqlQueryException($this->query, $result);
@@ -2340,7 +2403,7 @@ class EntityManager implements IEntityStoreOwner
             }
         }
 
-        return new UpdateResult(raw: $raw, affected: $this->query->rowCount(), identifiers: $identifiers, generatedMaps: $generatedMaps);
+        return new UpdateResult(raw: $raw, affected: $affected, identifiers: $identifiers, generatedMaps: $generatedMaps);
     }
 
     /**
@@ -2456,7 +2519,7 @@ class EntityManager implements IEntityStoreOwner
 
         foreach ($sourceProperties as $propertyName => $propertyValue) {
             if (!is_string($propertyName)) {
-                continue;
+                return false;
             }
 
             if (property_exists($entityClass, $propertyName) || isset($relationIdColumns[$propertyName])) {
@@ -2772,6 +2835,10 @@ class EntityManager implements IEntityStoreOwner
             return $left instanceof SQLExpression && $right instanceof SQLExpression && (string)$left === (string)$right;
         }
 
+        if ($left === null || $right === null) {
+            return $left === $right;
+        }
+
         return $left == $right;
     }
 
@@ -3003,6 +3070,7 @@ class EntityManager implements IEntityStoreOwner
 
         $result = $this->query->execute();
         $raw = $result->getRaw();
+        $affected = $this->query->rowCount() ?? 0;
         $errors = [];
 
         if ($result->isError()) {
@@ -3025,7 +3093,7 @@ class EntityManager implements IEntityStoreOwner
             raw: $raw,
             generatedMaps: $entity,
             errors: $errors,
-            affected: $this->query->rowCount() ?? 0,
+            affected: $affected,
         );
     }
 
@@ -3111,6 +3179,7 @@ class EntityManager implements IEntityStoreOwner
 
         $result = $this->query->execute();
         $raw = $result->getRaw();
+        $affected = $this->query->rowCount() ?? 0;
         $errors = [];
 
         if ($result->isError()) {
@@ -3151,7 +3220,7 @@ class EntityManager implements IEntityStoreOwner
             raw: $raw,
             generatedMaps: $generatedMaps,
             errors: $errors,
-            affected: $this->query->rowCount() ?? 0,
+            affected: $affected,
         );
     }
 
@@ -3224,6 +3293,7 @@ class EntityManager implements IEntityStoreOwner
 
         $result = $this->query->execute();
         $raw = $result->getRaw();
+        $affected = $this->query->rowCount() ?? 0;
 
         $errors = [];
         if ($result->isError()) {
@@ -3263,7 +3333,7 @@ class EntityManager implements IEntityStoreOwner
             raw: $raw,
             generatedMaps: $generatedMaps,
             errors: $errors,
-            affected: $this->query->rowCount() ?? 0,
+            affected: $affected,
         );
     }
 

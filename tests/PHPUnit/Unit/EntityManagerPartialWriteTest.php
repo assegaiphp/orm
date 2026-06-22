@@ -207,6 +207,35 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
+    public function testInsertAcceptsListArrayRows(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+
+        $result = $this->createManager(CatalogListingEntity::class)->insert(
+            CatalogListingEntity::class,
+            [
+                ['name' => 'Bulk Cordless Saw', 'categoryId' => 42],
+                ['name' => 'Bulk Bench Plane', 'category_id' => 42],
+            ],
+        );
+
+        self::assertTrue($result->isOk());
+        self::assertSame(2, $result->getTotalAffectedRows());
+        self::assertSame(42, $this->fetchCatalogListing('Bulk Cordless Saw')['category_id']);
+        self::assertSame(42, $this->fetchCatalogListing('Bulk Bench Plane')['category_id']);
+    }
+
+    public function testInsertRejectsListRowsWithNumericKeys(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
+            NullableCatalogItemEntity::class,
+            [['Numeric Key Item']],
+        );
+
+        self::assertTrue($result->isError());
+        self::assertInstanceOf(ORMException::class, $result->getErrors()[0] ?? null);
+    }
+
     public function testSqliteUpsertAcceptsRelationIdAliasWithoutPublicScalarProperty(): void
     {
         $this->insertCategory(42, 'Hardware');
@@ -245,6 +274,49 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertTrue($result->isOk());
         self::assertSame(1, substr_count($result->getRaw(), '"category_id"'));
         self::assertSame(42, $this->fetchCatalogListing('Cordless Driver')['category_id']);
+    }
+
+    public function testInsertDedupePreservesZeroRelationAliasValue(): void
+    {
+        $result = $this->createManager(CatalogListingWithScalarEntity::class)->insert(
+            CatalogListingWithScalarEntity::class,
+            ['name' => 'Zero Alias Insert', 'category_id' => 0],
+        );
+
+        $value = $this->fetchCatalogListing('Zero Alias Insert')['category_id'];
+        self::assertTrue($result->isOk());
+        self::assertNotNull($value);
+        self::assertSame(0, (int)$value);
+    }
+
+    public function testUpsertDedupePreservesZeroRelationAliasValue(): void
+    {
+        $result = $this->createManager(CatalogListingWithScalarEntity::class)->upsert(
+            CatalogListingWithScalarEntity::class,
+            ['name' => 'Zero Alias Upsert', 'category_id' => 0],
+            ['name'],
+        );
+
+        $value = $this->fetchCatalogListing('Zero Alias Upsert')['category_id'];
+        self::assertTrue($result->isOk());
+        self::assertNotNull($value);
+        self::assertSame(0, (int)$value);
+    }
+
+    public function testUpdateDedupePreservesZeroRelationAliasValue(): void
+    {
+        $this->insertCatalogListing('Zero Alias Update', 42);
+
+        $result = $this->createManager(CatalogListingWithScalarEntity::class)->update(
+            CatalogListingWithScalarEntity::class,
+            ['categoryId' => null, 'category_id' => 0],
+            ['name' => 'Zero Alias Update'],
+        );
+
+        $value = $this->fetchCatalogListing('Zero Alias Update')['category_id'];
+        self::assertTrue($result->isOk());
+        self::assertNotNull($value);
+        self::assertSame(0, (int)$value);
     }
 
     public function testConflictingScalarAndRelationJoinColumnWritesFailClearly(): void
