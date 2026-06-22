@@ -339,10 +339,11 @@ class EntityManager implements IEntityStoreOwner
      * Executes a fast and efficient `INSERT` query.
      * Does not check if the entity exist in the database, so the query will fail if
      * duplicate entity is being inserted.
+     * You can execute bulk inserts by passing a list of entity-like rows.
      *
      * @template TEntity of object
      * @param class-string<TEntity> $entityClass The entity class name.
-     * @param TEntity|array<string, mixed> $entity The entity to insert.
+     * @param TEntity|array<string, mixed>|list<TEntity|array<string, mixed>> $entity The entity or entities to insert.
      * @param InsertOptions|null $options The options to use when inserting the entity.
      * @return InsertResult<TEntity>
      * @throws ClassNotFoundException
@@ -352,26 +353,20 @@ class EntityManager implements IEntityStoreOwner
      */
     public function insert(string $entityClass, array|object $entity, ?InsertOptions $options = null): InsertResult
     {
+        if (is_array($entity) && array_is_list($entity)) {
+            return $this->insertMany(entityClass: $entityClass, entities: $entity, options: $options);
+        }
+
         # Check if the entity matches the given entity class
         if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
             return new InsertResult(identifiers: is_array($entity) ? (object)$entity : $entity, raw: $this->query->queryString(), generatedMaps: null, errors: [new ORMException("Entity does not match the given entity class.")]);
         }
 
-        $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
-        $primaryKey = $this->getPrimaryKeyMetadata($instance);
-        $primaryKeyField = $primaryKey['field'];
-        $columnsMeta = [];
-        $relations = [];
-        $relationProperties = [];
-
-        if ($options?->relations) {
-            $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
-        }
-
-        $columns = $this->entityInspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnsMeta);
-        $values = $this->entityInspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'relation_properties' => $relationProperties, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
-        [$columns, $values] = $this->appendRelationIdWriteColumnsAndValues($instance, $entity, $columns, $values, $options->readonlyColumns ?? $this->readonlyColumns);
-        [$columns, $values] = $this->deduplicateWriteColumnsAndValues($columns, $values);
+        $insertWrite = $this->prepareInsertWrite(entityClass: $entityClass, entity: $entity, options: $options);
+        $instance = $insertWrite['instance'];
+        $primaryKeyField = $insertWrite['primaryKeyField'];
+        $columns = $insertWrite['columns'];
+        $values = $insertWrite['values'];
 
         $columnCount = count($columns);
         $valueCount = count($values);
@@ -482,6 +477,164 @@ class EntityManager implements IEntityStoreOwner
         $identifiers = is_array($entity) ? (object)$entity : $entity;
 
         return new InsertResult(identifiers: $identifiers, raw: $raw, generatedMaps: $generatedMaps, affected: $affected);
+    }
+
+    /**
+     * @param list<object|array<string, mixed>|array<int, mixed>> $entities
+     * @throws ClassNotFoundException
+     * @throws GeneralSQLQueryException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function insertMany(string $entityClass, array $entities, ?InsertOptions $options = null): InsertResult
+    {
+        if (empty($entities)) {
+            return new InsertResult(
+                identifiers: (object)['results' => []],
+                raw: $this->query->queryString(),
+                generatedMaps: (object)['results' => []],
+            );
+        }
+
+        foreach ($entities as $entity) {
+            if (!is_array($entity) && !is_object($entity)) {
+                return $this->invalidInsertStructureResult();
+            }
+
+            if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
+                return $this->invalidInsertStructureResult();
+            }
+        }
+
+        $preparedRows = [];
+        $columnMap = [];
+
+        foreach ($entities as $entity) {
+            $insertWrite = $this->prepareInsertWrite(entityClass: $entityClass, entity: $entity, options: $options);
+            $preparedRows[] = $insertWrite;
+
+            foreach ($insertWrite['columns'] as $column) {
+                $normalizedColumnName = $this->normalizeColumnNameForComparison($column);
+                $columnMap[$normalizedColumnName] ??= $column;
+            }
+        }
+
+        $rowsList = [];
+
+        foreach ($preparedRows as $insertWrite) {
+            $rowValues = [];
+            $valueList = array_values($insertWrite['values']);
+            $index = 0;
+
+            foreach ($insertWrite['columns'] as $column) {
+                $rowValues[$this->normalizeColumnNameForComparison($column)] = $valueList[$index] ?? null;
+                $index++;
+            }
+
+            $row = [];
+
+            foreach (array_keys($columnMap) as $normalizedColumnName) {
+                $row[] = $rowValues[$normalizedColumnName] ?? null;
+            }
+
+            $rowsList[] = $row;
+        }
+
+        $firstInsert = $preparedRows[0];
+        $tableName = $this->entityInspector->getTableName(entity: $firstInsert['instance']);
+        $primaryKeyField = $firstInsert['primaryKeyField'];
+
+        $this->query
+            ->insertInto(tableName: $tableName)
+            ->multipleRows(columns: array_values($columnMap))
+            ->rows(rowsList: $rowsList);
+
+        if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+            $this->query->appendQueryString('RETURNING ' . $this->buildReturningProjection($firstInsert['instance']));
+        }
+
+        if ($this->isDebug || $options?->isDebug) {
+            $this->query->debug();
+        }
+
+        $result = $this->query->execute();
+        $raw = $result->getRaw();
+        $affected = $this->query->rowCount() ?? 0;
+
+        if ($result->isError()) {
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
+
+            $error = $this->newGeneralSqlQueryException($this->query, $result);
+            OrmRuntime::log('error', self::LOG_TAG, $error->getMessage());
+
+            return new InsertResult(
+                identifiers: (object)['results' => []],
+                raw: $raw,
+                generatedMaps: null,
+                errors: [$error, ...$this->publicResultErrors($result)],
+            );
+        }
+
+        $generatedMaps = $this->query->getDialect() === SQLDialect::POSTGRESQL
+            ? $this->hydrateGeneratedMapList($entityClass, $result->getData())
+            : array_map(
+                fn(array $insertWrite): ?object => $this->sanitizeGeneratedMaps($insertWrite['instance']),
+                $preparedRows
+            );
+        $identifiers = array_map(
+            fn(?object $generatedMap): object => (object)[$primaryKeyField => $generatedMap->{$primaryKeyField} ?? null],
+            $generatedMaps
+        );
+
+        return new InsertResult(
+            identifiers: (object)['results' => $identifiers],
+            raw: $raw,
+            generatedMaps: (object)['results' => $generatedMaps],
+            affected: $affected,
+        );
+    }
+
+    private function invalidInsertStructureResult(): InsertResult
+    {
+        return new InsertResult(
+            identifiers: (object)['results' => []],
+            raw: $this->query->queryString(),
+            generatedMaps: null,
+            errors: [new ORMException("Entity does not match the given entity class.")],
+        );
+    }
+
+    /**
+     * @return array{instance: object, primaryKeyField: string, columns: array<int|string, string>, values: array<int|string, mixed>}
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function prepareInsertWrite(string $entityClass, object|array $entity, ?InsertOptions $options = null): array
+    {
+        $instance = $this->create(entityClass: $entityClass, entityLike: (object)$entity);
+        $primaryKey = $this->getPrimaryKeyMetadata($instance);
+        $columnsMeta = [];
+        $relations = [];
+        $relationProperties = [];
+
+        if ($options?->relations) {
+            $relations = is_object($options->relations) ? (array)$options->relations : $options->relations;
+        }
+
+        $columns = $this->entityInspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnsMeta);
+        $values = $this->entityInspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'relation_properties' => $relationProperties, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
+        [$columns, $values] = $this->appendRelationIdWriteColumnsAndValues($instance, $entity, $columns, $values, $options->readonlyColumns ?? $this->readonlyColumns);
+        [$columns, $values] = $this->deduplicateWriteColumnsAndValues($columns, $values);
+
+        return [
+            'instance' => $instance,
+            'primaryKeyField' => $primaryKey['field'],
+            'columns' => $columns,
+            'values' => $values,
+        ];
     }
 
     /**
@@ -852,6 +1005,29 @@ class EntityManager implements IEntityStoreOwner
         $row = $this->normalizeReturnedRowForEntity($entityClass, $row);
 
         return $this->create($entityClass, (object)$row);
+    }
+
+    /**
+     * @return object[]
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function hydrateGeneratedMapList(string $entityClass, array $rows): array
+    {
+        $generatedMaps = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $row = $this->normalizeReturnedRowForEntity($entityClass, $row);
+            $generatedMap = $this->create($entityClass, (object)$row);
+            $generatedMaps[] = $this->sanitizeGeneratedMaps($generatedMap) ?? $generatedMap;
+        }
+
+        return $generatedMaps;
     }
 
     private function normalizeReturnedRowForEntity(string $entityClass, array $row): array

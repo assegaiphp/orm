@@ -225,16 +225,39 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
-    public function testInsertRejectsListArrayRows(): void
+    public function testInsertAcceptsListArrayRows(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+
+        $result = $this->createManager(CatalogListingEntity::class)->insert(
+            CatalogListingEntity::class,
+            [
+                ['name' => 'Bulk Cordless Saw', 'categoryId' => 42],
+                ['name' => 'Bulk Bench Plane', 'category_id' => 42],
+            ],
+        );
+
+        self::assertTrue($result->isOk());
+        self::assertSame(2, $result->getTotalAffectedRows());
+        self::assertStringContainsString('), (', $result->getRaw());
+        self::assertSame(42, $this->fetchCatalogListing('Bulk Cordless Saw')['category_id']);
+        self::assertSame(42, $this->fetchCatalogListing('Bulk Bench Plane')['category_id']);
+    }
+
+    public function testBulkInsertRejectsRowsWithNumericKeysBeforeWriting(): void
     {
         $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
             NullableCatalogItemEntity::class,
-            [['name' => 'Bulk Widget']],
+            [
+                ['name' => 'Bulk Widget'],
+                ['Numeric Key Item'],
+            ],
         );
 
         self::assertTrue($result->isError());
         self::assertInstanceOf(ORMException::class, $result->getErrors()[0] ?? null);
         self::assertFalse($this->catalogItemExistsByName('Bulk Widget'));
+        self::assertFalse($this->catalogItemExistsByName('Numeric Key Item'));
     }
 
     public function testInsertRejectsMixedNumericKeyPayload(): void
