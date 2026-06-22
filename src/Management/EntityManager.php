@@ -2289,7 +2289,8 @@ class EntityManager implements IEntityStoreOwner
         $assignmentList = $this->applyOnUpdateColumnAssignments($entityInstance, $assignmentList);
 
         if (empty($assignmentList)) {
-            return new UpdateResult(null, 0, $partialEntity, new stdClass());
+            $identifiers = is_array($partialEntity) ? (object)$partialEntity : $partialEntity;
+            return new UpdateResult(null, 0, $identifiers, new stdClass());
         }
 
         $statement = $this->query
@@ -2408,15 +2409,18 @@ class EntityManager implements IEntityStoreOwner
      */
     private function mapContainsColumnName(array $columnMap, string $columnName): bool
     {
+        $normalizedColumnName = $this->normalizeColumnNameForComparison($columnName);
+
         foreach ($columnMap as $key => $value) {
-            if (str_ends_with($key, $columnName)) {
+            if (is_string($key) && $this->normalizeColumnNameForComparison($key) === $normalizedColumnName) {
                 return true;
             }
 
-            if (str_ends_with($value, $columnName)) {
+            if ($this->normalizeColumnNameForComparison($value) === $normalizedColumnName) {
                 return true;
             }
         }
+
         return false;
     }
 

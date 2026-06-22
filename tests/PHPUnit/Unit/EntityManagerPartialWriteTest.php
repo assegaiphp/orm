@@ -127,6 +127,42 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
+    public function testArrayPayloadIdStaysReadonlyWhenRelationIdAliasExists(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+        $this->insertCatalogListing('Bench Vise', 42);
+        $original = $this->fetchCatalogListing('Bench Vise');
+
+        $result = $this->createManager(CatalogListingEntity::class)->update(
+            CatalogListingEntity::class,
+            ['id' => 999],
+            ['name' => 'Bench Vise'],
+        );
+
+        $updated = $this->fetchCatalogListing('Bench Vise');
+        self::assertSame(0, $result->affected);
+        self::assertSame($original['id'], $updated['id']);
+        self::assertFalse($this->catalogListingExistsById(999));
+    }
+
+    public function testObjectPayloadIdStaysReadonlyWhenRelationIdAliasExists(): void
+    {
+        $this->insertCategory(42, 'Hardware');
+        $this->insertCatalogListing('Table Saw', 42);
+        $original = $this->fetchCatalogListing('Table Saw');
+
+        $result = $this->createManager(CatalogListingEntity::class)->update(
+            CatalogListingEntity::class,
+            new CatalogListingReadonlyIdPatch(),
+            ['name' => 'Table Saw'],
+        );
+
+        $updated = $this->fetchCatalogListing('Table Saw');
+        self::assertSame(0, $result->affected);
+        self::assertSame($original['id'], $updated['id']);
+        self::assertFalse($this->catalogListingExistsById(999));
+    }
+
     public function testRelationIdAliasClearRequiresObjectNullWriteOptIn(): void
     {
         $this->insertCategory(42, 'Hardware');
@@ -288,11 +324,21 @@ final class EntityManagerPartialWriteTest extends TestCase
     private function fetchCatalogListing(string $name): array
     {
         $statement = $this->dataSource->getClient()->prepare(
-            'SELECT name, category_id FROM catalog_listings WHERE name = ?'
+            'SELECT id, name, category_id FROM catalog_listings WHERE name = ?'
         );
         $statement->execute([$name]);
 
         return $statement->fetch(PDO::FETCH_ASSOC);
+    }
+
+    private function catalogListingExistsById(int $id): bool
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'SELECT COUNT(*) FROM catalog_listings WHERE id = ?'
+        );
+        $statement->execute([$id]);
+
+        return (int)$statement->fetchColumn() > 0;
     }
 
     private function cleanupSqliteFiles(string $path): void
@@ -342,6 +388,11 @@ class CatalogListingCreatePayload
 class CatalogListingRelationPatch
 {
     public ?int $categoryId = null;
+}
+
+class CatalogListingReadonlyIdPatch
+{
+    public int $id = 999;
 }
 
 #[Entity(table: 'catalog_listings')]
