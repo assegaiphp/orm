@@ -36,6 +36,7 @@ final class EntityManagerPartialWriteTest extends TestCase
                 CatalogCategoryEntity::class,
                 CatalogListingEntity::class,
                 CatalogListingWithScalarEntity::class,
+                CatalogListingWithAliasCollisionEntity::class,
             ],
             name: $this->databasePath,
             type: DataSourceType::SQLITE,
@@ -58,6 +59,14 @@ final class EntityManagerPartialWriteTest extends TestCase
             'CREATE TABLE catalog_listings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
+                category_id INTEGER NULL
+            )'
+        );
+        $this->dataSource->getClient()->exec(
+            'CREATE TABLE catalog_listing_alias_collisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                category_code INTEGER NULL,
                 category_id INTEGER NULL
             )'
         );
@@ -347,6 +356,33 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertSame(42, $this->fetchCatalogListing('Cordless Driver')['category_id']);
     }
 
+    public function testDeclaredColumnWinsOverGeneratedRelationAliasOnInsert(): void
+    {
+        $result = $this->createManager(CatalogListingWithAliasCollisionEntity::class)->insert(
+            CatalogListingWithAliasCollisionEntity::class,
+            ['name' => 'Alias Collision Insert', 'categoryId' => 7],
+        );
+
+        $row = $this->fetchAliasCollisionListing('Alias Collision Insert');
+        self::assertTrue($result->isOk());
+        self::assertSame(7, (int)$row['category_code']);
+        self::assertNull($row['category_id']);
+    }
+
+    public function testDeclaredColumnWinsOverGeneratedRelationAliasOnUpsert(): void
+    {
+        $result = $this->createManager(CatalogListingWithAliasCollisionEntity::class)->upsert(
+            CatalogListingWithAliasCollisionEntity::class,
+            ['name' => 'Alias Collision Upsert', 'categoryId' => 7],
+            ['name'],
+        );
+
+        $row = $this->fetchAliasCollisionListing('Alias Collision Upsert');
+        self::assertTrue($result->isOk());
+        self::assertSame(7, (int)$row['category_code']);
+        self::assertNull($row['category_id']);
+    }
+
     public function testInsertDedupePreservesZeroRelationAliasValue(): void
     {
         $result = $this->createManager(CatalogListingWithScalarEntity::class)->insert(
@@ -509,6 +545,19 @@ final class EntityManagerPartialWriteTest extends TestCase
         return $statement->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchAliasCollisionListing(string $name): array
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'SELECT id, name, category_code, category_id FROM catalog_listing_alias_collisions WHERE name = ?'
+        );
+        $statement->execute([$name]);
+
+        return $statement->fetch(PDO::FETCH_ASSOC);
+    }
+
     private function catalogItemExistsByName(string $name): bool
     {
         $statement = $this->dataSource->getClient()->prepare(
@@ -607,6 +656,23 @@ class CatalogListingWithScalarEntity
     public string $name = '';
 
     #[Column(name: 'category_id', type: ColumnType::INT, nullable: true)]
+    public ?int $categoryId = null;
+
+    #[ManyToOne(type: CatalogCategoryEntity::class)]
+    #[JoinColumn(name: 'category_id', referencedColumnName: 'id')]
+    public ?CatalogCategoryEntity $category = null;
+}
+
+#[Entity(table: 'catalog_listing_alias_collisions')]
+class CatalogListingWithAliasCollisionEntity
+{
+    #[PrimaryGeneratedColumn]
+    public ?int $id = null;
+
+    #[Column(type: ColumnType::VARCHAR, nullable: false)]
+    public string $name = '';
+
+    #[Column(name: 'category_code', type: ColumnType::INT, nullable: true)]
     public ?int $categoryId = null;
 
     #[ManyToOne(type: CatalogCategoryEntity::class)]

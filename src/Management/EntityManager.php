@@ -2731,8 +2731,20 @@ class EntityManager implements IEntityStoreOwner
             }
 
             $metadata = $relationIdColumns[$propertyName];
-            $normalizedValue = $this->normalizeRelationIdWriteValue($value, $metadata['referencedColumn']);
             $existingColumnIndex = array_search($propertyName, array_keys($columns), true);
+
+            if ($existingColumnIndex !== false) {
+                $existingColumn = $columns[$propertyName];
+
+                if (
+                    $this->normalizeColumnNameForComparison($existingColumn) !==
+                    $this->normalizeColumnNameForComparison($metadata['qualifiedColumn'])
+                ) {
+                    continue;
+                }
+            }
+
+            $normalizedValue = $this->normalizeRelationIdWriteValue($value, $metadata['referencedColumn']);
             $columns[$propertyName] = $metadata['qualifiedColumn'];
 
             if (!$includeValues) {
