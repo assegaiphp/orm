@@ -354,7 +354,7 @@ class EntityManager implements IEntityStoreOwner
     public function insert(string $entityClass, array|object $entity, ?InsertOptions $options = null): InsertResult
     {
         # Check if the entity matches the given entity class
-        if (!$this->entityInspector->hasValidEntityStructure(entity: $entity, entityClass: $entityClass)) {
+        if (!$this->hasValidEntityWriteStructure(entity: $entity, entityClass: $entityClass)) {
             return new InsertResult(identifiers: $entity, raw: $this->query->queryString(), generatedMaps: null, errors: [new ORMException("Entity does not match the given entity class.")]);
         }
 
@@ -371,6 +371,8 @@ class EntityManager implements IEntityStoreOwner
 
         $columns = $this->entityInspector->getColumns(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnsMeta);
         $values = $this->entityInspector->getValues(entity: $instance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, options: ['relations' => $relations, 'relation_properties' => $relationProperties, 'filter' => true, 'column_types' => $columnsMeta['column_types'] ?? []]);
+        [$columns, $values] = $this->appendRelationIdWriteColumnsAndValues($instance, $entity, $columns, $values, $options->readonlyColumns ?? $this->readonlyColumns);
+        [$columns, $values] = $this->deduplicateWriteColumnsAndValues($columns, $values);
 
         $columnCount = count($columns);
         $valueCount = count($values);
@@ -2222,7 +2224,7 @@ class EntityManager implements IEntityStoreOwner
             $generatedMaps = new stdClass();
 
             foreach ($partialEntity as $partialItem) {
-                $result = $this->update(entityClass: $entityClass, partialEntity: $partialItem, conditions: $conditions);
+                $result = $this->update(entityClass: $entityClass, partialEntity: $partialItem, conditions: $conditions, options: $options);
                 $generatedMaps = $result->generatedMaps;
             }
 
@@ -2240,41 +2242,47 @@ class EntityManager implements IEntityStoreOwner
         }
 
         $columnMap = $this->entityInspector->getColumns(entity: $entityInstance, exclude: $options->readonlyColumns ?? $this->readonlyColumns, relations: $relations, relationProperties: $relationProperties, meta: $columnOptions);
+        $columnMap = $this->appendRelationIdWriteColumnMap($entityInstance, $columnMap, $options->readonlyColumns ?? $this->readonlyColumns);
 
         foreach ($partialEntity as $prop => $value) {
             # Get the correct prop name
             $columnName = $this->getColumnNameFromProperty($entityInstance, $prop);
 
             if ($this->mapContainsColumnName($columnMap, $columnName)) {
-                if (!is_null($value)) {
-                    if ($value instanceof UnitEnum && property_exists($value, 'value')) {
-                        $value = $value->value;
-                    }
-
-                    if ($value instanceof DateTime) {
-                        $value = $this->entityInspector->convertDateTimeToString($value, $prop, $columnOptions);
-                    }
-
-                    if ($value instanceof stdClass) {
-                        $value = json_encode($value);
-                    }
-
-                    if (isset($columnMap[$columnName])) {
-                        if (isset($relationProperties[$columnName])) {
-                            assert($relationProperties[$columnName] instanceof RelationPropertyMetadata);
-
-                            if (is_object($value) && property_exists($value, $relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName)) {
-                                $value = $value->{$relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName};
-                            }
-
-                            $columnName = $relationProperties[$columnName]->joinColumn->effectiveColumnName;
-                        } else {
-                            $columnName = $this->getUnqualifiedColumnName($columnMap[$columnName]);
-                        }
-                    }
-
-                    $assignmentList[$columnName] = $value;
+                if (is_null($value) && !$this->shouldWriteNullAssignment($partialEntity, $prop, $columnName, $options)) {
+                    continue;
                 }
+
+                if ($value instanceof UnitEnum && property_exists($value, 'value')) {
+                    $value = $value->value;
+                }
+
+                if ($value instanceof DateTime) {
+                    $value = $this->entityInspector->convertDateTimeToString($value, $prop, $columnOptions);
+                }
+
+                if ($value instanceof stdClass) {
+                    $value = json_encode($value);
+                }
+
+                if (isset($columnMap[$columnName])) {
+                    if (isset($relationProperties[$columnName])) {
+                        assert($relationProperties[$columnName] instanceof RelationPropertyMetadata);
+
+                        if (
+                            is_object($value) &&
+                            property_exists($value, $relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName)
+                        ) {
+                            $value = $value->{$relationProperties[$columnName]->joinColumn->effectiveReferencedColumnName};
+                        }
+
+                        $columnName = $relationProperties[$columnName]->joinColumn->effectiveColumnName;
+                    } else {
+                        $columnName = $this->getUnqualifiedColumnName($columnMap[$columnName]);
+                    }
+                }
+
+                $this->putAssignmentValue($assignmentList, $columnName, $value);
             }
         }
 
@@ -2428,6 +2436,325 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /**
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function hasValidEntityWriteStructure(object|array $entity, string $entityClass): bool
+    {
+        if (!class_exists($entityClass)) {
+            throw new ClassNotFoundException(className: $entityClass);
+        }
+
+        $entityInstance = (new ReflectionClass($entityClass))->newInstanceWithoutConstructor();
+        $relationIdColumns = $this->getRelationIdWriteColumnMetadataMap($entityInstance);
+        $sourceProperties = is_array($entity) ? $entity : get_object_vars($entity);
+
+        foreach ($sourceProperties as $propertyName => $propertyValue) {
+            if (!is_string($propertyName)) {
+                continue;
+            }
+
+            if (property_exists($entityClass, $propertyName) || isset($relationIdColumns[$propertyName])) {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<int|string, string> $columnMap
+     * @param string[] $exclude
+     * @return array<int|string, string>
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function appendRelationIdWriteColumnMap(object $entity, array $columnMap, array $exclude = []): array
+    {
+        foreach ($this->getRelationIdWriteColumnMetadataMap($entity, $exclude) as $alias => $metadata) {
+            $columnMap[$alias] ??= $metadata['qualifiedColumn'];
+        }
+
+        return $columnMap;
+    }
+
+    /**
+     * @param array<int|string, string> $columns
+     * @param array<int|string, mixed> $values
+     * @param string[] $exclude
+     * @return array{0: array<int|string, string>, 1: array<int|string, mixed>}
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function appendRelationIdWriteColumnsAndValues(
+        object $entity,
+        object|array $source,
+        array $columns,
+        array $values,
+        array $exclude = [],
+    ): array
+    {
+        $relationIdColumns = $this->getRelationIdWriteColumnMetadataMap($entity, $exclude);
+        $sourceProperties = is_array($source) ? $source : get_object_vars($source);
+
+        foreach ($sourceProperties as $propertyName => $value) {
+            if (!is_string($propertyName) || !isset($relationIdColumns[$propertyName])) {
+                continue;
+            }
+
+            $metadata = $relationIdColumns[$propertyName];
+            $columns[$propertyName] = $metadata['qualifiedColumn'];
+            $values[] = $this->normalizeRelationIdWriteValue($value, $metadata['referencedColumn']);
+        }
+
+        return [$columns, $values];
+    }
+
+    /**
+     * @param string[] $exclude
+     * @return array<string, array{column: string, qualifiedColumn: string, referencedColumn: string}>
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function getRelationIdWriteColumnMetadataMap(object $entity, array $exclude = []): array
+    {
+        $metadata = [];
+        $tableName = $this->entityInspector->getTableName($entity);
+        $reflectionClass = new ReflectionClass($entity);
+
+        foreach ($reflectionClass->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            if (!$this->isJoinColumnRelationProperty($property)) {
+                continue;
+            }
+
+            $propertyName = $property->getName();
+            $joinColumn = $this->entityInspector->getJoinColumnAttribute($entity::class, $propertyName);
+            $columnName = $joinColumn->effectiveColumnName ?? $joinColumn->name ?? strtosnake($propertyName . 'Id');
+            $referencedColumnName = $joinColumn->effectiveReferencedColumnName ?? $joinColumn->referencedColumnName ?? 'id';
+            $aliases = $this->getRelationIdWriteAliases($propertyName, $columnName, $referencedColumnName);
+
+            foreach ($aliases as $alias) {
+                if ($this->writeAliasIsExcluded($alias, $columnName, $exclude)) {
+                    continue;
+                }
+
+                $metadata[$alias] = [
+                    'column' => $columnName,
+                    'qualifiedColumn' => "$tableName.$columnName",
+                    'referencedColumn' => $referencedColumnName,
+                ];
+            }
+        }
+
+        return $metadata;
+    }
+
+    private function isJoinColumnRelationProperty(ReflectionProperty $property): bool
+    {
+        if (!empty($property->getAttributes(ManyToOne::class))) {
+            return true;
+        }
+
+        return !empty($property->getAttributes(OneToOne::class)) && !empty($property->getAttributes(JoinColumn::class));
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getRelationIdWriteAliases(string $propertyName, string $columnName, string $referencedColumnName): array
+    {
+        $aliases = [$columnName];
+        $referencedAlias = $propertyName . ucfirst(strtocamel($referencedColumnName));
+        $aliases[] = $referencedAlias;
+
+        if ($referencedColumnName === 'id') {
+            $aliases[] = $propertyName . 'Id';
+        }
+
+        return array_values(array_unique($aliases));
+    }
+
+    /**
+     * @param string[] $exclude
+     */
+    private function writeAliasIsExcluded(string $alias, string $columnName, array $exclude): bool
+    {
+        foreach ($exclude as $excludedColumn) {
+            if (!is_string($excludedColumn)) {
+                continue;
+            }
+
+            if (
+                $excludedColumn === $alias ||
+                $excludedColumn === $columnName ||
+                $this->normalizeColumnNameForComparison($excludedColumn) === $this->normalizeColumnNameForComparison($columnName)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function getWriteColumnNameFromProperty(object $entity, string $prop): string
+    {
+        $columnName = $this->getColumnNameFromProperty($entity, $prop);
+
+        if ($columnName !== $prop || property_exists($entity, $prop)) {
+            return $columnName;
+        }
+
+        $relationIdColumns = $this->getRelationIdWriteColumnMetadataMap($entity);
+
+        return $relationIdColumns[$prop]['column'] ?? $columnName;
+    }
+
+    private function normalizeRelationIdWriteValue(mixed $value, string $referencedColumnName): mixed
+    {
+        if ($value instanceof UnitEnum && property_exists($value, 'value')) {
+            return $value->value;
+        }
+
+        if (is_object($value)) {
+            foreach ([$referencedColumnName, strtocamel($referencedColumnName)] as $referencedPropertyName) {
+                if (property_exists($value, $referencedPropertyName)) {
+                    return $value->{$referencedPropertyName};
+                }
+            }
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<int|string, string> $columns
+     * @param array<int|string, mixed> $values
+     * @return array{0: array<int|string, string>, 1: array<int, mixed>}
+     * @throws ORMException
+     */
+    private function deduplicateWriteColumnsAndValues(array $columns, array $values): array
+    {
+        $dedupedColumns = [];
+        $dedupedValues = [];
+        $seenColumns = [];
+        $valueList = array_values($values);
+        $index = 0;
+
+        foreach ($columns as $key => $column) {
+            $value = $valueList[$index] ?? null;
+            $index++;
+            $normalizedColumnName = $this->normalizeColumnNameForComparison($column);
+
+            if (!array_key_exists($normalizedColumnName, $seenColumns)) {
+                $seenColumns[$normalizedColumnName] = count($dedupedValues);
+                $dedupedColumns[$key] = $column;
+                $dedupedValues[] = $value;
+                continue;
+            }
+
+            $existingValueIndex = $seenColumns[$normalizedColumnName];
+            $existingValue = $dedupedValues[$existingValueIndex];
+
+            if ($this->writeValuesAreEquivalent($existingValue, $value)) {
+                continue;
+            }
+
+            if ($existingValue === null && $value !== null) {
+                $dedupedValues[$existingValueIndex] = $value;
+                continue;
+            }
+
+            if ($existingValue !== null && $value === null) {
+                continue;
+            }
+
+            throw new ORMException("Column {$this->stripTableName($column)} is mapped more than once with conflicting write values.");
+        }
+
+        return [$dedupedColumns, $dedupedValues];
+    }
+
+    /**
+     * @param array<string, mixed> $assignmentList
+     * @throws ORMException
+     */
+    private function putAssignmentValue(array &$assignmentList, string $columnName, mixed $value): void
+    {
+        $normalizedColumnName = $this->normalizeColumnNameForComparison($columnName);
+
+        foreach ($assignmentList as $existingColumnName => $existingValue) {
+            if ($this->normalizeColumnNameForComparison($existingColumnName) !== $normalizedColumnName) {
+                continue;
+            }
+
+            if ($this->writeValuesAreEquivalent($existingValue, $value)) {
+                return;
+            }
+
+            if ($existingValue === null && $value !== null) {
+                $assignmentList[$existingColumnName] = $value;
+                return;
+            }
+
+            if ($existingValue !== null && $value === null) {
+                return;
+            }
+
+            throw new ORMException("Column {$this->stripTableName($columnName)} is mapped more than once with conflicting update values.");
+        }
+
+        $assignmentList[$this->stripTableName($columnName)] = $value;
+    }
+
+    private function shouldWriteNullAssignment(object|array $partialEntity, string $propertyName, string $columnName, ?UpdateOptions $options): bool
+    {
+        if (is_array($partialEntity) && !array_is_list($partialEntity)) {
+            return true;
+        }
+
+        $writeNulls = $options?->writeNulls ?? false;
+
+        if ($writeNulls === true) {
+            return true;
+        }
+
+        if (!is_array($writeNulls)) {
+            return false;
+        }
+
+        foreach ($writeNulls as $writeNullProperty) {
+            if (!is_string($writeNullProperty)) {
+                continue;
+            }
+
+            if (
+                $writeNullProperty === $propertyName ||
+                $writeNullProperty === $columnName ||
+                $this->normalizeColumnNameForComparison($writeNullProperty) === $this->normalizeColumnNameForComparison($columnName)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function writeValuesAreEquivalent(mixed $left, mixed $right): bool
+    {
+        if ($left instanceof SQLExpression || $right instanceof SQLExpression) {
+            return $left instanceof SQLExpression && $right instanceof SQLExpression && (string)$left === (string)$right;
+        }
+
+        return $left == $right;
+    }
+
+    /**
      * @param int|object|array $conditions
      * @param SQLQuery $query
      * @param object|null $entity
@@ -2443,7 +2770,7 @@ class EntityManager implements IEntityStoreOwner
 
         foreach ((array)$conditions as $key => $value) {
             $columnName = $entity && is_string($key)
-                ? $this->getColumnNameFromProperty($entity, $key)
+                ? $this->getWriteColumnNameFromProperty($entity, $key)
                 : (string)$key;
             $identifier = SqlIdentifier::quote($columnName, $query->getDialect());
 
@@ -2607,6 +2934,9 @@ class EntityManager implements IEntityStoreOwner
         $columns = $this->entityInspector->getColumns(entity: $entity);
         $updateColumns = $this->entityInspector->getColumns(entity: $entity, exclude: $options->readonlyColumns ?? $this->readonlyColumns);
         $values = $this->entityInspector->getValues(entity: $entity);
+        [$columns, $values] = $this->appendRelationIdWriteColumnsAndValues($entity, $entityOrEntities, $columns, $values);
+        [$columns, $values] = $this->deduplicateWriteColumnsAndValues($columns, $values);
+        [$updateColumns] = $this->appendRelationIdWriteColumnsAndValues($entity, $entityOrEntities, $updateColumns, [], $options->readonlyColumns ?? $this->readonlyColumns);
         $tableName = $this->entityInspector->getTableName(entity: $entity);
 
         return match ($this->query->getDialect()) {
@@ -2629,7 +2959,7 @@ class EntityManager implements IEntityStoreOwner
     {
         $originalId = $entity->{$primaryKeyField} ?? null;
         $columns = array_map([$this, 'stripTableName'], array_values($columns));
-        $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
+        $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
         [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
 
@@ -2734,7 +3064,7 @@ class EntityManager implements IEntityStoreOwner
     {
         $originalId = $entity->{$primaryKeyField} ?? null;
         $columns = array_map([$this, 'stripTableName'], array_values($columns));
-        $updateColumns = array_map([$this, 'stripTableName'], array_values($updateColumns));
+        $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
         [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
 
@@ -2862,6 +3192,7 @@ class EntityManager implements IEntityStoreOwner
         string        $primaryColumn,
     ): InsertResult
     {
+        $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $assignmentList = $this->buildMySqlUpsertAssignments($entityOrEntities, $updateColumns, $primaryColumn);
 
         $this->query->insertInto(tableName: $tableName)->singleRow(columns: $columns)->values(valuesList: $values)->onDuplicateKeyUpdate(assignmentList: $assignmentList);

@@ -115,7 +115,7 @@ readonly class Repository implements RepositoryInterface
    */
   public function insert(array|object $entity, ?InsertOptions $options = null): InsertResult
   {
-    return $this->manager->insert(entityClass: $this->entityId, entity: $entity);
+    return $this->manager->insert(entityClass: $this->entityId, entity: $entity, options: $options);
   }
 
   /**
