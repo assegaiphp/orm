@@ -282,6 +282,35 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertSame((int)$secondRow['id'], $generatedMaps[1]->id);
     }
 
+    public function testSqliteBulkInsertPopulatesGeneratedIdsWhenRowsMixExplicitAndGeneratedIds(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
+            NullableCatalogItemEntity::class,
+            [
+                ['id' => 100, 'name' => 'Bulk Explicit Id', 'description' => 'supplied id'],
+                ['name' => 'Bulk Generated Id', 'description' => 'generated id'],
+            ],
+            new InsertOptions(readonlyColumns: ['createdAt', 'updatedAt', 'deletedAt']),
+        );
+
+        $explicitRow = $this->fetchCatalogItem('Bulk Explicit Id');
+        $generatedRow = $this->fetchCatalogItem('Bulk Generated Id');
+        $identifiers = $result->getIdentifiers()->results ?? [];
+        $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
+        self::assertTrue($result->isOk());
+        self::assertSame(2, $result->getTotalAffectedRows());
+        self::assertCount(2, $identifiers);
+        self::assertCount(2, $generatedMaps);
+        self::assertSame(100, $identifiers[0]->id);
+        self::assertSame(100, $generatedMaps[0]->id);
+        self::assertSame((int)$generatedRow['id'], $identifiers[1]->id);
+        self::assertSame((int)$generatedRow['id'], $generatedMaps[1]->id);
+        self::assertGreaterThan(0, $identifiers[1]->id);
+        self::assertNotSame($identifiers[0]->id, $identifiers[1]->id);
+        self::assertSame(100, (int)$explicitRow['id']);
+    }
+
     public function testBulkInsertRejectsRowsWithNumericKeysBeforeWriting(): void
     {
         $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
@@ -308,6 +337,19 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertTrue($result->isError());
         self::assertInstanceOf(ORMException::class, $result->getErrors()[0] ?? null);
         self::assertFalse($this->catalogItemExistsByName('Numeric Key Item'));
+    }
+
+    public function testUpsertRejectsInvalidAssociativePayloadBeforeHydration(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->upsert(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Invalid Upsert Payload', 'descrption' => 'typo should be rejected'],
+            ['name'],
+        );
+
+        self::assertTrue($result->isError());
+        self::assertInstanceOf(ORMException::class, $result->getErrors()[0] ?? null);
+        self::assertFalse($this->catalogItemExistsByName('Invalid Upsert Payload'));
     }
 
     public function testSqliteUpsertAcceptsRelationIdAliasWithoutPublicScalarProperty(): void
@@ -574,7 +616,7 @@ final class EntityManagerPartialWriteTest extends TestCase
     private function fetchCatalogItem(string $name): array
     {
         $statement = $this->dataSource->getClient()->prepare(
-            'SELECT name, description FROM nullable_catalog_items WHERE name = ?'
+            'SELECT id, name, description FROM nullable_catalog_items WHERE name = ?'
         );
         $statement->execute([$name]);
 

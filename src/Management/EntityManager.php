@@ -544,13 +544,14 @@ class EntityManager implements IEntityStoreOwner
         $tableName = $this->entityInspector->getTableName(entity: $firstInsert['instance']);
         $primaryKeyField = $firstInsert['primaryKeyField'];
         $primaryColumn = $firstInsert['primaryColumn'];
+        $bulkInsertUsesReturning = in_array($this->query->getDialect(), [SQLDialect::POSTGRESQL, SQLDialect::SQLITE], true);
 
         $this->query
             ->insertInto(tableName: $tableName)
             ->multipleRows(columns: array_values($columnMap))
             ->rows(rowsList: $rowsList);
 
-        if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
+        if ($bulkInsertUsesReturning) {
             $this->query->appendQueryString('RETURNING ' . $this->buildReturningProjection($firstInsert['instance']));
         }
 
@@ -561,6 +562,9 @@ class EntityManager implements IEntityStoreOwner
         $result = $this->query->execute();
         $raw = $result->getRaw();
         $affected = $this->query->rowCount() ?? 0;
+        if ($bulkInsertUsesReturning && $affected === 0) {
+            $affected = count($result->getData());
+        }
 
         if ($result->isError()) {
             if (!headers_sent()) {
@@ -578,7 +582,7 @@ class EntityManager implements IEntityStoreOwner
             );
         }
 
-        $generatedMaps = $this->query->getDialect() === SQLDialect::POSTGRESQL
+        $generatedMaps = $bulkInsertUsesReturning
             ? $this->hydrateGeneratedMapList($entityClass, $result->getData())
             : $this->hydrateBulkGeneratedMapsWithoutReturning($preparedRows, $primaryKeyField, $primaryColumn);
         $identifiers = array_map(
@@ -674,12 +678,14 @@ class EntityManager implements IEntityStoreOwner
 
         $lastInsertId = $this->lastInsertId();
 
-        if (!$lastInsertId || $generatedRowCount !== $totalRowCount) {
+        if (!$lastInsertId) {
             return [];
         }
 
         return match ($this->query->getDialect()) {
-            SQLDialect::SQLITE => $this->resolveSqliteBulkGeneratedPrimaryKeys($lastInsertId, $generatedRowCount),
+            SQLDialect::SQLITE => $generatedRowCount === $totalRowCount
+                ? $this->resolveSqliteBulkGeneratedPrimaryKeys($lastInsertId, $generatedRowCount)
+                : [],
             SQLDialect::MYSQL, SQLDialect::MARIADB => $this->resolveMySqlBulkGeneratedPrimaryKeys($lastInsertId, $generatedRowCount),
             default => [],
         };
@@ -3315,6 +3321,15 @@ class EntityManager implements IEntityStoreOwner
         }
 
         $this->validateEntityName(entityClass: $entityClass);
+
+        if (!$this->hasValidEntityWriteStructure(entity: $entityOrEntities, entityClass: $entityClass)) {
+            return new InsertResult(
+                identifiers: is_array($entityOrEntities) ? (object)$entityOrEntities : $entityOrEntities,
+                raw: $this->query->queryString(),
+                generatedMaps: null,
+                errors: [new ORMException("Entity does not match the given entity class.")],
+            );
+        }
 
         $entity = $this->create(
             entityClass: $entityClass,
