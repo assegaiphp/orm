@@ -19,12 +19,15 @@ readonly class UpdateOptions
      *
      * @param object|string[]|null $relations The relations to include.
      * @param bool $isDebug Whether to output debug information.
+     * @param bool|string[] $writeNulls Whether null values should be written for object DTOs. Pass true for every
+     *   mapped null property, or a list of property/column names for selected nullable assignments.
      */
     public function __construct(
         object|array|null $relations = null,
         public bool       $isDebug = false,
         public ?array     $readonlyColumns = null,
         public string     $primaryKeyField = 'id',
+        public bool|array  $writeNulls = false,
     )
     {
         $this->relations = $this->normalizeRelations($relations);

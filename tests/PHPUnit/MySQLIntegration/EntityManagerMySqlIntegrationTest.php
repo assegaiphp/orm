@@ -3,6 +3,7 @@
 namespace Tests\PHPUnit\MySQLIntegration;
 
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Management\Options\InsertOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\QueryBuilder\Results\InsertResult;
 use Tests\PHPUnit\Support\MySqlIntegrationTestCase;
@@ -102,6 +103,87 @@ final class EntityManagerMySqlIntegrationTest extends MySqlIntegrationTestCase
         self::assertSame('mysql insert valid', $row['name']);
         self::assertSame('Inserted through insert()', $row['description']);
         self::assertSame(MockColorType::YELLOW->value, $row['color_type']);
+    }
+
+    public function testBulkInsertPopulatesGeneratedIdentifiers(): void
+    {
+        $result = $this->manager->insert(
+            MockEntity::class,
+            [
+                [
+                    'name' => 'mysql bulk insert first',
+                    'description' => 'First generated identifier',
+                    'colorType' => MockColorType::GREEN,
+                ],
+                [
+                    'name' => 'mysql bulk insert second',
+                    'description' => 'Second generated identifier',
+                    'colorType' => MockColorType::BLUE,
+                ],
+            ],
+        );
+
+        self::assertInstanceOf(InsertResult::class, $result);
+        self::assertTrue($result->isOk());
+
+        $identifiers = $result->getIdentifiers()->results ?? [];
+        $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
+        self::assertCount(2, $identifiers);
+        self::assertCount(2, $generatedMaps);
+        self::assertGreaterThan(0, $identifiers[0]->id);
+        self::assertGreaterThan(0, $identifiers[1]->id);
+        self::assertSame($identifiers[0]->id, $generatedMaps[0]->id);
+        self::assertSame($identifiers[1]->id, $generatedMaps[1]->id);
+
+        $firstRow = $this->fetchMocksRowById((int)$identifiers[0]->id);
+        $secondRow = $this->fetchMocksRowById((int)$identifiers[1]->id);
+
+        self::assertSame('mysql bulk insert first', $firstRow['name']);
+        self::assertSame('mysql bulk insert second', $secondRow['name']);
+        self::assertSame(MockColorType::GREEN->value, $firstRow['color_type']);
+        self::assertSame(MockColorType::BLUE->value, $secondRow['color_type']);
+    }
+
+    public function testBulkInsertPopulatesGeneratedIdentifiersWhenRowsMixExplicitAndGeneratedIds(): void
+    {
+        $result = $this->manager->insert(
+            MockEntity::class,
+            [
+                [
+                    'id' => 100000,
+                    'name' => 'mysql bulk explicit id',
+                    'description' => 'Explicit identifier',
+                    'colorType' => MockColorType::GREEN,
+                ],
+                [
+                    'name' => 'mysql bulk generated id',
+                    'description' => 'Generated identifier',
+                    'colorType' => MockColorType::BLUE,
+                ],
+            ],
+            new InsertOptions(readonlyColumns: ['createdAt', 'updatedAt', 'deletedAt']),
+        );
+
+        self::assertInstanceOf(InsertResult::class, $result);
+        self::assertTrue($result->isOk());
+
+        $identifiers = $result->getIdentifiers()->results ?? [];
+        $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
+        self::assertCount(2, $identifiers);
+        self::assertCount(2, $generatedMaps);
+        self::assertSame(100000, $identifiers[0]->id);
+        self::assertSame(100000, $generatedMaps[0]->id);
+        self::assertGreaterThan(0, $identifiers[1]->id);
+        self::assertSame($identifiers[1]->id, $generatedMaps[1]->id);
+        self::assertNotSame($identifiers[0]->id, $identifiers[1]->id);
+
+        $explicitRow = $this->fetchMocksRowById((int)$identifiers[0]->id);
+        $generatedRow = $this->fetchMocksRowById((int)$identifiers[1]->id);
+
+        self::assertSame('mysql bulk explicit id', $explicitRow['name']);
+        self::assertSame('mysql bulk generated id', $generatedRow['name']);
     }
 
     public function testInsertReturnsErrorForInvalidStructure(): void
