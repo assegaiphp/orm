@@ -543,6 +543,7 @@ class EntityManager implements IEntityStoreOwner
         $firstInsert = $preparedRows[0];
         $tableName = $this->entityInspector->getTableName(entity: $firstInsert['instance']);
         $primaryKeyField = $firstInsert['primaryKeyField'];
+        $primaryColumn = $firstInsert['primaryColumn'];
 
         $this->query
             ->insertInto(tableName: $tableName)
@@ -579,10 +580,7 @@ class EntityManager implements IEntityStoreOwner
 
         $generatedMaps = $this->query->getDialect() === SQLDialect::POSTGRESQL
             ? $this->hydrateGeneratedMapList($entityClass, $result->getData())
-            : array_map(
-                fn(array $insertWrite): ?object => $this->sanitizeGeneratedMaps($insertWrite['instance']),
-                $preparedRows
-            );
+            : $this->hydrateBulkGeneratedMapsWithoutReturning($preparedRows, $primaryKeyField, $primaryColumn);
         $identifiers = array_map(
             fn(?object $generatedMap): object => (object)[$primaryKeyField => $generatedMap->{$primaryKeyField} ?? null],
             $generatedMaps
@@ -596,6 +594,138 @@ class EntityManager implements IEntityStoreOwner
         );
     }
 
+    /**
+     * @param list<array{instance: object, primaryKeyField: string, primaryColumn: string, columns: array<int|string, string>, values: array<int|string, mixed>}> $preparedRows
+     * @return list<object|null>
+     */
+    private function hydrateBulkGeneratedMapsWithoutReturning(array $preparedRows, string $primaryKeyField, string $primaryColumn): array
+    {
+        $generatedMaps = array_map(
+            fn(array $insertWrite): ?object => $this->sanitizeGeneratedMaps($insertWrite['instance']),
+            $preparedRows
+        );
+        $generatedPrimaryKeyIndexes = [];
+
+        foreach ($preparedRows as $index => $insertWrite) {
+            if ($this->bulkInsertRowNeedsGeneratedPrimaryKey($insertWrite, $primaryKeyField, $primaryColumn)) {
+                $generatedPrimaryKeyIndexes[] = $index;
+            }
+        }
+
+        if (empty($generatedPrimaryKeyIndexes)) {
+            return $generatedMaps;
+        }
+
+        $generatedPrimaryKeys = $this->resolveNonReturningBulkGeneratedPrimaryKeys(
+            generatedRowCount: count($generatedPrimaryKeyIndexes),
+            totalRowCount: count($preparedRows),
+        );
+
+        foreach ($generatedPrimaryKeyIndexes as $offset => $rowIndex) {
+            if (!array_key_exists($offset, $generatedPrimaryKeys) || !$generatedMaps[$rowIndex]) {
+                continue;
+            }
+
+            $generatedMaps[$rowIndex]->{$primaryKeyField} = $generatedPrimaryKeys[$offset];
+        }
+
+        return $generatedMaps;
+    }
+
+    /**
+     * @param array{columns: array<int|string, string>, values: array<int|string, mixed>} $insertWrite
+     */
+    private function bulkInsertRowNeedsGeneratedPrimaryKey(array $insertWrite, string $primaryKeyField, string $primaryColumn): bool
+    {
+        $primaryKeyValue = $this->extractPreparedPrimaryKeyValue($insertWrite, $primaryKeyField, $primaryColumn);
+
+        return $primaryKeyValue === null || $primaryKeyValue === '';
+    }
+
+    /**
+     * @param array{columns: array<int|string, string>, values: array<int|string, mixed>} $insertWrite
+     */
+    private function extractPreparedPrimaryKeyValue(array $insertWrite, string $primaryKeyField, string $primaryColumn): mixed
+    {
+        $values = array_values($insertWrite['values']);
+
+        foreach (array_values($insertWrite['columns']) as $index => $column) {
+            $normalizedColumn = $this->normalizeColumnNameForComparison($column);
+
+            if (
+                $normalizedColumn === $this->normalizeColumnNameForComparison($primaryKeyField) ||
+                $normalizedColumn === $this->normalizeColumnNameForComparison($primaryColumn)
+            ) {
+                return $values[$index] ?? null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function resolveNonReturningBulkGeneratedPrimaryKeys(int $generatedRowCount, int $totalRowCount): array
+    {
+        if ($generatedRowCount <= 0) {
+            return [];
+        }
+
+        $lastInsertId = $this->lastInsertId();
+
+        if (!$lastInsertId || $generatedRowCount !== $totalRowCount) {
+            return [];
+        }
+
+        return match ($this->query->getDialect()) {
+            SQLDialect::SQLITE => $this->resolveSqliteBulkGeneratedPrimaryKeys($lastInsertId, $generatedRowCount),
+            SQLDialect::MYSQL, SQLDialect::MARIADB => $this->resolveMySqlBulkGeneratedPrimaryKeys($lastInsertId, $generatedRowCount),
+            default => [],
+        };
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function resolveSqliteBulkGeneratedPrimaryKeys(int $lastInsertId, int $generatedRowCount): array
+    {
+        $firstInsertId = $lastInsertId - $generatedRowCount + 1;
+
+        if ($firstInsertId <= 0) {
+            return [];
+        }
+
+        return range($firstInsertId, $lastInsertId);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function resolveMySqlBulkGeneratedPrimaryKeys(int $firstInsertId, int $generatedRowCount): array
+    {
+        $step = $this->resolveMySqlAutoIncrementStep();
+        $generatedPrimaryKeys = [];
+
+        for ($index = 0; $index < $generatedRowCount; $index++) {
+            $generatedPrimaryKeys[] = $firstInsertId + ($index * $step);
+        }
+
+        return $generatedPrimaryKeys;
+    }
+
+    private function resolveMySqlAutoIncrementStep(): int
+    {
+        try {
+            $statement = $this->query->getConnection()->query('SELECT @@auto_increment_increment');
+            $value = $statement !== false ? $statement->fetchColumn() : null;
+        } catch (Throwable) {
+            return 1;
+        }
+
+        return is_numeric($value) && (int)$value > 0 ? (int)$value : 1;
+    }
+
     private function invalidInsertStructureResult(): InsertResult
     {
         return new InsertResult(
@@ -607,7 +737,7 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /**
-     * @return array{instance: object, primaryKeyField: string, columns: array<int|string, string>, values: array<int|string, mixed>}
+     * @return array{instance: object, primaryKeyField: string, primaryColumn: string, columns: array<int|string, string>, values: array<int|string, mixed>}
      * @throws ClassNotFoundException
      * @throws ORMException
      * @throws ReflectionException
@@ -632,6 +762,7 @@ class EntityManager implements IEntityStoreOwner
         return [
             'instance' => $instance,
             'primaryKeyField' => $primaryKey['field'],
+            'primaryColumn' => $primaryKey['column'],
             'columns' => $columns,
             'values' => $values,
         ];

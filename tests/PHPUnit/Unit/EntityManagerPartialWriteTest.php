@@ -264,11 +264,22 @@ final class EntityManagerPartialWriteTest extends TestCase
             ],
         );
 
+        $firstRow = $this->fetchCatalogListing('Bulk Cordless Saw');
+        $secondRow = $this->fetchCatalogListing('Bulk Bench Plane');
+        $identifiers = $result->getIdentifiers()->results ?? [];
+        $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
         self::assertTrue($result->isOk());
         self::assertSame(2, $result->getTotalAffectedRows());
         self::assertStringContainsString('), (', $result->getRaw());
-        self::assertSame(42, $this->fetchCatalogListing('Bulk Cordless Saw')['category_id']);
-        self::assertSame(42, $this->fetchCatalogListing('Bulk Bench Plane')['category_id']);
+        self::assertSame(42, $firstRow['category_id']);
+        self::assertSame(42, $secondRow['category_id']);
+        self::assertCount(2, $identifiers);
+        self::assertCount(2, $generatedMaps);
+        self::assertSame((int)$firstRow['id'], $identifiers[0]->id);
+        self::assertSame((int)$secondRow['id'], $identifiers[1]->id);
+        self::assertSame((int)$firstRow['id'], $generatedMaps[0]->id);
+        self::assertSame((int)$secondRow['id'], $generatedMaps[1]->id);
     }
 
     public function testBulkInsertRejectsRowsWithNumericKeysBeforeWriting(): void

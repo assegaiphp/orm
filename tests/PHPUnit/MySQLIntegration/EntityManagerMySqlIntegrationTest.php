@@ -104,6 +104,46 @@ final class EntityManagerMySqlIntegrationTest extends MySqlIntegrationTestCase
         self::assertSame(MockColorType::YELLOW->value, $row['color_type']);
     }
 
+    public function testBulkInsertPopulatesGeneratedIdentifiers(): void
+    {
+        $result = $this->manager->insert(
+            MockEntity::class,
+            [
+                [
+                    'name' => 'mysql bulk insert first',
+                    'description' => 'First generated identifier',
+                    'colorType' => MockColorType::GREEN,
+                ],
+                [
+                    'name' => 'mysql bulk insert second',
+                    'description' => 'Second generated identifier',
+                    'colorType' => MockColorType::BLUE,
+                ],
+            ],
+        );
+
+        self::assertInstanceOf(InsertResult::class, $result);
+        self::assertTrue($result->isOk());
+
+        $identifiers = $result->getIdentifiers()->results ?? [];
+        $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
+        self::assertCount(2, $identifiers);
+        self::assertCount(2, $generatedMaps);
+        self::assertGreaterThan(0, $identifiers[0]->id);
+        self::assertGreaterThan(0, $identifiers[1]->id);
+        self::assertSame($identifiers[0]->id, $generatedMaps[0]->id);
+        self::assertSame($identifiers[1]->id, $generatedMaps[1]->id);
+
+        $firstRow = $this->fetchMocksRowById((int)$identifiers[0]->id);
+        $secondRow = $this->fetchMocksRowById((int)$identifiers[1]->id);
+
+        self::assertSame('mysql bulk insert first', $firstRow['name']);
+        self::assertSame('mysql bulk insert second', $secondRow['name']);
+        self::assertSame(MockColorType::GREEN->value, $firstRow['color_type']);
+        self::assertSame(MockColorType::BLUE->value, $secondRow['color_type']);
+    }
+
     public function testInsertReturnsErrorForInvalidStructure(): void
     {
         $invalid = (object) [
