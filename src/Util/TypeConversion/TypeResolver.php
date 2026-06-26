@@ -16,12 +16,18 @@ final class TypeResolver
   private static ?TypeResolver $instance = null;
 
   /**
-   * Constructs
+   * Constructs a new TypeResolver.
    */
-  private final function __construct()
+  public function __construct()
   {
   }
 
+  /**
+   * Returns the singleton instance of the TypeResolver.
+   *
+   * @return self The singleton instance of the TypeResolver.
+   * @deprecated Will be removed in Assegai ORM 0.10.0. Create and inject TypeResolver instead.
+   */
   public static function getInstance(): self
   {
     if (!self::$instance) {

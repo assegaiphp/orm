@@ -289,6 +289,26 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
     }
 
+    public function testObjectPartialUpdateSkipsNullsForRequiredColumnsWithoutDefaults(): void
+    {
+        $this->insertCatalogItem('Patch Target', 'Original description');
+
+        $payload = new NullableCatalogItemNameDescriptionPatch();
+        $payload->description = 'Updated description';
+
+        $result = $this->createManager(NullableCatalogItemEntity::class)->update(
+            NullableCatalogItemEntity::class,
+            $payload,
+            ['name' => 'Patch Target'],
+        );
+        $row = $this->fetchCatalogItem('Patch Target');
+
+        self::assertTrue($result->isOk());
+        self::assertSame(1, $result->affected);
+        self::assertSame('Patch Target', $row['name']);
+        self::assertSame('Updated description', $row['description']);
+    }
+
     public function testManagerUpsertUsesDefaultsForNonNullableNullsOnObjectPayloads(): void
     {
         $payload = new SoftRemovableCatalogItemWritePayload();
@@ -468,6 +488,36 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertTrue($result->isOk());
         self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
         self::assertNotNull($row['deleted_at']);
+    }
+
+    public function testSoftRemoveReportsOneAffectedRowWhenEntityExists(): void
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'INSERT INTO soft_removable_catalog_items (name, status, deleted_at) VALUES (?, ?, NULL)'
+        );
+        $statement->execute(['Affected Soft Remove', CatalogItemStatus::ACTIVE->value]);
+        $id = (int)$this->dataSource->getClient()->lastInsertId();
+
+        $entity = new SoftRemovableCatalogItemEntity();
+        $entity->id = $id;
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->softRemove($entity);
+        $row = $this->fetchSoftRemovableCatalogItem($id);
+
+        self::assertTrue($result->isOk());
+        self::assertSame(1, $result->affected);
+        self::assertNotNull($row['deleted_at']);
+    }
+
+    public function testSoftRemoveReportsZeroAffectedRowsWhenEntityDoesNotExist(): void
+    {
+        $entity = new SoftRemovableCatalogItemEntity();
+        $entity->id = 987654321;
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->softRemove($entity);
+
+        self::assertTrue($result->isOk());
+        self::assertSame(0, $result->affected);
     }
 
     public function testInsertAcceptsListArrayRows(): void
@@ -1022,6 +1072,12 @@ class NullableCatalogItemPatch
 class NullableCatalogItemNullNamePayload
 {
     public ?string $name = null;
+}
+
+class NullableCatalogItemNameDescriptionPatch
+{
+    public ?string $name = null;
+    public ?string $description = null;
 }
 
 #[Entity(table: 'nullable_catalog_item_schedules')]

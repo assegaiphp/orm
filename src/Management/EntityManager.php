@@ -788,6 +788,21 @@ class EntityManager implements IEntityStoreOwner
      */
     public function create(string $entityClass, null|object|array $entityLike = null): object
     {
+        return $this->createEntityInstance(entityClass: $entityClass, entityLike: $entityLike);
+    }
+
+    /**
+     * Hydrates an entity-like payload into an entity instance.
+     *
+     * @throws ClassNotFoundException
+     * @throws ORMException|ReflectionException
+     */
+    private function createEntityInstance(
+        string $entityClass,
+        null|object|array $entityLike = null,
+        bool $omitNullsForNonNullableProperties = false,
+    ): object
+    {
         $this->validateEntityName(entityClass: $entityClass);
 
         $entity = new $entityClass;
@@ -801,7 +816,7 @@ class EntityManager implements IEntityStoreOwner
 
                     if (is_null($entityLikePropertyValue)) {
                         if (!$targetAllowsNull) {
-                            if ($this->hasColumnDefaultValue($entityClassReflectionProperty)) {
+                            if ($this->hasColumnDefaultValue($entityClassReflectionProperty) || $omitNullsForNonNullableProperties) {
                                 continue;
                             }
 
@@ -2632,7 +2647,11 @@ class EntityManager implements IEntityStoreOwner
             return new UpdateResult(raw: $this->query->queryString(), affected: $this->query->rowCount(), identifiers: (object)$partialEntity, generatedMaps: $generatedMaps);
         }
 
-        $entityInstance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
+        $entityInstance = $this->createEntityInstance(
+            entityClass: $entityClass,
+            entityLike: $partialEntity,
+            omitNullsForNonNullableProperties: is_object($partialEntity),
+        );
         $assignmentList = [];
         $columnOptions = [];
         $relations = [];
@@ -3382,7 +3401,6 @@ class EntityManager implements IEntityStoreOwner
      */
     public function upsert(string $entityClass, object|array $entityOrEntities, array|UpsertOptions $options): InsertResult|UpdateResult
     {
-        // TODO: #83 Implement EntityManager::upsert @amasiye
         if (is_array($options)) {
             $options = array_is_list($options)
                 ? new UpsertOptions(conflictPaths: $options)
@@ -3424,7 +3442,6 @@ class EntityManager implements IEntityStoreOwner
             entityLike: is_array($entityOrEntities) ? $entityOrEntities : (object)$entityOrEntities,
         );
 
-        // TODO: Configure the upsert options
         $primaryKey = $this->getPrimaryKeyMetadata($entity);
         $primaryKeyField = $primaryKey['field'];
         $primaryColumn = $primaryKey['column'];
@@ -3855,7 +3872,6 @@ class EntityManager implements IEntityStoreOwner
                 throw $this->newGeneralSqlQueryException($this->query, $result);
             }
 
-            // TODO: #88 Verify that delete occurred @amasiye
             $generatedMaps = new stdClass();
             foreach ($result->value() as $key => $value) {
                 $generatedMaps->$key = $value;
