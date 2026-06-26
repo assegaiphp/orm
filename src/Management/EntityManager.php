@@ -55,6 +55,7 @@ use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\SqlIdentifier;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
+use BackedEnum;
 use DateInvalidTimeZoneException;
 use DateMalformedStringException;
 use DateTime;
@@ -805,9 +806,9 @@ class EntityManager implements IEntityStoreOwner
                     }
 
                     $entityLikeReflectionPropertyType = is_array($entityLike)
-                        ? strtolower(gettype($entityLikePropertyValue))
+                        ? $this->normalizePhpTypeName(gettype($entityLikePropertyValue))
                         : match (true) {
-                            (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType() instanceof ReflectionUnionType => strtolower(gettype($entityLikePropertyValue)),
+                            (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType() instanceof ReflectionUnionType => $this->normalizePhpTypeName(gettype($entityLikePropertyValue)),
                             default => (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType()?->getName()
                         };
                     $entityClassReflectionPropertyType = match (true) {
@@ -816,10 +817,45 @@ class EntityManager implements IEntityStoreOwner
                     };
                     $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || ((!empty($entityClassReflectionPropertyType) && !empty($entityLikeReflectionPropertyType)) && str_contains($entityClassReflectionPropertyType, ($entityLikeReflectionPropertyType ?? '')));
 
-                    $sourceType = $entityLikeReflectionPropertyType ?? gettype($entityLikePropertyValue);
-                    $targetType = $entityClassReflectionPropertyType ?? gettype($entityLikePropertyValue);
+                    $sourceType = $entityLikeReflectionPropertyType ?? $this->normalizePhpTypeName(gettype($entityLikePropertyValue));
+                    $targetType = $entityClassReflectionPropertyType ?? $this->normalizePhpTypeName(gettype($entityLikePropertyValue));
 
-                    $entity->$entityLikePropertyName = $typesMatch ? $entityLikePropertyValue : $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType) ?? $entityLikePropertyValue;
+                    if (!$typesMatch) {
+                        if (
+                            !($entityClassReflectionProperty->getType() instanceof ReflectionUnionType) &&
+                            is_string($targetType) &&
+                            enum_exists($targetType)
+                        ) {
+                            if ($entityLikePropertyValue instanceof $targetType) {
+                                $sourceType = $targetType;
+                            } elseif (is_subclass_of($targetType, BackedEnum::class) && (is_string($entityLikePropertyValue) || is_int($entityLikePropertyValue))) {
+                                $enumValue = $targetType::tryFrom($entityLikePropertyValue);
+
+                                if ($enumValue === null) {
+                                    throw new TypeConversionException("Cannot convert value for $entityLikePropertyName to $targetType.");
+                                }
+
+                                $entityLikePropertyValue = $enumValue;
+                                $sourceType = $targetType;
+                            }
+                        }
+
+                        if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
+                            $convertedValue = $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType);
+
+                            if (is_null($convertedValue) && !$entityClassReflectionProperty->getType()?->allowsNull()) {
+                                throw new TypeConversionException("Cannot convert value for $entityLikePropertyName from $sourceType to $targetType.");
+                            }
+
+                            $entityLikePropertyValue = $convertedValue;
+                        }
+                    }
+
+                    if (is_null($entityLikePropertyValue) && !$entityClassReflectionProperty->getType()?->allowsNull()) {
+                        continue;
+                    }
+
+                    $entity->$entityLikePropertyName = $entityLikePropertyValue;
                 }
             }
         }
@@ -880,6 +916,16 @@ class EntityManager implements IEntityStoreOwner
         return null;
     }
 
+    private function normalizePhpTypeName(string $type): string
+    {
+        return match (strtolower($type)) {
+            'integer' => 'int',
+            'double' => 'float',
+            'boolean' => 'bool',
+            'null' => 'null',
+            default => strtolower($type),
+        };
+    }
     /**
      * @throws ReflectionException
      * @throws TypeConversionException
@@ -4003,12 +4049,50 @@ class EntityManager implements IEntityStoreOwner
                     };
                 }
 
+                $targetAllowsNull = $targetReflectionType?->allowsNull() ?? true;
+
+                if (is_null($value) && !$targetAllowsNull) {
+                    continue;
+                }
+
                 if (is_null($sourceType) || is_null($targetType)) {
                     continue;
                 }
 
+                if (
+                    !($targetReflectionType instanceof ReflectionUnionType) &&
+                    is_string($targetType) &&
+                    enum_exists($targetType) &&
+                    !($value instanceof $targetType)
+                ) {
+                    if ($value instanceof $targetType) {
+                        $sourceType = $targetType;
+                    } elseif (is_subclass_of($targetType, BackedEnum::class) && (is_string($value) || is_int($value))) {
+                        $enumValue = $targetType::tryFrom($value);
+
+                        if ($enumValue === null) {
+                            throw new TypeConversionException("Cannot convert value for $prop to $targetType.");
+                        }
+
+                        $value = $enumValue;
+                        $sourceType = $targetType;
+                    } else {
+                        throw new TypeConversionException("Cannot convert value for $prop to $targetType.");
+                    }
+                }
+
                 if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
-                    $value = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
+                    $convertedValue = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
+
+                    if (is_null($convertedValue) && !$targetAllowsNull) {
+                        throw new TypeConversionException("Cannot convert value for $prop from $sourceType to $targetType.");
+                    }
+
+                    $value = $convertedValue;
+                }
+
+                if (is_null($value) && !$targetAllowsNull) {
+                    continue;
                 }
 
                 $entity->$prop = $value;
