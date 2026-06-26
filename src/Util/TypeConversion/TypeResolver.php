@@ -42,13 +42,31 @@ final class TypeResolver
    */
   public function resolve(object $converterHost, mixed $value, string $fromType, string $toType): mixed
   {
+    $resolved = false;
+    return $this->tryResolve($converterHost, $value, $fromType, $toType, $resolved);
+  }
+
+  /**
+   * @param object $converterHost
+   * @param mixed $value
+   * @param string $fromType
+   * @param string $toType
+   * @param bool $resolved
+   * @return mixed
+   * @throws ReflectionException
+   * @throws TypeConversionException
+   */
+  public function tryResolve(object $converterHost, mixed $value, string $fromType, string $toType, bool &$resolved): mixed
+  {
     if ( $method =
           $this->findConverter(
             converterHostClassName: $converterHost::class, sourceType: $fromType, targetType: $toType
           ) ) {
+      $resolved = true;
       return $method->invokeArgs($converterHost, [$value]);
     }
 
+    $resolved = false;
     return null;
   }
 

@@ -797,12 +797,18 @@ class EntityManager implements IEntityStoreOwner
                 if (property_exists($entity, $entityLikePropertyName)) {
                     $entityClassReflectionProperty = new ReflectionProperty($entityClass, $entityLikePropertyName);
 
-                    if (is_null($entityLikePropertyValue)) {
-                        $entityLikePropertyValue = $this->getDefaultColumnValue($entityClassReflectionProperty);
+                    $targetAllowsNull = $entityClassReflectionProperty->getType()?->allowsNull() ?? true;
 
-                        if (!$entityClassReflectionProperty->getType()->allowsNull()) {
-                            continue;
+                    if (is_null($entityLikePropertyValue)) {
+                        if (!$targetAllowsNull) {
+                            if ($this->hasColumnDefaultValue($entityClassReflectionProperty)) {
+                                continue;
+                            }
+
+                            throw new TypeConversionException("Cannot assign null to non-nullable property $entityLikePropertyName.");
                         }
+
+                        $entityLikePropertyValue = $this->getDefaultColumnValue($entityClassReflectionProperty);
                     }
 
                     $entityLikeReflectionPropertyType = is_array($entityLike)
@@ -841,18 +847,25 @@ class EntityManager implements IEntityStoreOwner
                         }
 
                         if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
-                            $convertedValue = $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType);
+                            $converted = false;
+                            $convertedValue = $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType, converted: $converted);
 
-                            if (is_null($convertedValue) && is_null($entityLikePropertyValue) && !$entityClassReflectionProperty->getType()?->allowsNull()) {
-                                throw new TypeConversionException("Cannot convert value for $entityLikePropertyName from $sourceType to $targetType.");
+                            if ($converted) {
+                                if (is_null($convertedValue) && !$targetAllowsNull) {
+                                    throw new TypeConversionException("Cannot convert value for $entityLikePropertyName from $sourceType to $targetType.");
+                                }
+
+                                $entityLikePropertyValue = $convertedValue;
                             }
-
-                            $entityLikePropertyValue = $convertedValue ?? $entityLikePropertyValue;
                         }
                     }
 
-                    if (is_null($entityLikePropertyValue) && !$entityClassReflectionProperty->getType()?->allowsNull()) {
-                        continue;
+                    if (is_null($entityLikePropertyValue) && !$targetAllowsNull) {
+                        if ($this->hasColumnDefaultValue($entityClassReflectionProperty)) {
+                            continue;
+                        }
+
+                        throw new TypeConversionException("Cannot assign null to non-nullable property $entityLikePropertyName.");
                     }
 
                     $entity->$entityLikePropertyName = $entityLikePropertyValue;
@@ -922,6 +935,23 @@ class EntityManager implements IEntityStoreOwner
         return null;
     }
 
+    private function hasColumnDefaultValue(ReflectionProperty $reflectionProperty): bool
+    {
+        foreach ($reflectionProperty->getAttributes() as $attribute) {
+            $attributeInstance = $attribute->newInstance();
+
+            if (property_exists($attributeInstance, 'default') && !is_null($attributeInstance->default)) {
+                return true;
+            }
+
+            if (property_exists($attributeInstance, 'autoIncrement') && $attributeInstance->autoIncrement) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function normalizePhpTypeName(string $type): string
     {
         return match (strtolower($type)) {
@@ -936,24 +966,30 @@ class EntityManager implements IEntityStoreOwner
      * @throws ReflectionException
      * @throws TypeConversionException
      */
-    private function castValue(mixed $value, string $sourceType, string $targetType): mixed
+    private function castValue(mixed $value, string $sourceType, string $targetType, bool &$converted = false): mixed
     {
+        $converted = false;
+
         if (is_null($value)) {
             return null;
         }
 
         foreach ($this->customConverters as $converter) {
-            $result = $this->typeResolver->resolve(converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType);
+            $resolved = false;
+            $result = $this->typeResolver->tryResolve($converter, $value, $sourceType, $targetType, $resolved);
 
-            if (!is_null($result)) {
+            if ($resolved) {
+                $converted = true;
                 return $result;
             }
         }
 
         foreach ($this->defaultConverters as $converter) {
-            $result = $this->typeResolver->resolve(converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType);
+            $resolved = false;
+            $result = $this->typeResolver->tryResolve($converter, $value, $sourceType, $targetType, $resolved);
 
-            if (!is_null($result)) {
+            if ($resolved) {
+                $converted = true;
                 return $result;
             }
         }
@@ -4058,7 +4094,11 @@ class EntityManager implements IEntityStoreOwner
                 $targetAllowsNull = $targetReflectionType?->allowsNull() ?? true;
 
                 if (is_null($value) && !$targetAllowsNull) {
-                    continue;
+                    if ($this->hasColumnDefaultValue($targetReflection)) {
+                        continue;
+                    }
+
+                    throw new TypeConversionException("Cannot assign null to non-nullable property $prop.");
                 }
 
                 if (is_null($sourceType) || is_null($targetType)) {
@@ -4088,17 +4128,24 @@ class EntityManager implements IEntityStoreOwner
                 }
 
                 if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
-                    $convertedValue = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
+                    $converted = false;
+                    $convertedValue = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType, converted: $converted);
 
-                    if (is_null($convertedValue) && is_null($value) && !$targetAllowsNull) {
-                        throw new TypeConversionException("Cannot convert value for $prop from $sourceType to $targetType.");
+                    if ($converted) {
+                        if (is_null($convertedValue) && !$targetAllowsNull) {
+                            throw new TypeConversionException("Cannot convert value for $prop from $sourceType to $targetType.");
+                        }
+
+                        $value = $convertedValue;
                     }
-
-                    $value = $convertedValue ?? $value;
                 }
 
                 if (is_null($value) && !$targetAllowsNull) {
-                    continue;
+                    if ($this->hasColumnDefaultValue($targetReflection)) {
+                        continue;
+                    }
+
+                    throw new TypeConversionException("Cannot assign null to non-nullable property $prop.");
                 }
 
                 $entity->$prop = $value;
