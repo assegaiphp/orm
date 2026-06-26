@@ -843,11 +843,11 @@ class EntityManager implements IEntityStoreOwner
                         if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
                             $convertedValue = $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType);
 
-                            if (is_null($convertedValue) && !$entityClassReflectionProperty->getType()?->allowsNull()) {
+                            if (is_null($convertedValue) && is_null($entityLikePropertyValue) && !$entityClassReflectionProperty->getType()?->allowsNull()) {
                                 throw new TypeConversionException("Cannot convert value for $entityLikePropertyName from $sourceType to $targetType.");
                             }
 
-                            $entityLikePropertyValue = $convertedValue;
+                            $entityLikePropertyValue = $convertedValue ?? $entityLikePropertyValue;
                         }
                     }
 
@@ -4084,11 +4084,11 @@ class EntityManager implements IEntityStoreOwner
                 if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
                     $convertedValue = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
 
-                    if (is_null($convertedValue) && !$targetAllowsNull) {
+                    if (is_null($convertedValue) && is_null($value) && !$targetAllowsNull) {
                         throw new TypeConversionException("Cannot convert value for $prop from $sourceType to $targetType.");
                     }
 
-                    $value = $convertedValue;
+                    $value = $convertedValue ?? $value;
                 }
 
                 if (is_null($value) && !$targetAllowsNull) {

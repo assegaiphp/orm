@@ -469,6 +469,41 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertSame((int)$secondRow['id'], $generatedMaps[1]->id);
     }
 
+    public function testCreatePreservesNonNullValuesWhenNullableConversionIsMissing(): void
+    {
+        $entity = $this->createManager(NullableCatalogItemEntity::class)->create(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Created Nullable Conversion', 'description' => 123],
+        );
+
+        self::assertSame('123', $entity->description);
+    }
+
+    public function testInsertPreservesNonNullValuesWhenNullableConversionIsMissing(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Inserted Nullable Conversion', 'description' => 123],
+        );
+        $row = $this->fetchCatalogItem('Inserted Nullable Conversion');
+
+        self::assertTrue($result->isOk());
+        self::assertSame('123', $row['description']);
+    }
+
+    public function testUpsertPreservesNonNullValuesWhenNullableConversionIsMissing(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->upsert(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Upserted Nullable Conversion', 'description' => 123],
+            ['name'],
+        );
+        $row = $this->fetchCatalogItem('Upserted Nullable Conversion');
+
+        self::assertTrue($result->isOk());
+        self::assertSame('123', $row['description']);
+    }
+
     public function testSqliteBulkInsertPopulatesGeneratedIdsWhenRowsMixExplicitAndGeneratedIds(): void
     {
         $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
