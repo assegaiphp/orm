@@ -8,6 +8,7 @@ use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Attributes\Relations\JoinColumn;
 use Assegai\Orm\Attributes\Relations\ManyToOne;
+use Assegai\Orm\Attributes\TypeConverter;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\Enumerations\DataSourceType;
@@ -20,6 +21,7 @@ use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Repository;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLQuery;
+use DateTime;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -35,6 +37,7 @@ final class EntityManagerPartialWriteTest extends TestCase
         $this->dataSource = new DataSource(new DataSourceOptions(
             entities: [
                 NullableCatalogItemEntity::class,
+                NullableCatalogItemScheduleEntity::class,
                 CatalogCategoryEntity::class,
                 CatalogListingEntity::class,
                 CatalogListingWithScalarEntity::class,
@@ -374,6 +377,34 @@ final class EntityManagerPartialWriteTest extends TestCase
 
         self::assertTrue($result->isOk());
         self::assertSame(CatalogItemStatus::DRAFT->value, $row['status']);
+    }
+
+    public function testCustomConverterNullResultIsPreservedForNullableTargets(): void
+    {
+        $payload = new CatalogItemSchedulePayload();
+        $payload->availableAt = '';
+
+        $manager = $this->createManager(NullableCatalogItemScheduleEntity::class);
+        $manager->useConverters([new BlankStringToDateTimeConverter()]);
+
+        $entity = $manager->getEntityFromObject(NullableCatalogItemScheduleEntity::class, $payload);
+
+        self::assertNull($entity->availableAt);
+    }
+
+    public function testRepositoryUpsertRejectsNullForRequiredColumnsWithoutDefaults(): void
+    {
+        $payload = new NullableCatalogItemNullNamePayload();
+
+        $repository = new Repository(
+            NullableCatalogItemEntity::class,
+            $this->createManager(NullableCatalogItemEntity::class),
+        );
+
+        $this->expectException(TypeConversionException::class);
+        $this->expectExceptionMessage('Cannot assign null to non-nullable property name.');
+
+        $repository->upsert($payload, ['name']);
     }
 
     public function testRepositorySoftRemoveConvertsBackedEnumScalarsOnPartialObjects(): void
@@ -986,6 +1017,35 @@ class NullableCatalogItemEntity
 class NullableCatalogItemPatch
 {
     public ?string $description = null;
+}
+
+class NullableCatalogItemNullNamePayload
+{
+    public ?string $name = null;
+}
+
+#[Entity(table: 'nullable_catalog_item_schedules')]
+class NullableCatalogItemScheduleEntity
+{
+    #[PrimaryGeneratedColumn]
+    public ?int $id = null;
+
+    #[Column(type: ColumnType::DATETIME, nullable: true)]
+    public ?DateTime $availableAt = null;
+}
+
+class CatalogItemSchedulePayload
+{
+    public string $availableAt = '';
+}
+
+class BlankStringToDateTimeConverter
+{
+    #[TypeConverter]
+    public function fromStringToDateTime(string $value): ?DateTime
+    {
+        return trim($value) === '' ? null : new DateTime($value);
+    }
 }
 
 #[Entity(table: 'catalog_categories')]
