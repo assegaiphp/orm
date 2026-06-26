@@ -898,13 +898,19 @@ class EntityManager implements IEntityStoreOwner
             try {
                 # Check if a default value is specified
                 if (!is_null($attributeInstance->default)) {
+                    $default = $attributeInstance->default;
+
+                    if (!is_string($default)) {
+                        return $default;
+                    }
+
                     return match (true) {
-                        $attributeInstance->default === 'CURRENT_TIMESTAMP', $attributeInstance->default === 'NOW()' => new DateTime(),
+                        $default === 'CURRENT_TIMESTAMP', $default === 'NOW()' => new DateTime(),
                         # Match ISO 8601 date format
-                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $attributeInstance->default) => new DateTime($attributeInstance->default),
+                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $default) => new DateTime($default),
                         # Match ATOM date format
-                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$/', $attributeInstance->default) => new DateTime($attributeInstance->default),
-                        default => $attributeInstance->default
+                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$/', $default) => new DateTime($default),
+                        default => $default
                     };
                 }
             } catch (Exception $exception) {
