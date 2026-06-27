@@ -41,9 +41,9 @@ final class EntityInspector
   protected Logger $logger;
 
   /**
-   * Constructs a new EntityInspector
+   * Constructs a new EntityInspector.
    */
-  private final function __construct()
+  public function __construct()
   {
     $this->logger = new Logger(new ConsoleOutput());
   }
@@ -52,6 +52,7 @@ final class EntityInspector
    * Returns the singleton instance of the EntityInspector.
    *
    * @return EntityInspector The singleton instance of the EntityInspector.
+   * @deprecated Will be removed in Assegai ORM 0.10.0. Create and inject EntityInspector instead.
    */
   public static function getInstance(): EntityInspector
   {

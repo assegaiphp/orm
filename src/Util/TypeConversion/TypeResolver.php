@@ -16,12 +16,18 @@ final class TypeResolver
   private static ?TypeResolver $instance = null;
 
   /**
-   * Constructs
+   * Constructs a new TypeResolver.
    */
-  private final function __construct()
+  public function __construct()
   {
   }
 
+  /**
+   * Returns the singleton instance of the TypeResolver.
+   *
+   * @return self The singleton instance of the TypeResolver.
+   * @deprecated Will be removed in Assegai ORM 0.10.0. Create and inject TypeResolver instead.
+   */
   public static function getInstance(): self
   {
     if (!self::$instance) {
@@ -42,13 +48,31 @@ final class TypeResolver
    */
   public function resolve(object $converterHost, mixed $value, string $fromType, string $toType): mixed
   {
+    $resolved = false;
+    return $this->tryResolve($converterHost, $value, $fromType, $toType, $resolved);
+  }
+
+  /**
+   * @param object $converterHost
+   * @param mixed $value
+   * @param string $fromType
+   * @param string $toType
+   * @param bool $resolved
+   * @return mixed
+   * @throws ReflectionException
+   * @throws TypeConversionException
+   */
+  public function tryResolve(object $converterHost, mixed $value, string $fromType, string $toType, bool &$resolved): mixed
+  {
     if ( $method =
           $this->findConverter(
             converterHostClassName: $converterHost::class, sourceType: $fromType, targetType: $toType
           ) ) {
+      $resolved = true;
       return $method->invokeArgs($converterHost, [$value]);
     }
 
+    $resolved = false;
     return null;
   }
 

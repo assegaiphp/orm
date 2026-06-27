@@ -55,6 +55,7 @@ use Assegai\Orm\Util\Log\Logger;
 use Assegai\Orm\Util\SqlIdentifier;
 use Assegai\Orm\Util\TypeConversion\BasicTypeConverter;
 use Assegai\Orm\Util\TypeConversion\TypeResolver;
+use BackedEnum;
 use DateInvalidTimeZoneException;
 use DateMalformedStringException;
 use DateTime;
@@ -787,6 +788,21 @@ class EntityManager implements IEntityStoreOwner
      */
     public function create(string $entityClass, null|object|array $entityLike = null): object
     {
+        return $this->createEntityInstance(entityClass: $entityClass, entityLike: $entityLike);
+    }
+
+    /**
+     * Hydrates an entity-like payload into an entity instance.
+     *
+     * @throws ClassNotFoundException
+     * @throws ORMException|ReflectionException
+     */
+    private function createEntityInstance(
+        string $entityClass,
+        null|object|array $entityLike = null,
+        bool $omitNullsForNonNullableProperties = false,
+    ): object
+    {
         $this->validateEntityName(entityClass: $entityClass);
 
         $entity = new $entityClass;
@@ -796,18 +812,24 @@ class EntityManager implements IEntityStoreOwner
                 if (property_exists($entity, $entityLikePropertyName)) {
                     $entityClassReflectionProperty = new ReflectionProperty($entityClass, $entityLikePropertyName);
 
-                    if (is_null($entityLikePropertyValue)) {
-                        $entityLikePropertyValue = $this->getDefaultColumnValue($entityClassReflectionProperty);
+                    $targetAllowsNull = $entityClassReflectionProperty->getType()?->allowsNull() ?? true;
 
-                        if (!$entityClassReflectionProperty->getType()->allowsNull()) {
-                            continue;
+                    if (is_null($entityLikePropertyValue)) {
+                        if (!$targetAllowsNull) {
+                            if ($this->hasColumnDefaultValue($entityClassReflectionProperty) || $omitNullsForNonNullableProperties) {
+                                continue;
+                            }
+
+                            throw new TypeConversionException("Cannot assign null to non-nullable property $entityLikePropertyName.");
                         }
+
+                        $entityLikePropertyValue = $this->getDefaultColumnValue($entityClassReflectionProperty);
                     }
 
                     $entityLikeReflectionPropertyType = is_array($entityLike)
-                        ? strtolower(gettype($entityLikePropertyValue))
+                        ? $this->normalizePhpTypeName(gettype($entityLikePropertyValue))
                         : match (true) {
-                            (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType() instanceof ReflectionUnionType => strtolower(gettype($entityLikePropertyValue)),
+                            (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType() instanceof ReflectionUnionType => $this->normalizePhpTypeName(gettype($entityLikePropertyValue)),
                             default => (new ReflectionProperty($entityLike, $entityLikePropertyName))->getType()?->getName()
                         };
                     $entityClassReflectionPropertyType = match (true) {
@@ -816,10 +838,52 @@ class EntityManager implements IEntityStoreOwner
                     };
                     $typesMatch = ($entityLikeReflectionPropertyType === $entityClassReflectionPropertyType) || ((!empty($entityClassReflectionPropertyType) && !empty($entityLikeReflectionPropertyType)) && str_contains($entityClassReflectionPropertyType, ($entityLikeReflectionPropertyType ?? '')));
 
-                    $sourceType = $entityLikeReflectionPropertyType ?? gettype($entityLikePropertyValue);
-                    $targetType = $entityClassReflectionPropertyType ?? gettype($entityLikePropertyValue);
+                    $sourceType = $entityLikeReflectionPropertyType ?? $this->normalizePhpTypeName(gettype($entityLikePropertyValue));
+                    $targetType = $entityClassReflectionPropertyType ?? $this->normalizePhpTypeName(gettype($entityLikePropertyValue));
 
-                    $entity->$entityLikePropertyName = $typesMatch ? $entityLikePropertyValue : $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType) ?? $entityLikePropertyValue;
+                    if (!$typesMatch) {
+                        if (
+                            !($entityClassReflectionProperty->getType() instanceof ReflectionUnionType) &&
+                            is_string($targetType) &&
+                            enum_exists($targetType)
+                        ) {
+                            if ($entityLikePropertyValue instanceof $targetType) {
+                                $sourceType = $targetType;
+                            } elseif (is_subclass_of($targetType, BackedEnum::class) && (is_string($entityLikePropertyValue) || is_int($entityLikePropertyValue))) {
+                                $enumValue = $targetType::tryFrom($entityLikePropertyValue);
+
+                                if ($enumValue === null) {
+                                    throw new TypeConversionException("Cannot convert value for $entityLikePropertyName to $targetType.");
+                                }
+
+                                $entityLikePropertyValue = $enumValue;
+                                $sourceType = $targetType;
+                            }
+                        }
+
+                        if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
+                            $converted = false;
+                            $convertedValue = $this->castValue(value: $entityLikePropertyValue, sourceType: $sourceType, targetType: $targetType, converted: $converted);
+
+                            if ($converted) {
+                                if (is_null($convertedValue) && !$targetAllowsNull) {
+                                    throw new TypeConversionException("Cannot convert value for $entityLikePropertyName from $sourceType to $targetType.");
+                                }
+
+                                $entityLikePropertyValue = $convertedValue;
+                            }
+                        }
+                    }
+
+                    if (is_null($entityLikePropertyValue) && !$targetAllowsNull) {
+                        if ($this->hasColumnDefaultValue($entityClassReflectionProperty)) {
+                            continue;
+                        }
+
+                        throw new TypeConversionException("Cannot assign null to non-nullable property $entityLikePropertyName.");
+                    }
+
+                    $entity->$entityLikePropertyName = $entityLikePropertyValue;
                 }
             }
         }
@@ -862,13 +926,19 @@ class EntityManager implements IEntityStoreOwner
             try {
                 # Check if a default value is specified
                 if (!is_null($attributeInstance->default)) {
+                    $default = $attributeInstance->default;
+
+                    if (!is_string($default)) {
+                        return $default;
+                    }
+
                     return match (true) {
-                        $attributeInstance->default === 'CURRENT_TIMESTAMP', $attributeInstance->default === 'NOW()' => new DateTime(),
+                        $default === 'CURRENT_TIMESTAMP', $default === 'NOW()' => new DateTime(),
                         # Match ISO 8601 date format
-                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $attributeInstance->default) => new DateTime($attributeInstance->default),
+                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/', $default) => new DateTime($default),
                         # Match ATOM date format
-                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$/', $attributeInstance->default) => new DateTime($attributeInstance->default),
-                        default => $attributeInstance->default
+                        preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+$/', $default) => new DateTime($default),
+                        default => $default
                     };
                 }
             } catch (Exception $exception) {
@@ -880,28 +950,61 @@ class EntityManager implements IEntityStoreOwner
         return null;
     }
 
+    private function hasColumnDefaultValue(ReflectionProperty $reflectionProperty): bool
+    {
+        foreach ($reflectionProperty->getAttributes() as $attribute) {
+            $attributeInstance = $attribute->newInstance();
+
+            if (property_exists($attributeInstance, 'default') && !is_null($attributeInstance->default)) {
+                return true;
+            }
+
+            if (property_exists($attributeInstance, 'autoIncrement') && $attributeInstance->autoIncrement) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizePhpTypeName(string $type): string
+    {
+        return match (strtolower($type)) {
+            'integer' => 'int',
+            'double' => 'float',
+            'boolean' => 'bool',
+            'null' => 'null',
+            default => strtolower($type),
+        };
+    }
     /**
      * @throws ReflectionException
      * @throws TypeConversionException
      */
-    private function castValue(mixed $value, string $sourceType, string $targetType): mixed
+    private function castValue(mixed $value, string $sourceType, string $targetType, bool &$converted = false): mixed
     {
+        $converted = false;
+
         if (is_null($value)) {
             return null;
         }
 
         foreach ($this->customConverters as $converter) {
-            $result = $this->typeResolver->resolve(converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType);
+            $resolved = false;
+            $result = $this->typeResolver->tryResolve($converter, $value, $sourceType, $targetType, $resolved);
 
-            if (!is_null($result)) {
+            if ($resolved) {
+                $converted = true;
                 return $result;
             }
         }
 
         foreach ($this->defaultConverters as $converter) {
-            $result = $this->typeResolver->resolve(converterHost: $converter, value: $value, fromType: $sourceType, toType: $targetType);
+            $resolved = false;
+            $result = $this->typeResolver->tryResolve($converter, $value, $sourceType, $targetType, $resolved);
 
-            if (!is_null($result)) {
+            if ($resolved) {
+                $converted = true;
                 return $result;
             }
         }
@@ -2544,7 +2647,11 @@ class EntityManager implements IEntityStoreOwner
             return new UpdateResult(raw: $this->query->queryString(), affected: $this->query->rowCount(), identifiers: (object)$partialEntity, generatedMaps: $generatedMaps);
         }
 
-        $entityInstance = $this->create(entityClass: $entityClass, entityLike: $partialEntity);
+        $entityInstance = $this->createEntityInstance(
+            entityClass: $entityClass,
+            entityLike: $partialEntity,
+            omitNullsForNonNullableProperties: is_object($partialEntity),
+        );
         $assignmentList = [];
         $columnOptions = [];
         $relations = [];
@@ -3294,7 +3401,6 @@ class EntityManager implements IEntityStoreOwner
      */
     public function upsert(string $entityClass, object|array $entityOrEntities, array|UpsertOptions $options): InsertResult|UpdateResult
     {
-        // TODO: #83 Implement EntityManager::upsert @amasiye
         if (is_array($options)) {
             $options = array_is_list($options)
                 ? new UpsertOptions(conflictPaths: $options)
@@ -3336,7 +3442,6 @@ class EntityManager implements IEntityStoreOwner
             entityLike: is_array($entityOrEntities) ? $entityOrEntities : (object)$entityOrEntities,
         );
 
-        // TODO: Configure the upsert options
         $primaryKey = $this->getPrimaryKeyMetadata($entity);
         $primaryKeyField = $primaryKey['field'];
         $primaryColumn = $primaryKey['column'];
@@ -3767,7 +3872,6 @@ class EntityManager implements IEntityStoreOwner
                 throw $this->newGeneralSqlQueryException($this->query, $result);
             }
 
-            // TODO: #88 Verify that delete occurred @amasiye
             $generatedMaps = new stdClass();
             foreach ($result->value() as $key => $value) {
                 $generatedMaps->$key = $value;
@@ -4003,12 +4107,61 @@ class EntityManager implements IEntityStoreOwner
                     };
                 }
 
+                $targetAllowsNull = $targetReflectionType?->allowsNull() ?? true;
+
+                if (is_null($value) && !$targetAllowsNull) {
+                    if ($this->hasColumnDefaultValue($targetReflection)) {
+                        continue;
+                    }
+
+                    throw new TypeConversionException("Cannot assign null to non-nullable property $prop.");
+                }
+
                 if (is_null($sourceType) || is_null($targetType)) {
                     continue;
                 }
 
+                if (
+                    !($targetReflectionType instanceof ReflectionUnionType) &&
+                    is_string($targetType) &&
+                    enum_exists($targetType) &&
+                    !($value instanceof $targetType)
+                ) {
+                    if ($value instanceof $targetType) {
+                        $sourceType = $targetType;
+                    } elseif (is_subclass_of($targetType, BackedEnum::class) && (is_string($value) || is_int($value))) {
+                        $enumValue = $targetType::tryFrom($value);
+
+                        if ($enumValue === null) {
+                            throw new TypeConversionException("Cannot convert value for $prop to $targetType.");
+                        }
+
+                        $value = $enumValue;
+                        $sourceType = $targetType;
+                    } else {
+                        throw new TypeConversionException("Cannot convert value for $prop to $targetType.");
+                    }
+                }
+
                 if ($sourceType !== $targetType && !str_contains($targetType, $sourceType)) {
-                    $value = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType);
+                    $converted = false;
+                    $convertedValue = $this->castValue(value: $value, sourceType: $sourceType, targetType: $targetType, converted: $converted);
+
+                    if ($converted) {
+                        if (is_null($convertedValue) && !$targetAllowsNull) {
+                            throw new TypeConversionException("Cannot convert value for $prop from $sourceType to $targetType.");
+                        }
+
+                        $value = $convertedValue;
+                    }
+                }
+
+                if (is_null($value) && !$targetAllowsNull) {
+                    if ($this->hasColumnDefaultValue($targetReflection)) {
+                        continue;
+                    }
+
+                    throw new TypeConversionException("Cannot assign null to non-nullable property $prop.");
                 }
 
                 $entity->$prop = $value;

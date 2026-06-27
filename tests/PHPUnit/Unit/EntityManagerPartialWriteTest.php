@@ -3,21 +3,25 @@
 namespace Tests\PHPUnit\Unit;
 
 use Assegai\Orm\Attributes\Columns\Column;
+use Assegai\Orm\Attributes\Columns\DeleteDateColumn;
 use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Attributes\Relations\JoinColumn;
 use Assegai\Orm\Attributes\Relations\ManyToOne;
+use Assegai\Orm\Attributes\TypeConverter;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Exceptions\ORMException;
+use Assegai\Orm\Exceptions\TypeConversionException;
 use Assegai\Orm\Management\EntityManager;
 use Assegai\Orm\Management\Options\InsertOptions;
 use Assegai\Orm\Management\Options\UpdateOptions;
 use Assegai\Orm\Management\Repository;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLQuery;
+use DateTime;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -33,10 +37,12 @@ final class EntityManagerPartialWriteTest extends TestCase
         $this->dataSource = new DataSource(new DataSourceOptions(
             entities: [
                 NullableCatalogItemEntity::class,
+                NullableCatalogItemScheduleEntity::class,
                 CatalogCategoryEntity::class,
                 CatalogListingEntity::class,
                 CatalogListingWithScalarEntity::class,
                 CatalogListingWithAliasCollisionEntity::class,
+                SoftRemovableCatalogItemEntity::class,
             ],
             name: $this->databasePath,
             type: DataSourceType::SQLITE,
@@ -68,6 +74,14 @@ final class EntityManagerPartialWriteTest extends TestCase
                 name TEXT NOT NULL UNIQUE,
                 category_code INTEGER NULL,
                 category_id INTEGER NULL
+            )'
+        );
+        $this->dataSource->getClient()->exec(
+            'CREATE TABLE soft_removable_catalog_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                deleted_at TEXT NULL
             )'
         );
     }
@@ -252,6 +266,260 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertObjectNotHasProperty('categoryId', $result->generatedMaps);
     }
 
+    public function testObjectPartialUpdateSkipsNullsForNonNullableDefaults(): void
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'INSERT INTO soft_removable_catalog_items (name, status, deleted_at) VALUES (?, ?, NULL)'
+        );
+        $statement->execute(['Pending Update', CatalogItemStatus::ACTIVE->value]);
+        $id = (int)$this->dataSource->getClient()->lastInsertId();
+
+        $payload = new SoftRemovableCatalogItemWritePayload();
+        $payload->name = 'Updated Without Status';
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->update(
+            SoftRemovableCatalogItemEntity::class,
+            $payload,
+            ['id' => $id],
+        );
+        $row = $this->fetchSoftRemovableCatalogItem($id);
+
+        self::assertTrue($result->isOk());
+        self::assertSame('Updated Without Status', $row['name']);
+        self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
+    }
+
+    public function testObjectPartialUpdateSkipsNullsForRequiredColumnsWithoutDefaults(): void
+    {
+        $this->insertCatalogItem('Patch Target', 'Original description');
+
+        $payload = new NullableCatalogItemNameDescriptionPatch();
+        $payload->description = 'Updated description';
+
+        $result = $this->createManager(NullableCatalogItemEntity::class)->update(
+            NullableCatalogItemEntity::class,
+            $payload,
+            ['name' => 'Patch Target'],
+        );
+        $row = $this->fetchCatalogItem('Patch Target');
+
+        self::assertTrue($result->isOk());
+        self::assertSame(1, $result->affected);
+        self::assertSame('Patch Target', $row['name']);
+        self::assertSame('Updated description', $row['description']);
+    }
+
+    public function testManagerUpsertUsesDefaultsForNonNullableNullsOnObjectPayloads(): void
+    {
+        $payload = new SoftRemovableCatalogItemWritePayload();
+        $payload->name = 'Manager Upsert Default Status';
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->upsert(
+            SoftRemovableCatalogItemEntity::class,
+            $payload,
+            ['name'],
+        );
+        $row = $this->fetchSoftRemovableCatalogItemByName('Manager Upsert Default Status');
+
+        self::assertTrue($result->isOk());
+        self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
+    }
+
+    public function testManagerUpdateConvertsBackedEnumScalarsOnObjectPayloads(): void
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'INSERT INTO soft_removable_catalog_items (name, status, deleted_at) VALUES (?, ?, NULL)'
+        );
+        $statement->execute(['Pending Scalar Update', CatalogItemStatus::ACTIVE->value]);
+        $id = (int)$this->dataSource->getClient()->lastInsertId();
+
+        $payload = new SoftRemovableCatalogItemRawWritePayload();
+        $payload->name = 'Updated With Scalar Status';
+        $payload->status = CatalogItemStatus::DRAFT->value;
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->update(
+            SoftRemovableCatalogItemEntity::class,
+            $payload,
+            ['id' => $id],
+        );
+        $row = $this->fetchSoftRemovableCatalogItem($id);
+
+        self::assertTrue($result->isOk());
+        self::assertSame('Updated With Scalar Status', $row['name']);
+        self::assertSame(CatalogItemStatus::DRAFT->value, $row['status']);
+    }
+
+    public function testManagerUpsertConvertsBackedEnumScalarsOnObjectPayloads(): void
+    {
+        $payload = new SoftRemovableCatalogItemRawWritePayload();
+        $payload->name = 'Manager Upsert Scalar Status';
+        $payload->status = CatalogItemStatus::DRAFT->value;
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->upsert(
+            SoftRemovableCatalogItemEntity::class,
+            $payload,
+            ['name'],
+        );
+        $row = $this->fetchSoftRemovableCatalogItemByName('Manager Upsert Scalar Status');
+
+        self::assertTrue($result->isOk());
+        self::assertSame(CatalogItemStatus::DRAFT->value, $row['status']);
+    }
+
+    public function testRepositoryUpsertSkipsNullsForNonNullableDefaultsOnPartialObjects(): void
+    {
+        $payload = new SoftRemovableCatalogItemWritePayload();
+        $payload->name = 'Repository Upsert Default Status';
+
+        $repository = new Repository(
+            SoftRemovableCatalogItemEntity::class,
+            $this->createManager(SoftRemovableCatalogItemEntity::class),
+        );
+        $result = $repository->upsert($payload, ['name']);
+        $row = $this->fetchSoftRemovableCatalogItemByName('Repository Upsert Default Status');
+
+        self::assertTrue($result->isOk());
+        self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
+    }
+
+    public function testRepositoryUpsertConvertsBackedEnumScalarsOnPartialObjects(): void
+    {
+        $payload = new SoftRemovableCatalogItemRawWritePayload();
+        $payload->name = 'Repository Upsert Scalar Status';
+        $payload->status = CatalogItemStatus::DRAFT->value;
+
+        $repository = new Repository(
+            SoftRemovableCatalogItemEntity::class,
+            $this->createManager(SoftRemovableCatalogItemEntity::class),
+        );
+        $result = $repository->upsert($payload, ['name']);
+        $row = $this->fetchSoftRemovableCatalogItemByName('Repository Upsert Scalar Status');
+
+        self::assertTrue($result->isOk());
+        self::assertSame(CatalogItemStatus::DRAFT->value, $row['status']);
+    }
+
+    public function testCustomConverterNullResultIsPreservedForNullableTargets(): void
+    {
+        $payload = new CatalogItemSchedulePayload();
+        $payload->availableAt = '';
+
+        $manager = $this->createManager(NullableCatalogItemScheduleEntity::class);
+        $manager->useConverters([new BlankStringToDateTimeConverter()]);
+
+        $entity = $manager->getEntityFromObject(NullableCatalogItemScheduleEntity::class, $payload);
+
+        self::assertNull($entity->availableAt);
+    }
+
+    public function testRepositoryUpsertRejectsNullForRequiredColumnsWithoutDefaults(): void
+    {
+        $payload = new NullableCatalogItemNullNamePayload();
+
+        $repository = new Repository(
+            NullableCatalogItemEntity::class,
+            $this->createManager(NullableCatalogItemEntity::class),
+        );
+
+        $this->expectException(TypeConversionException::class);
+        $this->expectExceptionMessage('Cannot assign null to non-nullable property name.');
+
+        $repository->upsert($payload, ['name']);
+    }
+
+    public function testRepositorySoftRemoveConvertsBackedEnumScalarsOnPartialObjects(): void
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'INSERT INTO soft_removable_catalog_items (name, status, deleted_at) VALUES (?, ?, NULL)'
+        );
+        $statement->execute(['Archive Scalar Candidate', CatalogItemStatus::ACTIVE->value]);
+        $id = (int)$this->dataSource->getClient()->lastInsertId();
+
+        $payload = new SoftRemovableCatalogItemRawDeletionPayload();
+        $payload->id = $id;
+        $payload->status = CatalogItemStatus::ACTIVE->value;
+
+        $repository = new Repository(
+            SoftRemovableCatalogItemEntity::class,
+            $this->createManager(SoftRemovableCatalogItemEntity::class),
+        );
+        $result = $repository->softRemove($payload);
+        $row = $this->fetchSoftRemovableCatalogItem($id);
+
+        self::assertTrue($result->isOk());
+        self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
+        self::assertNotNull($row['deleted_at']);
+    }
+
+    public function testRepositoryUpsertRejectsInvalidBackedEnumScalarsClearly(): void
+    {
+        $payload = new SoftRemovableCatalogItemRawWritePayload();
+        $payload->name = 'Repository Upsert Invalid Status';
+        $payload->status = 'archived';
+
+        $repository = new Repository(
+            SoftRemovableCatalogItemEntity::class,
+            $this->createManager(SoftRemovableCatalogItemEntity::class),
+        );
+
+        $this->expectException(TypeConversionException::class);
+        $this->expectExceptionMessage('Cannot convert value for status');
+
+        $repository->upsert($payload, ['name']);
+    }
+    public function testRepositorySoftRemoveSkipsNullsForNonNullableDefaultsOnPartialObjects(): void
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'INSERT INTO soft_removable_catalog_items (name, status, deleted_at) VALUES (?, ?, NULL)'
+        );
+        $statement->execute(['Archive Candidate', CatalogItemStatus::ACTIVE->value]);
+        $id = (int)$this->dataSource->getClient()->lastInsertId();
+
+        $payload = new SoftRemovableCatalogItemDeletionPayload();
+        $payload->id = $id;
+
+        $repository = new Repository(
+            SoftRemovableCatalogItemEntity::class,
+            $this->createManager(SoftRemovableCatalogItemEntity::class),
+        );
+        $result = $repository->softRemove($payload);
+        $row = $this->fetchSoftRemovableCatalogItem($id);
+
+        self::assertTrue($result->isOk());
+        self::assertSame(CatalogItemStatus::ACTIVE->value, $row['status']);
+        self::assertNotNull($row['deleted_at']);
+    }
+
+    public function testSoftRemoveReportsOneAffectedRowWhenEntityExists(): void
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'INSERT INTO soft_removable_catalog_items (name, status, deleted_at) VALUES (?, ?, NULL)'
+        );
+        $statement->execute(['Affected Soft Remove', CatalogItemStatus::ACTIVE->value]);
+        $id = (int)$this->dataSource->getClient()->lastInsertId();
+
+        $entity = new SoftRemovableCatalogItemEntity();
+        $entity->id = $id;
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->softRemove($entity);
+        $row = $this->fetchSoftRemovableCatalogItem($id);
+
+        self::assertTrue($result->isOk());
+        self::assertSame(1, $result->affected);
+        self::assertNotNull($row['deleted_at']);
+    }
+
+    public function testSoftRemoveReportsZeroAffectedRowsWhenEntityDoesNotExist(): void
+    {
+        $entity = new SoftRemovableCatalogItemEntity();
+        $entity->id = 987654321;
+
+        $result = $this->createManager(SoftRemovableCatalogItemEntity::class)->softRemove($entity);
+
+        self::assertTrue($result->isOk());
+        self::assertSame(0, $result->affected);
+    }
+
     public function testInsertAcceptsListArrayRows(): void
     {
         $this->insertCategory(42, 'Hardware');
@@ -280,6 +548,41 @@ final class EntityManagerPartialWriteTest extends TestCase
         self::assertSame((int)$secondRow['id'], $identifiers[1]->id);
         self::assertSame((int)$firstRow['id'], $generatedMaps[0]->id);
         self::assertSame((int)$secondRow['id'], $generatedMaps[1]->id);
+    }
+
+    public function testCreatePreservesNonNullValuesWhenNullableConversionIsMissing(): void
+    {
+        $entity = $this->createManager(NullableCatalogItemEntity::class)->create(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Created Nullable Conversion', 'description' => 123],
+        );
+
+        self::assertSame('123', $entity->description);
+    }
+
+    public function testInsertPreservesNonNullValuesWhenNullableConversionIsMissing(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->insert(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Inserted Nullable Conversion', 'description' => 123],
+        );
+        $row = $this->fetchCatalogItem('Inserted Nullable Conversion');
+
+        self::assertTrue($result->isOk());
+        self::assertSame('123', $row['description']);
+    }
+
+    public function testUpsertPreservesNonNullValuesWhenNullableConversionIsMissing(): void
+    {
+        $result = $this->createManager(NullableCatalogItemEntity::class)->upsert(
+            NullableCatalogItemEntity::class,
+            ['name' => 'Upserted Nullable Conversion', 'description' => 123],
+            ['name'],
+        );
+        $row = $this->fetchCatalogItem('Upserted Nullable Conversion');
+
+        self::assertTrue($result->isOk());
+        self::assertSame('123', $row['description']);
     }
 
     public function testSqliteBulkInsertPopulatesGeneratedIdsWhenRowsMixExplicitAndGeneratedIds(): void
@@ -649,6 +952,31 @@ final class EntityManagerPartialWriteTest extends TestCase
         return $statement->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchSoftRemovableCatalogItem(int $id): array
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'SELECT id, name, status, deleted_at FROM soft_removable_catalog_items WHERE id = ?'
+        );
+        $statement->execute([$id]);
+
+        return $statement->fetch(PDO::FETCH_ASSOC);
+    }
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchSoftRemovableCatalogItemByName(string $name): array
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'SELECT id, name, status, deleted_at FROM soft_removable_catalog_items WHERE name = ?'
+        );
+        $statement->execute([$name]);
+
+        return $statement->fetch(PDO::FETCH_ASSOC);
+    }
+
     private function catalogItemExistsByName(string $name): bool
     {
         $statement = $this->dataSource->getClient()->prepare(
@@ -679,6 +1007,50 @@ final class EntityManagerPartialWriteTest extends TestCase
     }
 }
 
+enum CatalogItemStatus: string
+{
+    case ACTIVE = 'active';
+    case DRAFT = 'draft';
+}
+
+#[Entity(table: 'soft_removable_catalog_items')]
+class SoftRemovableCatalogItemEntity
+{
+    #[PrimaryGeneratedColumn]
+    public ?int $id = null;
+
+    #[Column(type: ColumnType::VARCHAR, nullable: false)]
+    public string $name = '';
+
+    #[Column(type: ColumnType::ENUM, nullable: false, default: CatalogItemStatus::ACTIVE, enum: CatalogItemStatus::class)]
+    public CatalogItemStatus $status = CatalogItemStatus::ACTIVE;
+
+    #[DeleteDateColumn]
+    public ?string $deletedAt = null;
+}
+
+class SoftRemovableCatalogItemDeletionPayload
+{
+    public ?int $id = null;
+    public ?CatalogItemStatus $status = null;
+}
+class SoftRemovableCatalogItemWritePayload
+{
+    public string $name = '';
+    public ?CatalogItemStatus $status = null;
+}
+class SoftRemovableCatalogItemRawDeletionPayload
+{
+    public ?int $id = null;
+    public string $status = '';
+}
+
+class SoftRemovableCatalogItemRawWritePayload
+{
+    public string $name = '';
+    public string $status = '';
+}
+
 #[Entity(table: 'nullable_catalog_items')]
 class NullableCatalogItemEntity
 {
@@ -695,6 +1067,41 @@ class NullableCatalogItemEntity
 class NullableCatalogItemPatch
 {
     public ?string $description = null;
+}
+
+class NullableCatalogItemNullNamePayload
+{
+    public ?string $name = null;
+}
+
+class NullableCatalogItemNameDescriptionPatch
+{
+    public ?string $name = null;
+    public ?string $description = null;
+}
+
+#[Entity(table: 'nullable_catalog_item_schedules')]
+class NullableCatalogItemScheduleEntity
+{
+    #[PrimaryGeneratedColumn]
+    public ?int $id = null;
+
+    #[Column(type: ColumnType::DATETIME, nullable: true)]
+    public ?DateTime $availableAt = null;
+}
+
+class CatalogItemSchedulePayload
+{
+    public string $availableAt = '';
+}
+
+class BlankStringToDateTimeConverter
+{
+    #[TypeConverter]
+    public function fromStringToDateTime(string $value): ?DateTime
+    {
+        return trim($value) === '' ? null : new DateTime($value);
+    }
 }
 
 #[Entity(table: 'catalog_categories')]
