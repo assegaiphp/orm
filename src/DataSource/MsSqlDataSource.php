@@ -39,7 +39,7 @@ class MsSqlDataSource implements DataSourceInterface
     $user = $options->username ?? 'sa';
     $password = $options->password ?? '';
 
-    $dsn = DBFactory::buildMsSqlDsn($options->host, $options->port, $options->name);
+    $dsn = DBFactory::buildMsSqlDsn($options->host, $options->port, $options->name, $options->trustServerCertificate);
     $this->client = new PDO($dsn, $user, $password);
     DBFactory::applyConnectionAttributes($this->client, SQLDialect::MSSQL);
   }

@@ -308,7 +308,7 @@ class DataSource implements DataSourceInterface
       return DBFactory::getMsSqlConnection(dbName: $options->name);
     }
 
-    $dsn = DBFactory::buildMsSqlDsn($options->host, $options->port, $options->name);
+    $dsn = DBFactory::buildMsSqlDsn($options->host, $options->port, $options->name, $options->trustServerCertificate);
     return new PDO(dsn: $dsn, username: $options->username, password: $options->password);
   }
 

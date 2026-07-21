@@ -3,12 +3,13 @@
 namespace Assegai\Orm\DataSource;
 
 use Assegai\Orm\Enumerations\DataSourceType;
+use JsonSerializable;
 use Stringable;
 
 /**
  * Class DataSourceOptions. Represents the options for a DataSource.
  */
-readonly class DataSourceOptions implements Stringable
+readonly class DataSourceOptions implements JsonSerializable, Stringable
 {
   /**
    * @param array $entities T
@@ -21,6 +22,7 @@ readonly class DataSourceOptions implements Stringable
    * @param bool $synchronize S
    * @param SQLCharacterSet|null $charSet The character set to use.
    * @param string|null $path The path to the database.
+   * @param bool $trustServerCertificate Whether SQL Server may use an unverified certificate.
    */
   public function __construct(
     public array            $entities,
@@ -33,6 +35,7 @@ readonly class DataSourceOptions implements Stringable
     public bool             $synchronize = false,
     public ?SQLCharacterSet $charSet = SQLCharacterSet::UTF8MB4,
     public ?string          $path = null,
+    public bool             $trustServerCertificate = false,
   )
   {
   }
@@ -49,10 +52,11 @@ readonly class DataSourceOptions implements Stringable
       'host' => $this->host,
       'port' => $this->port,
       'username' => $this->username,
-      'password' => $this->password,
+      'password' => $this->password === null ? null : '[REDACTED]',
       'synchronize' => $this->synchronize,
       'charSet' => $this->charSet?->value,
       'path' => $this->path,
+      'trustServerCertificate' => $this->trustServerCertificate,
     ];
   }
 
@@ -83,7 +87,13 @@ readonly class DataSourceOptions implements Stringable
       synchronize: $props['synchronize'] ?? false,
       charSet: $charSet,
       path: $props['path'] ?? null,
+      trustServerCertificate: self::normalizeBoolean($props['trustServerCertificate'] ?? $props['trust_server_certificate'] ?? false),
     );
+  }
+
+  public function jsonSerialize(): array
+  {
+    return $this->toArray();
   }
 
   /**
@@ -91,6 +101,15 @@ readonly class DataSourceOptions implements Stringable
    */
   public function __toString(): string
   {
-    return json_encode($this->toArray());
+    return json_encode($this->toArray()) ?: '{}';
+  }
+
+  private static function normalizeBoolean(mixed $value): bool
+  {
+    if (is_bool($value)) {
+      return $value;
+    }
+
+    return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false;
   }
 }

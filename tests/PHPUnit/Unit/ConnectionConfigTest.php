@@ -35,7 +35,7 @@ final class ConnectionConfigTest extends TestCase
     {
         $dsn = DBFactory::buildMsSqlDsn('127.0.0.1', 1433, 'assegai');
 
-        self::assertSame('sqlsrv:Server=127.0.0.1,1433;Database=assegai;Encrypt=yes;TrustServerCertificate=yes', $dsn);
+        self::assertSame('sqlsrv:Server=127.0.0.1,1433;Database=assegai;Encrypt=yes;TrustServerCertificate=no', $dsn);
     }
 
     public function testDoesNotQualifyMsSqlTablesWithDatabaseName(): void

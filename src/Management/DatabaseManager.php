@@ -299,7 +299,7 @@ final class DatabaseManager
       $options = $dataSource->getOptions();
       $maintenanceDatabase = strcasecmp($databaseName, 'master') === 0 ? 'tempdb' : 'master';
       $client = new PDO(
-        DBFactory::buildMsSqlDsn($options->host, $options->port, $maintenanceDatabase),
+        DBFactory::buildMsSqlDsn($options->host, $options->port, $maintenanceDatabase, $options->trustServerCertificate),
         $options->username ?? 'sa',
         $options->password ?? '',
       );

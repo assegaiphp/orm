@@ -289,18 +289,25 @@ final class DBFactory
      * @param string $host The SQL Server host name or address.
      * @param int $port The SQL Server TCP port.
      * @param string $database The database name.
+     * @param bool $trustServerCertificate Whether to disable SQL Server certificate verification.
      * @return string Returns the SQL Server PDO DSN.
      */
-    public static function buildMsSqlDsn(string $host, int $port, string $database): string
+    public static function buildMsSqlDsn(
+        string $host,
+        int $port,
+        string $database,
+        bool $trustServerCertificate = false,
+    ): string
     {
         $server = $port > 0
             ? sprintf('%s,%d', $host, $port)
             : $host;
 
         return sprintf(
-            'sqlsrv:Server=%s;Database=%s;Encrypt=yes;TrustServerCertificate=yes',
+            'sqlsrv:Server=%s;Database=%s;Encrypt=yes;TrustServerCertificate=%s',
             $server,
-            $database
+            $database,
+            $trustServerCertificate ? 'yes' : 'no',
         );
     }
 
@@ -343,7 +350,7 @@ final class DBFactory
                 $password = $options->password ?? '';
 
                 self::$connections[$type][$dbName] = new PDO(
-                    dsn: self::buildMsSqlDsn($options->host, $options->port, $options->name),
+                    dsn: self::buildMsSqlDsn($options->host, $options->port, $options->name, $options->trustServerCertificate),
                     username: $user,
                     password: $password
                 );
