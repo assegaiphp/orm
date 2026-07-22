@@ -14,6 +14,7 @@ use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Support\OrmRuntime;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 final class ConnectionConfigTest extends TestCase
 {
@@ -35,7 +36,96 @@ final class ConnectionConfigTest extends TestCase
     {
         $dsn = DBFactory::buildMsSqlDsn('127.0.0.1', 1433, 'assegai');
 
-        self::assertSame('sqlsrv:Server=127.0.0.1,1433;Database=assegai;Encrypt=yes;TrustServerCertificate=yes', $dsn);
+        self::assertSame('sqlsrv:Server=127.0.0.1,1433;Database=assegai;Encrypt=yes;TrustServerCertificate=no', $dsn);
+    }
+
+    public function testExplicitMsSqlTrustOptionSurvivesRuntimeConfigResolution(): void
+    {
+        $name = 'mssql_' . uniqid('', true);
+        OrmRuntime::configure([
+            'databases' => [
+                DataSourceType::MSSQL->value => [
+                    $name => [
+                        'host' => 'runtime.example.test',
+                        'trustServerCertificate' => false,
+                    ],
+                ],
+            ],
+        ]);
+
+        try {
+            $options = new DataSourceOptions(
+                entities: [],
+                name: $name,
+                type: DataSourceType::MSSQL,
+                trustServerCertificate: true,
+            );
+            $reflection = new ReflectionClass(DataSource::class);
+            /** @var DataSource $dataSource */
+            $dataSource = $reflection->newInstanceWithoutConstructor();
+            /** @var DataSourceOptions $resolved */
+            $resolved = $reflection->getMethod('resolveOptions')->invoke($dataSource, $options);
+
+            self::assertTrue($resolved->trustServerCertificate);
+            self::assertSame('runtime.example.test', $resolved->host);
+        } finally {
+            OrmRuntime::configure([]);
+        }
+    }
+
+    public function testRuntimeMsSqlTrustOptionAppliesWithoutCallerOverride(): void
+    {
+        $name = 'mssql_' . uniqid('', true);
+        OrmRuntime::configure([
+            'databases' => [
+                DataSourceType::MSSQL->value => [
+                    $name => [
+                        'host' => 'runtime.example.test',
+                        'trustServerCertificate' => true,
+                    ],
+                ],
+            ],
+        ]);
+
+        try {
+            $reflection = new ReflectionClass(DataSource::class);
+            /** @var DataSource $dataSource */
+            $dataSource = $reflection->newInstanceWithoutConstructor();
+            $resolveOptions = $reflection->getMethod('resolveOptions');
+
+            $unspecified = new DataSourceOptions(
+                entities: [],
+                name: $name,
+                type: DataSourceType::MSSQL,
+            );
+            $runtimeDefault = $resolveOptions->invoke(
+                $dataSource,
+                DataSourceOptions::fromArray($unspecified->toArray()),
+            );
+            $explicitOverride = $resolveOptions->invoke($dataSource, new DataSourceOptions(
+                entities: [],
+                name: $name,
+                type: DataSourceType::MSSQL,
+                trustServerCertificate: false,
+            ));
+
+            self::assertTrue($runtimeDefault->trustServerCertificate);
+            self::assertFalse($explicitOverride->trustServerCertificate);
+            self::assertFalse($unspecified->hasExplicitTrustServerCertificate());
+        } finally {
+            OrmRuntime::configure([]);
+        }
+    }
+
+    public function testMsSqlSharedConnectionsArePartitionedByCertificateTrustPolicy(): void
+    {
+        $reflection = new ReflectionClass(DBFactory::class);
+        $getCacheKey = $reflection->getMethod('getConnectionCacheKey');
+
+        $verifiedKey = $getCacheKey->invoke(null, 'production', SQLDialect::MSSQL, false);
+        $trustedKey = $getCacheKey->invoke(null, 'production', SQLDialect::MSSQL, true);
+
+        self::assertNotSame($verifiedKey, $trustedKey);
     }
 
     public function testDoesNotQualifyMsSqlTablesWithDatabaseName(): void

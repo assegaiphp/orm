@@ -3,6 +3,7 @@
 namespace Tests\SQLite\Fixtures;
 
 use Assegai\Orm\Attributes\Columns\Column;
+use Assegai\Orm\Attributes\Columns\PasswordColumn;
 use Assegai\Orm\Attributes\Columns\PrimaryGeneratedColumn;
 use Assegai\Orm\Attributes\Entity;
 use Assegai\Orm\Attributes\Relations\JoinColumn;
@@ -62,6 +63,12 @@ class RelationTag
 
   #[Column(type: ColumnType::VARCHAR, nullable: false)]
   public string $label = '';
+
+  #[PasswordColumn(name: 'credential_hash')]
+  public string $credentialHash = '';
+
+  #[Column(name: 'password', type: ColumnType::VARCHAR, nullable: false)]
+  public string $legacyCredential = '';
 
   #[ManyToMany(type: RelationPost::class, inverseSide: 'tags')]
   public array $posts = [];

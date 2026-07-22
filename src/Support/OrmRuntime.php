@@ -105,6 +105,11 @@ final class OrmRuntime
     return (int)(self::config('DEFAULT_SKIP', 0) ?? 0);
   }
 
+  public static function maxLimit(): int
+  {
+    return max(1, (int)(self::config('MAX_LIMIT', 1000) ?? 1000));
+  }
+
   public static function environment(): string
   {
     $configClass = '\\Assegai\\Core\\Config';

@@ -24,6 +24,7 @@ use Assegai\Orm\Queries\Sql\SQLQuery;
 use DateTime;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 final class EntityManagerPartialWriteTest extends TestCase
 {
@@ -90,6 +91,15 @@ final class EntityManagerPartialWriteTest extends TestCase
     {
         $this->dataSource?->disconnect();
         $this->cleanupSqliteFiles($this->databasePath);
+    }
+
+    public function testMySqlZeroIdentifierHandlingFollowsSessionSqlMode(): void
+    {
+        $method = new ReflectionMethod(EntityManager::class, 'mysqlSqlModeTreatsZeroAsGeneratedPrimaryKey');
+
+        self::assertTrue($method->invoke(null, 'STRICT_TRANS_TABLES'));
+        self::assertFalse($method->invoke(null, 'STRICT_TRANS_TABLES,NO_AUTO_VALUE_ON_ZERO'));
+        self::assertFalse($method->invoke(null, 'no_auto_value_on_zero,STRICT_TRANS_TABLES'));
     }
 
     public function testArrayPartialUpdateWritesExplicitNull(): void

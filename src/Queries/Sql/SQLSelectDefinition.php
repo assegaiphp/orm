@@ -133,7 +133,9 @@ class SQLSelectDefinition
       $columnListString .= '*';
     } else {
       foreach ($columns as $key => $value) {
-        $expression = $this->formatColumnExpression((string)$value);
+        $expression = $value instanceof SQLExpression
+          ? (string)$value
+          : $this->formatColumnExpression((string)$value);
         $columnListString .= is_numeric($key)
           ? "{$expression}{$separator}"
           : $expression . ' AS ' . $this->query->quoteIdentifier((string)$key) . $separator;
@@ -146,11 +148,11 @@ class SQLSelectDefinition
   /**
    * Quote a selectable column expression when it is a plain identifier.
    *
-   * Expressions that are not valid identifiers are returned unchanged so raw
-   * SQL fragments such as functions can still be used intentionally.
+   * Raw SQL fragments must be wrapped in SQLExpression so ordinary strings
+   * always fail closed when they are not valid identifiers.
    *
    * @param string $expression The column expression to format.
-   * @return string Returns the quoted identifier or the original expression.
+   * @return string Returns the quoted identifier.
    */
   protected function formatColumnExpression(string $expression): string
   {
@@ -158,10 +160,6 @@ class SQLSelectDefinition
       return '*';
     }
 
-    try {
-      return SqlIdentifier::quote($expression, $this->query->getDialect());
-    } catch (InvalidArgumentException) {
-      return $expression;
-    }
+    return SqlIdentifier::quote($expression, $this->query->getDialect());
   }
 }

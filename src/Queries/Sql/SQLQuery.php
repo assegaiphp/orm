@@ -63,7 +63,7 @@ class SQLQuery
         private readonly string $fetchClass = stdClass::class,
         private readonly int    $fetchMode = PDO::FETCH_ASSOC,
         private readonly array  $fetchClassParams = [],
-        private readonly array  $passwordHashFields = ['password'],
+        private array           $passwordHashFields = ['password'],
         private string          $passwordHashAlgorithm = '',
         ?SQLDialect             $dialect = null
     )
@@ -185,6 +185,16 @@ class SQLQuery
     public function passwordHashFields(): array
     {
         return $this->passwordHashFields;
+    }
+
+    /**
+     * Replace the storage column names that must be password-hashed for future writes.
+     *
+     * @param string[] $passwordHashFields
+     */
+    public function setPasswordHashFields(array $passwordHashFields): void
+    {
+        $this->passwordHashFields = array_values(array_unique($passwordHashFields));
     }
 
     /**

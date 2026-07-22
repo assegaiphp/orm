@@ -126,6 +126,13 @@ class EntityManager implements IEntityStoreOwner
     protected LoggerInterface $logger;
 
     /**
+     * Hash fields explicitly configured by the query caller.
+     *
+     * @var string[]
+     */
+    private array $configuredPasswordHashFields;
+
+    /**
      * Constructs a new EntityManager instance.
      *
      * @param DataSource $connection The data source to use.
@@ -138,6 +145,7 @@ class EntityManager implements IEntityStoreOwner
     {
         $this->logger = new Logger(new ConsoleOutput());
         $this->query = $query ?? SQLQuery::forConnection(db: $connection->getClient(), dialect: $connection->getDialect());
+        $this->configuredPasswordHashFields = $this->query->passwordHashFields();
 
         // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
         if (!$this->entityInspector) {
@@ -368,6 +376,7 @@ class EntityManager implements IEntityStoreOwner
         $primaryKeyField = $insertWrite['primaryKeyField'];
         $columns = $insertWrite['columns'];
         $values = $insertWrite['values'];
+        $this->configurePasswordHashFields($instance);
 
         $columnCount = count($columns);
         $valueCount = count($values);
@@ -398,7 +407,7 @@ class EntityManager implements IEntityStoreOwner
 
         if ($this->query->getDialect() === SQLDialect::POSTGRESQL) {
             $generatedMaps = $this->hydrateGeneratedMaps($entityClass, $result->getData()) ?? $instance;
-            $generatedMaps = $this->sanitizeGeneratedMaps($generatedMaps);
+            $generatedMaps = $this->sanitizeGeneratedMaps($generatedMaps, $instance);
             $identifierValue = $generatedMaps?->{$primaryKeyField} ?? $instance->{$primaryKeyField} ?? $this->lastInsertId();
 
             if ($identifierValue !== null && $identifierValue !== '') {
@@ -470,7 +479,7 @@ class EntityManager implements IEntityStoreOwner
         $generatedMaps->{$primaryKeyField} = $identifierValue;
 
         foreach ($generatedMaps as $prop => $value) {
-            if (in_array($prop, $this->getSecure())) {
+            if (in_array($prop, $this->getSensitivePropertyNames($instance), true)) {
                 unset($generatedMaps->$prop);
             }
         }
@@ -542,6 +551,7 @@ class EntityManager implements IEntityStoreOwner
         }
 
         $firstInsert = $preparedRows[0];
+        $this->configurePasswordHashFields($firstInsert['instance']);
         $tableName = $this->entityInspector->getTableName(entity: $firstInsert['instance']);
         $primaryKeyField = $firstInsert['primaryKeyField'];
         $primaryColumn = $firstInsert['primaryColumn'];
@@ -610,9 +620,26 @@ class EntityManager implements IEntityStoreOwner
             $preparedRows
         );
         $generatedPrimaryKeyIndexes = [];
+        $zeroPrimaryKeyIsGenerated = false;
+
+        if (in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
+            foreach ($preparedRows as $insertWrite) {
+                $primaryKeyValue = $this->extractPreparedPrimaryKeyValue($insertWrite, $primaryKeyField, $primaryColumn);
+
+                if ($primaryKeyValue === 0 || $primaryKeyValue === '0') {
+                    $zeroPrimaryKeyIsGenerated = $this->mysqlTreatsZeroAsGeneratedPrimaryKey();
+                    break;
+                }
+            }
+        }
 
         foreach ($preparedRows as $index => $insertWrite) {
-            if ($this->bulkInsertRowNeedsGeneratedPrimaryKey($insertWrite, $primaryKeyField, $primaryColumn)) {
+            if ($this->bulkInsertRowNeedsGeneratedPrimaryKey(
+                $insertWrite,
+                $primaryKeyField,
+                $primaryColumn,
+                $zeroPrimaryKeyIsGenerated,
+            )) {
                 $generatedPrimaryKeyIndexes[] = $index;
             }
         }
@@ -640,11 +667,35 @@ class EntityManager implements IEntityStoreOwner
     /**
      * @param array{columns: array<int|string, string>, values: array<int|string, mixed>} $insertWrite
      */
-    private function bulkInsertRowNeedsGeneratedPrimaryKey(array $insertWrite, string $primaryKeyField, string $primaryColumn): bool
+    private function bulkInsertRowNeedsGeneratedPrimaryKey(
+        array $insertWrite,
+        string $primaryKeyField,
+        string $primaryColumn,
+        bool $zeroPrimaryKeyIsGenerated,
+    ): bool
     {
         $primaryKeyValue = $this->extractPreparedPrimaryKeyValue($insertWrite, $primaryKeyField, $primaryColumn);
 
-        return $primaryKeyValue === null || $primaryKeyValue === '';
+        if ($primaryKeyValue === null || $primaryKeyValue === '') {
+            return true;
+        }
+
+        return $zeroPrimaryKeyIsGenerated && ($primaryKeyValue === 0 || $primaryKeyValue === '0');
+    }
+
+    private function mysqlTreatsZeroAsGeneratedPrimaryKey(): bool
+    {
+        $statement = $this->query->getConnection()->query('SELECT @@SESSION.sql_mode');
+        $sqlMode = $statement === false ? '' : (string)$statement->fetchColumn();
+
+        return self::mysqlSqlModeTreatsZeroAsGeneratedPrimaryKey($sqlMode);
+    }
+
+    private static function mysqlSqlModeTreatsZeroAsGeneratedPrimaryKey(string $sqlMode): bool
+    {
+        $modes = array_map('trim', explode(',', strtoupper($sqlMode)));
+
+        return !in_array('NO_AUTO_VALUE_ON_ZERO', $modes, true);
     }
 
     /**
@@ -1300,13 +1351,18 @@ class EntityManager implements IEntityStoreOwner
         return $row;
     }
 
-    private function sanitizeGeneratedMaps(?object $entity): ?object
+    private function sanitizeGeneratedMaps(?object $entity, object|string|null $metadataSource = null): ?object
     {
         if (!$entity) {
             return null;
         }
 
-        foreach ($this->getSecure() as $prop) {
+        $metadataSource ??= $entity;
+        $sensitiveProperties = is_object($metadataSource) && $metadataSource::class !== stdClass::class
+            ? $this->getSensitivePropertyNames($metadataSource)
+            : $this->getSecure();
+
+        foreach ($sensitiveProperties as $prop) {
             if (property_exists($entity, $prop)) {
                 unset($entity->{$prop});
             }
@@ -1329,6 +1385,102 @@ class EntityManager implements IEntityStoreOwner
     public function setSecure(array $secure): void
     {
         $this->customSecure = $secure;
+    }
+
+    /**
+     * @return array{storage: string[], result: string[]}
+     */
+    private function getPasswordColumnMetadata(object $entity): array
+    {
+        $storageColumns = [];
+        $resultProperties = [];
+        $reflection = new ReflectionClass($entity);
+
+        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            $attributes = $property->getAttributes(Column::class, ReflectionAttribute::IS_INSTANCEOF);
+
+            foreach ($attributes as $attribute) {
+                /** @var Column $column */
+                $column = $attribute->newInstance();
+                $propertyName = $property->getName();
+                $storageColumn = $column->name ?: strtosnake($propertyName);
+
+                if (
+                    !$column instanceof PasswordColumn &&
+                    $this->normalizeColumnNameForComparison($storageColumn) !== 'password'
+                ) {
+                    continue;
+                }
+
+                $storageColumns[] = $storageColumn;
+                $resultProperties[] = $propertyName;
+
+                if ($column->alias !== '') {
+                    $resultProperties[] = $column->alias;
+                }
+
+                break;
+            }
+        }
+
+        return [
+            'storage' => array_values(array_unique($storageColumns)),
+            'result' => array_values(array_unique($resultProperties)),
+        ];
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getSensitivePropertyNames(object $entity): array
+    {
+        $entityMetadata = $this->entityInspector->getMetaData($entity);
+
+        return array_values(array_unique(array_merge(
+            $this->getSecure(),
+            $entityMetadata->protected ?? [],
+            $this->getPasswordColumnMetadata($entity)['result'],
+        )));
+    }
+
+    private function configurePasswordHashFields(object $entity): void
+    {
+        $this->query->setPasswordHashFields(array_merge(
+            $this->configuredPasswordHashFields,
+            $this->getPasswordColumnMetadata($entity)['storage'],
+        ));
+    }
+
+    /**
+     * Hash password-column values used by manual dialect upsert statements.
+     *
+     * @param array<int|string, string> $columns
+     * @param array<int|string, mixed> $values
+     * @return array<int, mixed>
+     */
+    private function hashPasswordValues(array $columns, array $values): array
+    {
+        $passwordColumns = array_fill_keys(array_map(
+            [$this, 'normalizeColumnNameForComparison'],
+            $this->query->passwordHashFields(),
+        ), true);
+        $valueList = array_values($values);
+
+        foreach (array_values($columns) as $index => $column) {
+            if (!isset($passwordColumns[$this->normalizeColumnNameForComparison($column)])) {
+                continue;
+            }
+
+            $value = $valueList[$index] ?? null;
+
+            if ($value === null || $value instanceof SQLExpression) {
+                continue;
+            }
+
+            $valueList[$index] = password_hash((string)$value, $this->query->passwordHashAlgorithm());
+        }
+
+        return $valueList;
     }
 
     /**
@@ -1387,7 +1539,7 @@ class EntityManager implements IEntityStoreOwner
         $conditions = [];
         $availableRelations = [];
         $requestedRelations = $this->getRequestedRelationNames($findOptions);
-        $baseExcludeColumns = $this->resolveBaseEntityExcludeColumns($findOptions, $requestedRelations);
+        $baseExcludeColumns = $this->resolveBaseEntityExcludeColumns($entity, $findOptions, $requestedRelations);
 
         if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
             $conditions = array_merge($findOptions->where->conditions ?? $findOptions->where ?? [], [$deleteColumnName => 'NULL']);
@@ -1427,8 +1579,7 @@ class EntityManager implements IEntityStoreOwner
             $statement->orderBy($findOptions->order);
         }
 
-        $limit = $findOptions->limit ?? $_GET['limit'] ?? OrmRuntime::defaultLimit();
-        $skip = $findOptions->skip ?? $_GET['skip'] ?? OrmRuntime::defaultSkip();
+        [$limit, $skip] = $this->resolvePagination($findOptions->limit, $findOptions->skip);
 
         $statement = $statement->limit(limit: $limit, offset: $skip);
 
@@ -1444,7 +1595,10 @@ class EntityManager implements IEntityStoreOwner
 
         $loadedRelations = $this->loadRequestedRelations($entityClass, $result->getData(), $findOptions, $availableRelations);
         $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
-        $resultSet = $this->stripExcludedColumns($resultSet, $findOptions->exclude ?? []);
+        $resultSet = $this->stripExcludedColumns(
+            $resultSet,
+            array_values(array_unique(array_merge($findOptions->exclude ?? [], $this->getSensitivePropertyNames($entity))))
+        );
 
         if ($findOptions->withRealTotal) {
             $total = $this->count(entityClass: $entityClass, options: $findOptions);
@@ -1504,9 +1658,12 @@ class EntityManager implements IEntityStoreOwner
      * @param string[] $requestedRelations
      * @return string[]
      */
-    private function resolveBaseEntityExcludeColumns(?FindOptions $findOptions, array $requestedRelations): array
+    private function resolveBaseEntityExcludeColumns(object $entity, ?FindOptions $findOptions, array $requestedRelations): array
     {
-        $excludeColumns = $findOptions?->exclude ?? [];
+        $excludeColumns = array_values(array_unique(array_merge(
+            $findOptions?->exclude ?? [],
+            $this->getSensitivePropertyNames($entity),
+        )));
 
         if (empty($excludeColumns) || empty($requestedRelations)) {
             return $excludeColumns;
@@ -1520,6 +1677,22 @@ class EntityManager implements IEntityStoreOwner
                 fn(string $column): bool => !in_array($column, $requiredColumns, true)
             )
         );
+    }
+
+    /**
+     * Apply safe, framework-owned pagination bounds.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function resolvePagination(?int $limit = null, ?int $skip = null): array
+    {
+        $limit = $limit ?? OrmRuntime::defaultLimit();
+        $skip = $skip ?? OrmRuntime::defaultSkip();
+
+        return [
+            max(0, min($limit, OrmRuntime::maxLimit())),
+            max(0, $skip),
+        ];
     }
 
     /**
@@ -1898,6 +2071,10 @@ class EntityManager implements IEntityStoreOwner
 
         $entity = $this->create($entityClass);
         $tableName = $this->entityInspector->getTableName($entity);
+        $excludeColumns = array_values(array_unique(array_merge(
+            $excludeColumns,
+            $this->getSensitivePropertyNames($entity),
+        )));
         $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
 
         foreach ($additionalColumns as $alias => $columnName) {
@@ -2246,10 +2423,11 @@ class EntityManager implements IEntityStoreOwner
         $targetJoinColumn = $mapping['targetJoinColumn'];
         $joinTableName = $joinTable->name ?? strtolower($mapping['ownerTable'] . '_' . $mapping['targetTable']);
 
-        $columns = $this->entityInspector->getColumns(
-            entity: $targetEntity,
-            exclude: $this->resolveRelationExcludeColumns($relationProperty, $findOptions)
-        );
+        $excludeColumns = array_values(array_unique(array_merge(
+            $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
+            $this->getSensitivePropertyNames($targetEntity),
+        )));
+        $columns = $this->entityInspector->getColumns(entity: $targetEntity, exclude: $excludeColumns);
         $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
 
         $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
@@ -2587,10 +2765,13 @@ class EntityManager implements IEntityStoreOwner
                 entityClass: $entityClass
             );
         }
-        $statement = $this->query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $where->exclude))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
+        $excludeColumns = array_values(array_unique(array_merge(
+            $where->exclude,
+            $this->getSensitivePropertyNames($entity),
+        )));
+        $statement = $this->query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
 
-        $limit = $_GET['limit'] ?? 100;
-        $skip = $_GET['skip'] ?? 0;
+        [$limit, $skip] = $this->resolvePagination(100, 0);
 
         $statement = $statement->limit(limit: $limit, offset: $skip);
 
@@ -2604,7 +2785,11 @@ class EntityManager implements IEntityStoreOwner
             throw $this->newGeneralSqlQueryException($this->query, $result);
         }
 
-        return new FindResult(raw: $result->getRaw(), data: $result->getData(), errors: $this->publicResultErrors($result));
+        return new FindResult(
+            raw: $result->getRaw(),
+            data: $this->stripExcludedColumns($result->getData(), $excludeColumns),
+            errors: $this->publicResultErrors($result)
+        );
     }
 
     /**
@@ -2652,6 +2837,7 @@ class EntityManager implements IEntityStoreOwner
             entityLike: $partialEntity,
             omitNullsForNonNullableProperties: is_object($partialEntity),
         );
+        $this->configurePasswordHashFields($entityInstance);
         $assignmentList = [];
         $columnOptions = [];
         $relations = [];
@@ -2754,7 +2940,7 @@ class EntityManager implements IEntityStoreOwner
             $generatedMaps = $updatedEntity->getData() ?? new stdClass();
         }
 
-        $generatedMaps = $this->sanitizeGeneratedMaps($generatedMaps);
+        $generatedMaps = $this->sanitizeGeneratedMaps($generatedMaps, $entityInstance);
 
         $identifiers = is_array($partialEntity) ? (object)$partialEntity : $partialEntity;
         if ($generatedMaps && is_object($generatedMaps)) {
@@ -3441,6 +3627,7 @@ class EntityManager implements IEntityStoreOwner
             entityClass: $entityClass,
             entityLike: is_array($entityOrEntities) ? $entityOrEntities : (object)$entityOrEntities,
         );
+        $this->configurePasswordHashFields($entity);
 
         $primaryKey = $this->getPrimaryKeyMetadata($entity);
         $primaryKeyField = $primaryKey['field'];
@@ -3477,6 +3664,7 @@ class EntityManager implements IEntityStoreOwner
         $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
         [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
+        $values = $this->hashPasswordValues($columns, $values);
 
         $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
         $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
@@ -3518,7 +3706,7 @@ class EntityManager implements IEntityStoreOwner
         return new InsertResult(
             identifiers: (object)[$primaryKeyField => $identifier],
             raw: $raw,
-            generatedMaps: $entity,
+            generatedMaps: $this->sanitizeGeneratedMaps(clone $entity, $entity),
             errors: $errors,
             affected: $affected,
         );
@@ -3588,6 +3776,7 @@ class EntityManager implements IEntityStoreOwner
         $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
         [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
+        $values = $this->hashPasswordValues($columns, $values);
 
         $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
         $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
@@ -3650,7 +3839,7 @@ class EntityManager implements IEntityStoreOwner
         return new InsertResult(
             identifiers: (object)[$primaryKeyField => $identifierValue],
             raw: $raw,
-            generatedMaps: $generatedMaps,
+            generatedMaps: $this->sanitizeGeneratedMaps(clone $generatedMaps, $entity),
             errors: $errors,
             affected: $affected,
         );
@@ -3763,7 +3952,7 @@ class EntityManager implements IEntityStoreOwner
         return new InsertResult(
             identifiers: (object)[$primaryKeyField => $identifierValue],
             raw: $raw,
-            generatedMaps: $generatedMaps,
+            generatedMaps: $this->sanitizeGeneratedMaps(clone $generatedMaps, $entityOrEntities),
             errors: $errors,
             affected: $affected,
         );
