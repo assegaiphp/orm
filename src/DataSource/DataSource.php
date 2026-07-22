@@ -171,7 +171,11 @@ class DataSource implements DataSourceInterface
       DBFactory::applyConnectionAttributes($this->connection, SqlDialectHelper::fromDataSourceType($this->type));
 
       if ($this->usesSharedConnection) {
-        DBFactory::retainSharedConnection($this->getConnectionIdentifierForDisconnect(), $this->getDialect());
+        DBFactory::retainSharedConnection(
+          $this->getConnectionIdentifierForDisconnect(),
+          $this->getDialect(),
+          $this->getSharedConnectionTrustPolicy(),
+        );
       }
     } catch (PDOException) {
       throw new DataSourceConnectionException($this->type);
@@ -195,7 +199,11 @@ class DataSource implements DataSourceInterface
     }
 
     if ($this->usesSharedConnection && $this->options instanceof DataSourceOptions) {
-      DBFactory::releaseSharedConnection($this->getConnectionIdentifierForDisconnect(), $this->getDialect());
+      DBFactory::releaseSharedConnection(
+        $this->getConnectionIdentifierForDisconnect(),
+        $this->getDialect(),
+        $this->getSharedConnectionTrustPolicy(),
+      );
     } elseif ($this->connection->inTransaction()) {
       $this->connection->rollBack();
     }
@@ -306,7 +314,10 @@ class DataSource implements DataSourceInterface
   {
     if (empty($options->username) && empty($options->password)) {
       $this->usesSharedConnection = true;
-      return DBFactory::getMsSqlConnection(dbName: $options->name);
+      return DBFactory::getMsSqlConnection(
+        dbName: $options->name,
+        trustServerCertificate: $options->trustServerCertificate,
+      );
     }
 
     $dsn = DBFactory::buildMsSqlDsn($options->host, $options->port, $options->name, $options->trustServerCertificate);
@@ -335,6 +346,13 @@ class DataSource implements DataSourceInterface
     }
 
     return $this->options->name;
+  }
+
+  private function getSharedConnectionTrustPolicy(): ?bool
+  {
+    return $this->type === DataSourceType::MSSQL
+      ? $this->options->trustServerCertificate
+      : null;
   }
 
   private function isDirectSqlitePath(string $path): bool

@@ -73,6 +73,17 @@ final class ConnectionConfigTest extends TestCase
         }
     }
 
+    public function testMsSqlSharedConnectionsArePartitionedByCertificateTrustPolicy(): void
+    {
+        $reflection = new ReflectionClass(DBFactory::class);
+        $getCacheKey = $reflection->getMethod('getConnectionCacheKey');
+
+        $verifiedKey = $getCacheKey->invoke(null, 'production', SQLDialect::MSSQL, false);
+        $trustedKey = $getCacheKey->invoke(null, 'production', SQLDialect::MSSQL, true);
+
+        self::assertNotSame($verifiedKey, $trustedKey);
+    }
+
     public function testDoesNotQualifyMsSqlTablesWithDatabaseName(): void
     {
         self::assertSame('[mocks]', SqlDialectHelper::qualifyTable('mocks', 'master', SQLDialect::MSSQL));

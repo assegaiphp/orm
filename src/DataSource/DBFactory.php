@@ -315,10 +315,11 @@ final class DBFactory
      * Retrieve or create a shared SQL Server connection from the runtime config.
      *
      * @param string $dbName The configured SQL Server database name.
+     * @param bool|null $trustServerCertificate Optional resolved certificate trust policy.
      * @return PDO Returns the cached SQL Server connection.
      * @throws DataSourceConnectionException When the connection cannot be created.
      */
-    public static function getMsSqlConnection(string $dbName): PDO
+    public static function getMsSqlConnection(string $dbName, ?bool $trustServerCertificate = null): PDO
     {
         $type = 'mssql';
         self::ensureDriverIsAvailable(SQLDialect::MSSQL);
@@ -327,40 +328,43 @@ final class DBFactory
             throw new DataSourceConnectionException(DataSourceType::MSSQL);
         }
 
-        if (!isset(self::$connections[$type][$dbName]) || empty(self::$connections[$type][$dbName])) {
-            self::validateDatabaseDetails(type: $type, dbName: $dbName);
-            $config = OrmRuntime::databaseConfigs()[$type][$dbName];
+        self::validateDatabaseDetails(type: $type, dbName: $dbName);
+        $config = OrmRuntime::databaseConfigs()[$type][$dbName];
 
-            if (empty($config)) {
-                $databases = OrmRuntime::databaseConfigs()[$type];
+        if (empty($config)) {
+            $databases = OrmRuntime::databaseConfigs()[$type];
 
-                if (!empty($databases)) {
-                    $config = array_pop($databases);
-                }
+            if (!empty($databases)) {
+                $config = array_pop($databases);
             }
+        }
 
+        $options = DataSourceOptions::fromArray([
+            ...$config,
+            'name' => $config['name'] ?? $dbName,
+            'database' => $config['database'] ?? $dbName,
+            'type' => DataSourceType::MSSQL,
+        ]);
+        $trustServerCertificate ??= $options->trustServerCertificate;
+        $cacheKey = self::getMsSqlCacheKey($dbName, $trustServerCertificate);
+
+        if (!isset(self::$connections[$type][$cacheKey]) || empty(self::$connections[$type][$cacheKey])) {
             try {
-                $options = DataSourceOptions::fromArray([
-                    ...$config,
-                    'name' => $config['name'] ?? $dbName,
-                    'database' => $config['database'] ?? $dbName,
-                    'type' => DataSourceType::MSSQL,
-                ]);
                 $user = $options->username ?? 'sa';
                 $password = $options->password ?? '';
 
-                self::$connections[$type][$dbName] = new PDO(
-                    dsn: self::buildMsSqlDsn($options->host, $options->port, $options->name, $options->trustServerCertificate),
+                self::$connections[$type][$cacheKey] = new PDO(
+                    dsn: self::buildMsSqlDsn($options->host, $options->port, $options->name, $trustServerCertificate),
                     username: $user,
                     password: $password
                 );
-                self::applyConnectionAttributes(self::$connections[$type][$dbName], SQLDialect::MSSQL);
+                self::applyConnectionAttributes(self::$connections[$type][$cacheKey], SQLDialect::MSSQL);
             } catch (PDOException) {
                 throw new DataSourceConnectionException(DataSourceType::MSSQL);
             }
         }
 
-        return self::$connections[$type][$dbName];
+        return self::$connections[$type][$cacheKey];
     }
 
     /**
@@ -424,10 +428,14 @@ final class DBFactory
         return SqlDialectHelper::normalizeSqlitePath((string)$resolvedPath);
     }
 
-    public static function retainSharedConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+    public static function retainSharedConnection(
+        string $dbName,
+        ?SQLDialect $dialect = SQLDialect::MYSQL,
+        ?bool $trustServerCertificate = null,
+    ): void
     {
         $type = self::getConnectionPoolType($dialect);
-        $cacheKey = self::getConnectionCacheKey($dbName, $dialect);
+        $cacheKey = self::getConnectionCacheKey($dbName, $dialect, $trustServerCertificate);
 
         self::$sharedConnectionReferences[$type][$cacheKey] = (self::$sharedConnectionReferences[$type][$cacheKey] ?? 0) + 1;
     }
@@ -443,20 +451,45 @@ final class DBFactory
         };
     }
 
-    private static function getConnectionCacheKey(string $dbName, ?SQLDialect $dialect): string
+    private static function getConnectionCacheKey(
+        string $dbName,
+        ?SQLDialect $dialect,
+        ?bool $trustServerCertificate = null,
+    ): string
     {
-        return $dialect === SQLDialect::SQLITE
-            ? self::getSqliteCacheKey($dbName)
-            : $dbName;
+        return match ($dialect) {
+            SQLDialect::MSSQL => self::getMsSqlCacheKey(
+                $dbName,
+                $trustServerCertificate ?? self::getConfiguredMsSqlTrustServerCertificate($dbName),
+            ),
+            SQLDialect::SQLITE => self::getSqliteCacheKey($dbName),
+            default => $dbName,
+        };
     }
 
-    public static function releaseSharedConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+    private static function getMsSqlCacheKey(string $dbName, bool $trustServerCertificate): string
+    {
+        return $dbName . ':' . ($trustServerCertificate ? 'trust' : 'verify');
+    }
+
+    private static function getConfiguredMsSqlTrustServerCertificate(string $dbName): bool
+    {
+        $config = OrmRuntime::databaseConfigs()['mssql'][$dbName] ?? [];
+
+        return DataSourceOptions::fromArray($config)->trustServerCertificate;
+    }
+
+    public static function releaseSharedConnection(
+        string $dbName,
+        ?SQLDialect $dialect = SQLDialect::MYSQL,
+        ?bool $trustServerCertificate = null,
+    ): void
     {
         $type = self::getConnectionPoolType($dialect);
-        $cacheKey = self::getConnectionCacheKey($dbName, $dialect);
+        $cacheKey = self::getConnectionCacheKey($dbName, $dialect, $trustServerCertificate);
 
         if (!isset(self::$sharedConnectionReferences[$type][$cacheKey])) {
-            self::disconnectConnection($dbName, $dialect);
+            self::disconnectConnection($dbName, $dialect, $trustServerCertificate);
             return;
         }
 
@@ -467,13 +500,17 @@ final class DBFactory
         }
 
         unset(self::$sharedConnectionReferences[$type][$cacheKey]);
-        self::disconnectConnection($dbName, $dialect);
+        self::disconnectConnection($dbName, $dialect, $trustServerCertificate);
     }
 
-    public static function disconnectConnection(string $dbName, ?SQLDialect $dialect = SQLDialect::MYSQL): void
+    public static function disconnectConnection(
+        string $dbName,
+        ?SQLDialect $dialect = SQLDialect::MYSQL,
+        ?bool $trustServerCertificate = null,
+    ): void
     {
         $type = self::getConnectionPoolType($dialect);
-        $cacheKey = self::getConnectionCacheKey($dbName, $dialect);
+        $cacheKey = self::getConnectionCacheKey($dbName, $dialect, $trustServerCertificate);
         $connection = self::$connections[$type][$cacheKey] ?? null;
 
         unset(self::$sharedConnectionReferences[$type][$cacheKey]);
