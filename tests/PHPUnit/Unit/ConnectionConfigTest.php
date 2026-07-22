@@ -14,6 +14,7 @@ use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Support\OrmRuntime;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 final class ConnectionConfigTest extends TestCase
 {
@@ -36,6 +37,40 @@ final class ConnectionConfigTest extends TestCase
         $dsn = DBFactory::buildMsSqlDsn('127.0.0.1', 1433, 'assegai');
 
         self::assertSame('sqlsrv:Server=127.0.0.1,1433;Database=assegai;Encrypt=yes;TrustServerCertificate=no', $dsn);
+    }
+
+    public function testExplicitMsSqlTrustOptionSurvivesRuntimeConfigResolution(): void
+    {
+        $name = 'mssql_' . uniqid('', true);
+        OrmRuntime::configure([
+            'databases' => [
+                DataSourceType::MSSQL->value => [
+                    $name => [
+                        'host' => 'runtime.example.test',
+                        'trustServerCertificate' => false,
+                    ],
+                ],
+            ],
+        ]);
+
+        try {
+            $options = new DataSourceOptions(
+                entities: [],
+                name: $name,
+                type: DataSourceType::MSSQL,
+                trustServerCertificate: true,
+            );
+            $reflection = new ReflectionClass(DataSource::class);
+            /** @var DataSource $dataSource */
+            $dataSource = $reflection->newInstanceWithoutConstructor();
+            /** @var DataSourceOptions $resolved */
+            $resolved = $reflection->getMethod('resolveOptions')->invoke($dataSource, $options);
+
+            self::assertTrue($resolved->trustServerCertificate);
+            self::assertSame('runtime.example.test', $resolved->host);
+        } finally {
+            OrmRuntime::configure([]);
+        }
     }
 
     public function testDoesNotQualifyMsSqlTablesWithDatabaseName(): void

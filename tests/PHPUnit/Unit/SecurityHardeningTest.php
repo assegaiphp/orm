@@ -31,7 +31,7 @@ final class SecurityHardeningTest extends TestCase
         $this->databasePath = sys_get_temp_dir() . '/assegai-security-' . uniqid('', true) . '.sqlite';
         $this->cleanupSqliteFiles($this->databasePath);
         $this->dataSource = new DataSource(new DataSourceOptions(
-            entities: [SecureAccountEntity::class, LegacyPasswordAccountEntity::class],
+            entities: [SecureAccountEntity::class, LegacyPasswordAccountEntity::class, ManualHashAccountEntity::class],
             name: $this->databasePath,
             type: DataSourceType::SQLITE,
         ));
@@ -47,6 +47,13 @@ final class SecurityHardeningTest extends TestCase
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL
+            )'
+        );
+        $this->dataSource->getClient()->exec(
+            'CREATE TABLE manual_hash_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                secret TEXT NOT NULL
             )'
         );
     }
@@ -149,6 +156,43 @@ final class SecurityHardeningTest extends TestCase
 
         self::assertTrue(password_verify('replacement-secret', $this->fetchLegacyCredential('legacy@example.test')));
         self::assertArrayNotHasKey('credential', (array)$update->generatedMaps);
+    }
+
+    public function testEntityMetadataDoesNotReplaceCallerConfiguredHashFields(): void
+    {
+        $query = SQLQuery::forConnection(
+            $this->dataSource->getClient(),
+            fetchClass: ManualHashAccountEntity::class,
+            fetchMode: PDO::FETCH_CLASS,
+            passwordHashFields: ['secret'],
+            dialect: SQLDialect::SQLITE,
+        );
+        $manager = new EntityManager($this->dataSource, $query);
+
+        $manager->insert(ManualHashAccountEntity::class, [
+            'email' => 'manual@example.test',
+            'secret' => 'caller-configured-secret',
+        ]);
+
+        $stored = $this->dataSource->getClient()
+            ->query("SELECT secret FROM manual_hash_accounts WHERE email = 'manual@example.test'")
+            ->fetchColumn();
+
+        self::assertTrue(password_verify('caller-configured-secret', (string)$stored));
+
+        $manager->upsert(
+            ManualHashAccountEntity::class,
+            (object)[
+                'email' => 'manual@example.test',
+                'secret' => 'updated-caller-configured-secret',
+            ],
+            new UpsertOptions(conflictPaths: ['email']),
+        );
+        $updated = $this->dataSource->getClient()
+            ->query("SELECT secret FROM manual_hash_accounts WHERE email = 'manual@example.test'")
+            ->fetchColumn();
+
+        self::assertTrue(password_verify('updated-caller-configured-secret', (string)$updated));
     }
 
     public function testSelectRejectsRawStringsAndAcceptsExplicitExpressions(): void
@@ -272,4 +316,17 @@ class LegacyPasswordAccountEntity
 
     #[Column(name: 'password', type: ColumnType::TEXT, nullable: false)]
     public string $credential = '';
+}
+
+#[Entity(table: 'manual_hash_accounts')]
+class ManualHashAccountEntity
+{
+    #[PrimaryGeneratedColumn]
+    public ?int $id = null;
+
+    #[Column(name: 'email', type: ColumnType::TEXT, nullable: false, isUnique: true)]
+    public string $email = '';
+
+    #[Column(name: 'secret', type: ColumnType::TEXT, nullable: false)]
+    public string $secret = '';
 }

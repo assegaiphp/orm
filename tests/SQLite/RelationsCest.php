@@ -65,7 +65,7 @@ class RelationsCest
     $db->exec('CREATE TABLE relation_profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, bio TEXT NOT NULL)');
     $db->exec('CREATE TABLE relation_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, profileId INTEGER)');
     $db->exec('CREATE TABLE relation_authors (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)');
-    $db->exec('CREATE TABLE relation_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL)');
+    $db->exec('CREATE TABLE relation_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, label TEXT NOT NULL, credential_hash TEXT NOT NULL, password TEXT NOT NULL)');
     $db->exec('CREATE TABLE relation_posts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, author_id INTEGER)');
     $db->exec('CREATE TABLE relation_posts_tags (post_id INTEGER NOT NULL, tag_id INTEGER NOT NULL)');
     $db->exec('CREATE TABLE relation_publishers (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, name TEXT NOT NULL)');
@@ -76,7 +76,7 @@ class RelationsCest
     $db->exec("INSERT INTO relation_profiles (id, bio) VALUES (1, 'Builder'), (2, 'Explorer')");
     $db->exec("INSERT INTO relation_users (id, name, profileId) VALUES (1, 'Alice', 1), (2, 'Bob', 2)");
     $db->exec("INSERT INTO relation_authors (id, name) VALUES (1, 'John'), (2, 'Mary')");
-    $db->exec("INSERT INTO relation_tags (id, label) VALUES (1, 'php'), (2, 'orm'), (3, 'nest')");
+    $db->exec("INSERT INTO relation_tags (id, label, credential_hash, password) VALUES (1, 'php', 'hash-1', 'legacy-1'), (2, 'orm', 'hash-2', 'legacy-2'), (3, 'nest', 'hash-3', 'legacy-3')");
     $db->exec("INSERT INTO relation_posts (id, title, author_id) VALUES (1, 'Hello ORM', 1), (2, 'Deep Dive', 1), (3, 'Other Post', 2)");
     $db->exec('INSERT INTO relation_posts_tags (post_id, tag_id) VALUES (1, 1), (1, 2), (2, 2), (2, 3)');
     $db->exec("INSERT INTO relation_publishers (id, code, name) VALUES (1, 'tech', 'Tech Press'), (2, 'news', 'News Desk')");
@@ -213,6 +213,10 @@ class RelationsCest
     $labels = array_map(fn(object $item) => $item->label, $post->tags);
     sort($labels);
     $I->assertSame(['nest', 'orm'], array_values($labels));
+    foreach ($post->tags as $relatedTag) {
+      $I->assertFalse(array_key_exists('credentialHash', get_object_vars($relatedTag)));
+      $I->assertFalse(array_key_exists('legacyCredential', get_object_vars($relatedTag)));
+    }
 
     $I->assertSame('orm', $tag->label);
     $I->assertCount(2, $tag->posts);

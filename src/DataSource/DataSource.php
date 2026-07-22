@@ -246,6 +246,7 @@ class DataSource implements DataSourceInterface
       'type' => $options->type,
       'synchronize' => $options->synchronize,
       'path' => $options->path ?? $databaseConfig['path'] ?? null,
+      'trustServerCertificate' => $options->trustServerCertificate,
     ]);
   }
 

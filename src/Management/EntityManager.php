@@ -126,6 +126,13 @@ class EntityManager implements IEntityStoreOwner
     protected LoggerInterface $logger;
 
     /**
+     * Hash fields explicitly configured by the query caller.
+     *
+     * @var string[]
+     */
+    private array $configuredPasswordHashFields;
+
+    /**
      * Constructs a new EntityManager instance.
      *
      * @param DataSource $connection The data source to use.
@@ -138,6 +145,7 @@ class EntityManager implements IEntityStoreOwner
     {
         $this->logger = new Logger(new ConsoleOutput());
         $this->query = $query ?? SQLQuery::forConnection(db: $connection->getClient(), dialect: $connection->getDialect());
+        $this->configuredPasswordHashFields = $this->query->passwordHashFields();
 
         // TODO: *BREAKING_CHANGE* Remove this binding as it breaks the inversion of control principal
         if (!$this->entityInspector) {
@@ -1401,7 +1409,10 @@ class EntityManager implements IEntityStoreOwner
 
     private function configurePasswordHashFields(object $entity): void
     {
-        $this->query->setPasswordHashFields($this->getPasswordColumnMetadata($entity)['storage']);
+        $this->query->setPasswordHashFields(array_merge(
+            $this->configuredPasswordHashFields,
+            $this->getPasswordColumnMetadata($entity)['storage'],
+        ));
     }
 
     /**
@@ -1411,11 +1422,11 @@ class EntityManager implements IEntityStoreOwner
      * @param array<int|string, mixed> $values
      * @return array<int, mixed>
      */
-    private function hashPasswordValues(object $entity, array $columns, array $values): array
+    private function hashPasswordValues(array $columns, array $values): array
     {
         $passwordColumns = array_fill_keys(array_map(
             [$this, 'normalizeColumnNameForComparison'],
-            $this->getPasswordColumnMetadata($entity)['storage']
+            $this->query->passwordHashFields(),
         ), true);
         $valueList = array_values($values);
 
@@ -2376,10 +2387,11 @@ class EntityManager implements IEntityStoreOwner
         $targetJoinColumn = $mapping['targetJoinColumn'];
         $joinTableName = $joinTable->name ?? strtolower($mapping['ownerTable'] . '_' . $mapping['targetTable']);
 
-        $columns = $this->entityInspector->getColumns(
-            entity: $targetEntity,
-            exclude: $this->resolveRelationExcludeColumns($relationProperty, $findOptions)
-        );
+        $excludeColumns = array_values(array_unique(array_merge(
+            $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
+            $this->getSensitivePropertyNames($targetEntity),
+        )));
+        $columns = $this->entityInspector->getColumns(entity: $targetEntity, exclude: $excludeColumns);
         $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
 
         $query = SQLQuery::forConnection($this->query->getConnection(), dialect: $this->query->getDialect());
@@ -3616,7 +3628,7 @@ class EntityManager implements IEntityStoreOwner
         $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
         [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
-        $values = $this->hashPasswordValues($entity, $columns, $values);
+        $values = $this->hashPasswordValues($columns, $values);
 
         $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
         $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
@@ -3728,7 +3740,7 @@ class EntityManager implements IEntityStoreOwner
         $updateColumns = array_values(array_unique(array_map([$this, 'stripTableName'], array_values($updateColumns))));
         $conflictPaths = $this->resolveUpsertConflictColumns($entity, $options->conflictPaths ?: [$primaryColumn]);
         [$columns, $values] = $this->filterNullableUpsertColumns($columns, $values, $conflictPaths, $updateColumns);
-        $values = $this->hashPasswordValues($entity, $columns, $values);
+        $values = $this->hashPasswordValues($columns, $values);
 
         $quotedColumns = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $columns));
         $quotedConflictPaths = implode(', ', array_map(fn(string $column): string => SqlIdentifier::quote($column, $this->query->getDialect()), $conflictPaths));
