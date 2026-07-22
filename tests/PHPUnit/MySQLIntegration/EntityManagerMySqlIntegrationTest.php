@@ -145,6 +145,38 @@ final class EntityManagerMySqlIntegrationTest extends MySqlIntegrationTestCase
         self::assertSame(MockColorType::BLUE->value, $secondRow['color_type']);
     }
 
+    public function testBulkInsertTreatsZeroIdentifiersAsGenerated(): void
+    {
+        $result = $this->manager->insert(
+            MockEntity::class,
+            [
+                [
+                    'id' => 0,
+                    'name' => 'mysql bulk zero id first',
+                    'description' => 'First zero identifier',
+                    'colorType' => MockColorType::GREEN,
+                ],
+                [
+                    'id' => 0,
+                    'name' => 'mysql bulk zero id second',
+                    'description' => 'Second zero identifier',
+                    'colorType' => MockColorType::BLUE,
+                ],
+            ],
+            new InsertOptions(readonlyColumns: ['createdAt', 'updatedAt', 'deletedAt']),
+        );
+
+        $identifiers = $result->getIdentifiers()->results ?? [];
+        $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
+        self::assertCount(2, $identifiers);
+        self::assertCount(2, $generatedMaps);
+        self::assertGreaterThan(0, $identifiers[0]->id);
+        self::assertGreaterThan(0, $identifiers[1]->id);
+        self::assertSame($identifiers[0]->id, $generatedMaps[0]->id);
+        self::assertSame($identifiers[1]->id, $generatedMaps[1]->id);
+    }
+
     public function testBulkInsertPopulatesGeneratedIdentifiersWhenRowsMixExplicitAndGeneratedIds(): void
     {
         $result = $this->manager->insert(

@@ -31,7 +31,7 @@ final class SecurityHardeningTest extends TestCase
         $this->databasePath = sys_get_temp_dir() . '/assegai-security-' . uniqid('', true) . '.sqlite';
         $this->cleanupSqliteFiles($this->databasePath);
         $this->dataSource = new DataSource(new DataSourceOptions(
-            entities: [SecureAccountEntity::class],
+            entities: [SecureAccountEntity::class, LegacyPasswordAccountEntity::class],
             name: $this->databasePath,
             type: DataSourceType::SQLITE,
         ));
@@ -40,6 +40,13 @@ final class SecurityHardeningTest extends TestCase
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
                 credential_hash TEXT NOT NULL
+            )'
+        );
+        $this->dataSource->getClient()->exec(
+            'CREATE TABLE legacy_password_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL
             )'
         );
     }
@@ -120,6 +127,30 @@ final class SecurityHardeningTest extends TestCase
         self::assertTrue(password_verify('bulk-secret-two', $this->fetchCredential('bulk-two@example.test')));
     }
 
+    public function testMappedLegacyPasswordColumnsAreHashedAndRedacted(): void
+    {
+        $manager = $this->manager(LegacyPasswordAccountEntity::class);
+        $insert = $manager->insert(LegacyPasswordAccountEntity::class, [
+            'email' => 'legacy@example.test',
+            'credential' => 'legacy-secret',
+        ]);
+
+        self::assertTrue(password_verify('legacy-secret', $this->fetchLegacyCredential('legacy@example.test')));
+        self::assertArrayNotHasKey('credential', (array)$insert->generatedMaps);
+
+        $found = $manager->find(LegacyPasswordAccountEntity::class);
+        self::assertArrayNotHasKey('credential', (array)$found->getData()[0]);
+
+        $update = $manager->update(
+            LegacyPasswordAccountEntity::class,
+            ['credential' => 'replacement-secret'],
+            ['email' => 'legacy@example.test'],
+        );
+
+        self::assertTrue(password_verify('replacement-secret', $this->fetchLegacyCredential('legacy@example.test')));
+        self::assertArrayNotHasKey('credential', (array)$update->generatedMaps);
+    }
+
     public function testSelectRejectsRawStringsAndAcceptsExplicitExpressions(): void
     {
         $query = SQLQuery::forConnection(new PDO('sqlite::memory:'));
@@ -154,8 +185,11 @@ final class SecurityHardeningTest extends TestCase
     public function testDataSourceSerializationRedactsPasswordAndSqlServerVerifiesCertificates(): void
     {
         $options = new DataSourceOptions([], 'production', password: 'database-secret');
+        $roundTrip = DataSourceOptions::fromArray($options->toArray());
 
-        self::assertSame('[REDACTED]', $options->toArray()['password']);
+        self::assertSame('database-secret', $options->toArray()['password']);
+        self::assertSame('database-secret', $roundTrip->password);
+        self::assertSame('[REDACTED]', $options->toRedactedArray()['password']);
         self::assertStringNotContainsString('database-secret', (string)$options);
         self::assertStringNotContainsString('database-secret', json_encode($options));
         self::assertSame(
@@ -168,13 +202,16 @@ final class SecurityHardeningTest extends TestCase
         );
     }
 
-    private function manager(): EntityManager
+    /**
+     * @param class-string $entityClass
+     */
+    private function manager(string $entityClass = SecureAccountEntity::class): EntityManager
     {
         return new EntityManager(
             $this->dataSource,
             SQLQuery::forConnection(
                 $this->dataSource->getClient(),
-                fetchClass: SecureAccountEntity::class,
+                fetchClass: $entityClass,
                 fetchMode: PDO::FETCH_CLASS,
                 dialect: SQLDialect::SQLITE,
             ),
@@ -185,6 +222,16 @@ final class SecurityHardeningTest extends TestCase
     {
         $statement = $this->dataSource->getClient()->prepare(
             'SELECT credential_hash FROM secure_accounts WHERE email = ?'
+        );
+        $statement->execute([$email]);
+
+        return (string)$statement->fetchColumn();
+    }
+
+    private function fetchLegacyCredential(string $email): string
+    {
+        $statement = $this->dataSource->getClient()->prepare(
+            'SELECT password FROM legacy_password_accounts WHERE email = ?'
         );
         $statement->execute([$email]);
 
@@ -212,4 +259,17 @@ class SecureAccountEntity
 
     #[PasswordColumn(name: 'credential_hash')]
     public string $credentialHash = '';
+}
+
+#[Entity(table: 'legacy_password_accounts')]
+class LegacyPasswordAccountEntity
+{
+    #[PrimaryGeneratedColumn]
+    public ?int $id = null;
+
+    #[Column(name: 'email', type: ColumnType::TEXT, nullable: false, isUnique: true)]
+    public string $email = '';
+
+    #[Column(name: 'password', type: ColumnType::TEXT, nullable: false)]
+    public string $credential = '';
 }

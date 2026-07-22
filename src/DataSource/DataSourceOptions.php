@@ -52,12 +52,26 @@ readonly class DataSourceOptions implements JsonSerializable, Stringable
       'host' => $this->host,
       'port' => $this->port,
       'username' => $this->username,
-      'password' => $this->password === null ? null : '[REDACTED]',
+      'password' => $this->password,
       'synchronize' => $this->synchronize,
       'charSet' => $this->charSet?->value,
       'path' => $this->path,
       'trustServerCertificate' => $this->trustServerCertificate,
     ];
+  }
+
+  /**
+   * @return array
+   */
+  public function toRedactedArray(): array
+  {
+    $options = $this->toArray();
+
+    if ($options['password'] !== null) {
+      $options['password'] = '[REDACTED]';
+    }
+
+    return $options;
   }
 
   /**
@@ -93,7 +107,7 @@ readonly class DataSourceOptions implements JsonSerializable, Stringable
 
   public function jsonSerialize(): array
   {
-    return $this->toArray();
+    return $this->toRedactedArray();
   }
 
   /**
@@ -101,7 +115,7 @@ readonly class DataSourceOptions implements JsonSerializable, Stringable
    */
   public function __toString(): string
   {
-    return json_encode($this->toArray()) ?: '{}';
+    return json_encode($this->toRedactedArray()) ?: '{}';
   }
 
   private static function normalizeBoolean(mixed $value): bool

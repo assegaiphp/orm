@@ -646,7 +646,12 @@ class EntityManager implements IEntityStoreOwner
     {
         $primaryKeyValue = $this->extractPreparedPrimaryKeyValue($insertWrite, $primaryKeyField, $primaryColumn);
 
-        return $primaryKeyValue === null || $primaryKeyValue === '';
+        if ($primaryKeyValue === null || $primaryKeyValue === '') {
+            return true;
+        }
+
+        return in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)
+            && ($primaryKeyValue === 0 || $primaryKeyValue === '0');
     }
 
     /**
@@ -1348,28 +1353,30 @@ class EntityManager implements IEntityStoreOwner
         $reflection = new ReflectionClass($entity);
 
         foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-            $attributes = $property->getAttributes(PasswordColumn::class);
+            $attributes = $property->getAttributes(Column::class, ReflectionAttribute::IS_INSTANCEOF);
 
-            if (empty($attributes)) {
-                continue;
+            foreach ($attributes as $attribute) {
+                /** @var Column $column */
+                $column = $attribute->newInstance();
+                $propertyName = $property->getName();
+                $storageColumn = $column->name ?: strtosnake($propertyName);
+
+                if (
+                    !$column instanceof PasswordColumn &&
+                    $this->normalizeColumnNameForComparison($storageColumn) !== 'password'
+                ) {
+                    continue;
+                }
+
+                $storageColumns[] = $storageColumn;
+                $resultProperties[] = $propertyName;
+
+                if ($column->alias !== '') {
+                    $resultProperties[] = $column->alias;
+                }
+
+                break;
             }
-
-            /** @var PasswordColumn $column */
-            $column = $attributes[0]->newInstance();
-            $propertyName = $property->getName();
-            $storageColumns[] = $column->name ?: strtosnake($propertyName);
-            $resultProperties[] = $propertyName;
-
-            if ($column->alias !== '') {
-                $resultProperties[] = $column->alias;
-            }
-        }
-
-        // Preserve the legacy convention for entities that still map a property
-        // literally named "password" with a regular Column attribute.
-        if (property_exists($entity, 'password') && !in_array('password', $resultProperties, true)) {
-            $storageColumns[] = $this->getColumnNameFromProperty($entity, 'password');
-            $resultProperties[] = 'password';
         }
 
         return [
