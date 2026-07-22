@@ -246,6 +246,8 @@ class DataSource implements DataSourceInterface
       return $options;
     }
 
+    $runtimeOptions = DataSourceOptions::fromArray($databaseConfig);
+
     return DataSourceOptions::fromArray([
       ...$databaseConfig,
       'entities' => $options->entities,
@@ -254,7 +256,9 @@ class DataSource implements DataSourceInterface
       'type' => $options->type,
       'synchronize' => $options->synchronize,
       'path' => $options->path ?? $databaseConfig['path'] ?? null,
-      'trustServerCertificate' => $options->trustServerCertificate,
+      'trustServerCertificate' => $options->hasExplicitTrustServerCertificate()
+        ? $options->trustServerCertificate
+        : $runtimeOptions->trustServerCertificate,
     ]);
   }
 

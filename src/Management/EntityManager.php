@@ -620,9 +620,26 @@ class EntityManager implements IEntityStoreOwner
             $preparedRows
         );
         $generatedPrimaryKeyIndexes = [];
+        $zeroPrimaryKeyIsGenerated = false;
+
+        if (in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)) {
+            foreach ($preparedRows as $insertWrite) {
+                $primaryKeyValue = $this->extractPreparedPrimaryKeyValue($insertWrite, $primaryKeyField, $primaryColumn);
+
+                if ($primaryKeyValue === 0 || $primaryKeyValue === '0') {
+                    $zeroPrimaryKeyIsGenerated = $this->mysqlTreatsZeroAsGeneratedPrimaryKey();
+                    break;
+                }
+            }
+        }
 
         foreach ($preparedRows as $index => $insertWrite) {
-            if ($this->bulkInsertRowNeedsGeneratedPrimaryKey($insertWrite, $primaryKeyField, $primaryColumn)) {
+            if ($this->bulkInsertRowNeedsGeneratedPrimaryKey(
+                $insertWrite,
+                $primaryKeyField,
+                $primaryColumn,
+                $zeroPrimaryKeyIsGenerated,
+            )) {
                 $generatedPrimaryKeyIndexes[] = $index;
             }
         }
@@ -650,7 +667,12 @@ class EntityManager implements IEntityStoreOwner
     /**
      * @param array{columns: array<int|string, string>, values: array<int|string, mixed>} $insertWrite
      */
-    private function bulkInsertRowNeedsGeneratedPrimaryKey(array $insertWrite, string $primaryKeyField, string $primaryColumn): bool
+    private function bulkInsertRowNeedsGeneratedPrimaryKey(
+        array $insertWrite,
+        string $primaryKeyField,
+        string $primaryColumn,
+        bool $zeroPrimaryKeyIsGenerated,
+    ): bool
     {
         $primaryKeyValue = $this->extractPreparedPrimaryKeyValue($insertWrite, $primaryKeyField, $primaryColumn);
 
@@ -658,8 +680,22 @@ class EntityManager implements IEntityStoreOwner
             return true;
         }
 
-        return in_array($this->query->getDialect(), [SQLDialect::MYSQL, SQLDialect::MARIADB], true)
-            && ($primaryKeyValue === 0 || $primaryKeyValue === '0');
+        return $zeroPrimaryKeyIsGenerated && ($primaryKeyValue === 0 || $primaryKeyValue === '0');
+    }
+
+    private function mysqlTreatsZeroAsGeneratedPrimaryKey(): bool
+    {
+        $statement = $this->query->getConnection()->query('SELECT @@SESSION.sql_mode');
+        $sqlMode = $statement === false ? '' : (string)$statement->fetchColumn();
+
+        return self::mysqlSqlModeTreatsZeroAsGeneratedPrimaryKey($sqlMode);
+    }
+
+    private static function mysqlSqlModeTreatsZeroAsGeneratedPrimaryKey(string $sqlMode): bool
+    {
+        $modes = array_map('trim', explode(',', strtoupper($sqlMode)));
+
+        return !in_array('NO_AUTO_VALUE_ON_ZERO', $modes, true);
     }
 
     /**

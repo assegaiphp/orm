@@ -177,6 +177,51 @@ final class EntityManagerMySqlIntegrationTest extends MySqlIntegrationTestCase
         self::assertSame($identifiers[1]->id, $generatedMaps[1]->id);
     }
 
+    public function testBulkInsertPreservesZeroIdentifiersWhenSqlModeRequiresIt(): void
+    {
+        $connection = $this->dataSource->getClient();
+        $originalSqlMode = (string)$connection->query('SELECT @@SESSION.sql_mode')->fetchColumn();
+
+        try {
+            $sqlModes = array_values(array_filter(array_map('trim', explode(',', $originalSqlMode))));
+            if (!in_array('NO_AUTO_VALUE_ON_ZERO', $sqlModes, true)) {
+                $sqlModes[] = 'NO_AUTO_VALUE_ON_ZERO';
+            }
+            $statement = $connection->prepare('SET SESSION sql_mode = :sql_mode');
+            $statement->execute(['sql_mode' => implode(',', $sqlModes)]);
+
+            $result = $this->manager->insert(
+                MockEntity::class,
+                [
+                    [
+                        'id' => 0,
+                        'name' => 'mysql bulk explicit zero id',
+                        'description' => 'Explicit zero identifier',
+                        'colorType' => MockColorType::GREEN,
+                    ],
+                    [
+                        'name' => 'mysql bulk generated after zero',
+                        'description' => 'Generated after explicit zero',
+                        'colorType' => MockColorType::BLUE,
+                    ],
+                ],
+                new InsertOptions(readonlyColumns: ['createdAt', 'updatedAt', 'deletedAt']),
+            );
+
+            $identifiers = $result->getIdentifiers()->results ?? [];
+            $generatedMaps = $result->getGeneratedMaps()->results ?? [];
+
+            self::assertSame(0, $identifiers[0]->id);
+            self::assertSame(0, $generatedMaps[0]->id);
+            self::assertGreaterThan(0, $identifiers[1]->id);
+            self::assertSame($identifiers[1]->id, $generatedMaps[1]->id);
+            self::assertSame('mysql bulk explicit zero id', $this->fetchMocksRowById(0)['name']);
+        } finally {
+            $statement = $connection->prepare('SET SESSION sql_mode = :sql_mode');
+            $statement->execute(['sql_mode' => $originalSqlMode]);
+        }
+    }
+
     public function testBulkInsertPopulatesGeneratedIdentifiersWhenRowsMixExplicitAndGeneratedIds(): void
     {
         $result = $this->manager->insert(

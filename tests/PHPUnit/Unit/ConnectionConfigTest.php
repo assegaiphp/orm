@@ -73,6 +73,50 @@ final class ConnectionConfigTest extends TestCase
         }
     }
 
+    public function testRuntimeMsSqlTrustOptionAppliesWithoutCallerOverride(): void
+    {
+        $name = 'mssql_' . uniqid('', true);
+        OrmRuntime::configure([
+            'databases' => [
+                DataSourceType::MSSQL->value => [
+                    $name => [
+                        'host' => 'runtime.example.test',
+                        'trustServerCertificate' => true,
+                    ],
+                ],
+            ],
+        ]);
+
+        try {
+            $reflection = new ReflectionClass(DataSource::class);
+            /** @var DataSource $dataSource */
+            $dataSource = $reflection->newInstanceWithoutConstructor();
+            $resolveOptions = $reflection->getMethod('resolveOptions');
+
+            $unspecified = new DataSourceOptions(
+                entities: [],
+                name: $name,
+                type: DataSourceType::MSSQL,
+            );
+            $runtimeDefault = $resolveOptions->invoke(
+                $dataSource,
+                DataSourceOptions::fromArray($unspecified->toArray()),
+            );
+            $explicitOverride = $resolveOptions->invoke($dataSource, new DataSourceOptions(
+                entities: [],
+                name: $name,
+                type: DataSourceType::MSSQL,
+                trustServerCertificate: false,
+            ));
+
+            self::assertTrue($runtimeDefault->trustServerCertificate);
+            self::assertFalse($explicitOverride->trustServerCertificate);
+            self::assertFalse($unspecified->hasExplicitTrustServerCertificate());
+        } finally {
+            OrmRuntime::configure([]);
+        }
+    }
+
     public function testMsSqlSharedConnectionsArePartitionedByCertificateTrustPolicy(): void
     {
         $reflection = new ReflectionClass(DBFactory::class);
