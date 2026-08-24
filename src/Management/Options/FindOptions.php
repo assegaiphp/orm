@@ -12,6 +12,8 @@ use JsonSerializable;
  */
 class FindOptions implements JsonSerializable
 {
+    public const array DEFAULT_EXCLUDE = ['password'];
+
     /**
      * The default value for withRealTotal.
      */
@@ -31,7 +33,7 @@ class FindOptions implements JsonSerializable
      * @param bool $isDebug Whether to enable debug mode.
      * @param RelationOptions[] $relationOptions Options for relations.
      */
-    public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = ['password'], public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
+    public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, public readonly array $exclude = self::DEFAULT_EXCLUDE, public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
     {
         $this->relations = $this->normalizeRelations($relations);
     }
@@ -93,7 +95,7 @@ class FindOptions implements JsonSerializable
         $order = $options['order'] ?? null;
         $skip = $options['skip'] ?? null;
         $limit = $options['limit'] ?? null;
-        $exclude = $options['exclude'] ?? ['password'];
+        $exclude = $options['exclude'] ?? self::DEFAULT_EXCLUDE;
         $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
 
         if (is_array($where)) {

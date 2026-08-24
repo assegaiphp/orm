@@ -1597,7 +1597,7 @@ class EntityManager implements IEntityStoreOwner
         $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
         $resultSet = $this->stripExcludedColumns(
             $resultSet,
-            array_values(array_unique(array_merge($findOptions->exclude ?? [], $this->getSensitivePropertyNames($entity))))
+            $this->resolveReadExcludeColumns($entity, $findOptions->exclude ?? [])
         );
 
         if ($findOptions->withRealTotal) {
@@ -1660,10 +1660,7 @@ class EntityManager implements IEntityStoreOwner
      */
     private function resolveBaseEntityExcludeColumns(object $entity, ?FindOptions $findOptions, array $requestedRelations): array
     {
-        $excludeColumns = array_values(array_unique(array_merge(
-            $findOptions?->exclude ?? [],
-            $this->getSensitivePropertyNames($entity),
-        )));
+        $excludeColumns = $this->resolveReadExcludeColumns($entity, $findOptions?->exclude ?? []);
 
         if (empty($excludeColumns) || empty($requestedRelations)) {
             return $excludeColumns;
@@ -2071,10 +2068,7 @@ class EntityManager implements IEntityStoreOwner
 
         $entity = $this->create($entityClass);
         $tableName = $this->entityInspector->getTableName($entity);
-        $excludeColumns = array_values(array_unique(array_merge(
-            $excludeColumns,
-            $this->getSensitivePropertyNames($entity),
-        )));
+        $excludeColumns = $this->resolveReadExcludeColumns($entity, $excludeColumns);
         $columns = $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns, relations: $relations);
 
         foreach ($additionalColumns as $alias => $columnName) {
@@ -2423,10 +2417,10 @@ class EntityManager implements IEntityStoreOwner
         $targetJoinColumn = $mapping['targetJoinColumn'];
         $joinTableName = $joinTable->name ?? strtolower($mapping['ownerTable'] . '_' . $mapping['targetTable']);
 
-        $excludeColumns = array_values(array_unique(array_merge(
+        $excludeColumns = $this->resolveReadExcludeColumns(
+            $targetEntity,
             $this->resolveRelationExcludeColumns($relationProperty, $findOptions),
-            $this->getSensitivePropertyNames($targetEntity),
-        )));
+        );
         $columns = $this->entityInspector->getColumns(entity: $targetEntity, exclude: $excludeColumns);
         $columns['__relation_owner_key'] = "$joinTableName.$localJoinColumn";
 
@@ -2688,6 +2682,25 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /**
+     * Expand the default password exclusion to every configured sensitive field.
+     * Any caller-supplied override remains authoritative, including an empty list.
+     *
+     * @param string[] $excludeColumns
+     * @return string[]
+     */
+    private function resolveReadExcludeColumns(object $entity, array $excludeColumns): array
+    {
+        if ($excludeColumns !== FindOptions::DEFAULT_EXCLUDE) {
+            return array_values(array_unique($excludeColumns));
+        }
+
+        return array_values(array_unique(array_merge(
+            $excludeColumns,
+            $this->getSensitivePropertyNames($entity),
+        )));
+    }
+
+    /**
      * Counts entities that match given options.
      * Useful for pagination.
      *
@@ -2765,10 +2778,7 @@ class EntityManager implements IEntityStoreOwner
                 entityClass: $entityClass
             );
         }
-        $excludeColumns = array_values(array_unique(array_merge(
-            $where->exclude,
-            $this->getSensitivePropertyNames($entity),
-        )));
+        $excludeColumns = $this->resolveReadExcludeColumns($entity, $where->exclude);
         $statement = $this->query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
 
         [$limit, $skip] = $this->resolvePagination(100, 0);
