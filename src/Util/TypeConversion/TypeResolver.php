@@ -26,7 +26,7 @@ final class TypeResolver
    * Returns the singleton instance of the TypeResolver.
    *
    * @return self The singleton instance of the TypeResolver.
-   * @deprecated Will be removed in Assegai ORM 0.10.0. Create and inject TypeResolver instead.
+   * @deprecated Will be removed in Assegai ORM 1.0.0. Create and inject TypeResolver instead.
    */
   public static function getInstance(): self
   {

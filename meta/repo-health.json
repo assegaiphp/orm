@@ -8,8 +8,8 @@
     "label": "tests"
   },
   "status": {
-    "label": "0.9.0 rewrite in progress",
-    "color": "f59e0b",
-    "summary": "MySQL hardening first, then SQLite polish and PostgreSQL parity."
+    "label": "active",
+    "color": "10b981",
+    "summary": "Standalone ORM with optional Assegai integration, synchronized with the AssegaiPHP 0.10 release line."
   }
 }

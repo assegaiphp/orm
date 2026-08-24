@@ -52,7 +52,7 @@ final class EntityInspector
    * Returns the singleton instance of the EntityInspector.
    *
    * @return EntityInspector The singleton instance of the EntityInspector.
-   * @deprecated Will be removed in Assegai ORM 0.10.0. Create and inject EntityInspector instead.
+   * @deprecated Will be removed in Assegai ORM 1.0.0. Create and inject EntityInspector instead.
    */
   public static function getInstance(): EntityInspector
   {
