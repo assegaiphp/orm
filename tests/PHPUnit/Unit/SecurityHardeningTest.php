@@ -12,7 +12,9 @@ use Assegai\Orm\DataSource\DBFactory;
 use Assegai\Orm\Enumerations\DataSourceType;
 use Assegai\Orm\Enumerations\SQLDialect;
 use Assegai\Orm\Management\EntityManager;
+use Assegai\Orm\Management\Repository;
 use Assegai\Orm\Management\Options\FindOptions;
+use Assegai\Orm\Management\Options\FindWhereOptions;
 use Assegai\Orm\Management\Options\UpsertOptions;
 use Assegai\Orm\Queries\Sql\ColumnType;
 use Assegai\Orm\Queries\Sql\SQLExpression;
@@ -156,6 +158,121 @@ final class SecurityHardeningTest extends TestCase
 
         self::assertTrue(password_verify('replacement-secret', $this->fetchLegacyCredential('legacy@example.test')));
         self::assertArrayNotHasKey('credential', (array)$update->generatedMaps);
+    }
+
+    public function testExplicitEmptyExclusionsExposePasswordFieldsForTrustedReads(): void
+    {
+        $manager = $this->manager();
+        $manager->insert(SecureAccountEntity::class, [
+            'email' => 'authentication@example.test',
+            'credentialHash' => 'authentication-secret',
+        ]);
+
+        $defaultRead = $manager->find(SecureAccountEntity::class);
+        self::assertArrayNotHasKey('credentialHash', (array)$defaultRead->getData()[0]);
+
+        $trustedRead = $manager->find(
+            SecureAccountEntity::class,
+            new FindOptions(where: ['email' => 'authentication@example.test'], exclude: []),
+        );
+        self::assertTrue(password_verify(
+            'authentication-secret',
+            (string)$trustedRead->getData()[0]->credentialHash,
+        ));
+
+        $defaultShapedOverride = $manager->find(
+            SecureAccountEntity::class,
+            new FindOptions(
+                where: ['email' => 'authentication@example.test'],
+                exclude: ['password'],
+            ),
+        );
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $defaultShapedOverride->getData()[0]->credentialHash,
+        );
+
+        $selectiveRead = $manager->find(
+            SecureAccountEntity::class,
+            new FindOptions(
+                where: ['email' => 'authentication@example.test'],
+                exclude: ['email'],
+            ),
+        );
+        self::assertArrayNotHasKey('email', (array)$selectiveRead->getData()[0]);
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $selectiveRead->getData()[0]->credentialHash,
+        );
+
+        $findByRead = $manager->findBy(
+            SecureAccountEntity::class,
+            new FindWhereOptions(
+                ['email' => 'authentication@example.test'],
+                exclude: ['password'],
+            ),
+        );
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $findByRead->getData()[0]->credentialHash,
+        );
+
+        $repository = new Repository(SecureAccountEntity::class, $manager);
+        $repositoryRead = $repository->find([
+            'where' => ['email' => 'authentication@example.test'],
+            'exclude' => ['password'],
+        ]);
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $repositoryRead->getData()[0]->credentialHash,
+        );
+
+        $repositoryFindOneRead = $repository->findOne([
+            'where' => ['email' => 'authentication@example.test'],
+            'exclude' => ['password'],
+        ]);
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $repositoryFindOneRead->getData()->credentialHash,
+        );
+
+        $legacyManager = $this->manager(LegacyPasswordAccountEntity::class);
+        $legacyManager->insert(LegacyPasswordAccountEntity::class, [
+            'email' => 'legacy-authentication@example.test',
+            'credential' => 'legacy-authentication-secret',
+        ]);
+        $legacyRead = $legacyManager->find(
+            LegacyPasswordAccountEntity::class,
+            new FindOptions(exclude: []),
+        );
+        self::assertTrue(password_verify(
+            'legacy-authentication-secret',
+            (string)$legacyRead->getData()[0]->credential,
+        ));
+    }
+
+    public function testExplicitEmptyExclusionsOverrideManagerSensitiveDefaults(): void
+    {
+        $manager = $this->manager(ManualHashAccountEntity::class);
+        $manager->setSecure(['secret']);
+        $manager->insert(ManualHashAccountEntity::class, [
+            'email' => 'manager-sensitive@example.test',
+            'secret' => 'manager-sensitive-value',
+        ]);
+
+        $defaultRead = $manager->find(ManualHashAccountEntity::class);
+        self::assertArrayNotHasKey('secret', (array)$defaultRead->getData()[0]);
+
+        $trustedRead = $manager->find(
+            ManualHashAccountEntity::class,
+            new FindOptions(exclude: ['password']),
+        );
+        self::assertSame('manager-sensitive-value', $trustedRead->getData()[0]->secret);
+
+        $roundTrippedDefaults = FindOptions::fromArray(FindOptions::toArray(new FindOptions()));
+        self::assertFalse($roundTrippedDefaults->excludeIsExplicit);
+        $defaultRead = $manager->find(ManualHashAccountEntity::class, $roundTrippedDefaults);
+        self::assertArrayNotHasKey('secret', (array)$defaultRead->getData()[0]);
     }
 
     public function testEntityMetadataDoesNotReplaceCallerConfiguredHashFields(): void

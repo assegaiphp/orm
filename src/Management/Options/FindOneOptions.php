@@ -28,7 +28,7 @@ class FindOneOptions extends FindOptions
      * @param FindWhereOptions|array|null $where Simple condition that should be applied to match entities.
      * @param object|array|null $order Order, in which entities should be ordered.
      * @param array<string, string>|JoinOptions|null $join Join options.
-     * @param string[] $exclude
+     * @param string[]|null $exclude
      */
     public function __construct(
         null|object|array                      $select = null,
@@ -36,7 +36,7 @@ class FindOneOptions extends FindOptions
         null|FindWhereOptions|array            $where = null,
         null|object|array                      $order = null,
         public readonly null|array|JoinOptions $join = null,
-        array                                  $exclude = ['password'],
+        ?array                                 $exclude = null,
     )
     {
         parent::__construct(
@@ -52,7 +52,7 @@ class FindOneOptions extends FindOptions
     }
 
     /**
-     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, join: array<string, string>|JoinOptions|null, exclude: array|string[], with_real_total: bool} $options
+     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, join: array<string, string>|JoinOptions|null, exclude: array|string[], exclude_explicit?: bool, with_real_total: bool} $options
      * @return FindOptions
      * @throws ORMException
      */
@@ -63,7 +63,8 @@ class FindOneOptions extends FindOptions
         $where = $options['where'] ?? null;
         $order = $options['order'] ?? null;
         $join = $options['join'] ?? null;
-        $exclude = $options['exclude'] ?? ['password'];
+        $excludeIsExplicit = $options['exclude_explicit'] ?? array_key_exists('exclude', $options);
+        $exclude = $excludeIsExplicit ? ($options['exclude'] ?? []) : null;
 
         if (is_array($where)) {
             $where = new FindWhereOptions($where, $exclude);

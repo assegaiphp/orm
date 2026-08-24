@@ -7,20 +7,20 @@ use Assegai\Orm\Exceptions\ORMException;
 /**
  * Defines the search criteria for finding many entities.
  */
-class FindManyOptions extends FindOneOptions
+class FindManyOptions extends FindOptions
 {
     /**
      * @param int|null $skip
      * @param int|null $limit
-     * @param array $exclude
+     * @param array|null $exclude
      */
     public function __construct(
-        public readonly ?int  $skip = null,
-        public readonly ?int  $limit = null,
-        public readonly array $exclude = ['password'],
+        ?int   $skip = null,
+        ?int   $limit = null,
+        ?array $exclude = null,
     )
     {
-        parent::__construct(skip: $this->skip, limit: $this->limit, exclude: $this->exclude);
+        parent::__construct(skip: $skip, limit: $limit, exclude: $exclude);
     }
 
     /**
@@ -30,8 +30,13 @@ class FindManyOptions extends FindOneOptions
      */
     public static function fromArray(array $options): FindOptions
     {
-        $options = parent::fromArray($options);
-        return new FindManyOptions(skip: $options->skip, limit: $options->limit, exclude: $options->exclude);
+        $excludeIsExplicit = $options['exclude_explicit'] ?? array_key_exists('exclude', $options);
+
+        return new FindManyOptions(
+            skip: $options['skip'] ?? null,
+            limit: $options['limit'] ?? null,
+            exclude: $excludeIsExplicit ? ($options['exclude'] ?? []) : null,
+        );
     }
 
     /**
