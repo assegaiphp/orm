@@ -19,7 +19,7 @@
         "ext-pdo": "*",
         "ext-curl": "*",
         "ext-intl": "*",
-        "assegaiphp/util": "^0.9.0",
+        "assegaiphp/util": "^0.10.0",
         "psr/log": "^3.0",
         "symfony/console": "^8.0",
         "predis/predis": "^2.3"

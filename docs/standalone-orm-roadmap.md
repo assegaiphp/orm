@@ -18,6 +18,8 @@ Assegai applications.
 
 ## What still needs to happen
 
+The deprecated `EntityInspector::getInstance()` and `TypeResolver::getInstance()` compatibility accessors remain available throughout the 0.x line. Their removal target is ORM 1.0.0; new code should use direct construction or dependency injection now.
+
 ### 1. Keep framework behavior opt-in
 
 - Assegai-specific convenience should keep working when `assegaiphp/core` is installed
