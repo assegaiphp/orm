@@ -180,6 +180,18 @@ final class SecurityHardeningTest extends TestCase
             (string)$trustedRead->getData()[0]->credentialHash,
         ));
 
+        $defaultShapedOverride = $manager->find(
+            SecureAccountEntity::class,
+            new FindOptions(
+                where: ['email' => 'authentication@example.test'],
+                exclude: ['password'],
+            ),
+        );
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $defaultShapedOverride->getData()[0]->credentialHash,
+        );
+
         $selectiveRead = $manager->find(
             SecureAccountEntity::class,
             new FindOptions(
@@ -195,7 +207,10 @@ final class SecurityHardeningTest extends TestCase
 
         $findByRead = $manager->findBy(
             SecureAccountEntity::class,
-            new FindWhereOptions(['email' => 'authentication@example.test'], exclude: []),
+            new FindWhereOptions(
+                ['email' => 'authentication@example.test'],
+                exclude: ['password'],
+            ),
         );
         self::assertSame(
             $trustedRead->getData()[0]->credentialHash,
@@ -205,11 +220,20 @@ final class SecurityHardeningTest extends TestCase
         $repository = new Repository(SecureAccountEntity::class, $manager);
         $repositoryRead = $repository->find([
             'where' => ['email' => 'authentication@example.test'],
-            'exclude' => [],
+            'exclude' => ['password'],
         ]);
         self::assertSame(
             $trustedRead->getData()[0]->credentialHash,
             $repositoryRead->getData()[0]->credentialHash,
+        );
+
+        $repositoryFindOneRead = $repository->findOne([
+            'where' => ['email' => 'authentication@example.test'],
+            'exclude' => ['password'],
+        ]);
+        self::assertSame(
+            $trustedRead->getData()[0]->credentialHash,
+            $repositoryFindOneRead->getData()->credentialHash,
         );
 
         $legacyManager = $this->manager(LegacyPasswordAccountEntity::class);
@@ -241,9 +265,14 @@ final class SecurityHardeningTest extends TestCase
 
         $trustedRead = $manager->find(
             ManualHashAccountEntity::class,
-            new FindOptions(exclude: []),
+            new FindOptions(exclude: ['password']),
         );
         self::assertSame('manager-sensitive-value', $trustedRead->getData()[0]->secret);
+
+        $roundTrippedDefaults = FindOptions::fromArray(FindOptions::toArray(new FindOptions()));
+        self::assertFalse($roundTrippedDefaults->excludeIsExplicit);
+        $defaultRead = $manager->find(ManualHashAccountEntity::class, $roundTrippedDefaults);
+        self::assertArrayNotHasKey('secret', (array)$defaultRead->getData()[0]);
     }
 
     public function testEntityMetadataDoesNotReplaceCallerConfiguredHashFields(): void

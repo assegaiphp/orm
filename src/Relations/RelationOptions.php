@@ -15,6 +15,9 @@ use Assegai\Orm\Enumerations\OrphanedRowAction;
  */
 readonly class RelationOptions
 {
+  public array $exclude;
+  public bool $excludeIsExplicit;
+
   /**
    * @param null|bool|CascadeOption|array $cascade Sets cascades options for the given relation.
    * If set to true then it means that related object can be allowed to be inserted or updated in the database.
@@ -63,7 +66,10 @@ readonly class RelationOptions
     public ?bool                          $isEager = null,
     public ?bool                          $isPersistent = null,
     public ?OrphanedRowAction             $orphanedRowAction = null,
-    public array                          $exclude = ['password'],
+    ?array                                $exclude = null,
     public string                         $primaryKeyField = 'id',
-  ) { }
+  ) {
+    $this->excludeIsExplicit = $exclude !== null;
+    $this->exclude = $exclude ?? ['password'];
+  }
 }

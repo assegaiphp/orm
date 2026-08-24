@@ -24,21 +24,25 @@ final readonly class FindWhereOptions
      * @var string|null
      */
     private ?string $tableName;
+    public array $exclude;
+    public bool $excludeIsExplicit;
 
     /**
      * @param object|array<string, mixed> $conditions The conditions to search for.
-     * @param string[] $exclude The columns to exclude.
+     * @param string[]|null $exclude The columns to exclude, or null to use the secure defaults.
      * @param class-string|null $entityClass The entity class.
      * @param bool $withRealTotal The flag to include the real count.
      * @throws ORMException
      */
     public function __construct(
         public object|array $conditions,
-        public array        $exclude = ['password'],
+        ?array              $exclude = null,
         private ?string     $entityClass = null,
         public bool         $withRealTotal = false
     )
     {
+        $this->excludeIsExplicit = $exclude !== null;
+        $this->exclude = $exclude ?? FindOptions::DEFAULT_EXCLUDE;
         $tableName = null;
 
         if ($this->entityClass) {
@@ -62,14 +66,15 @@ final readonly class FindWhereOptions
     /**
      * Creates a new FindWhereOptions instance from an array.
      *
-     * @param array{conditions: ?array<string, mixed>, exclude: ?string[], entity_class: ?class-string, with_real_total: ?bool} $options The options.
+     * @param array{conditions: ?array<string, mixed>, exclude: ?string[], exclude_explicit?: bool, entity_class: ?class-string, with_real_total: ?bool} $options The options.
      * @return FindWhereOptions The FindWhereOptions instance.
      * @throws ORMException
      */
     public static function fromArray(array $options): FindWhereOptions
     {
         $conditions = $options['conditions'] ?? $options;
-        $exclude = $options['exclude'] ?? ['password'];
+        $excludeIsExplicit = $options['exclude_explicit'] ?? array_key_exists('exclude', $options);
+        $exclude = $excludeIsExplicit ? ($options['exclude'] ?? []) : null;
         $entityClassName = $options['entity_class'] ?? null;
         $withRealTotal = $options['with_real_total'] ?? false;
 
