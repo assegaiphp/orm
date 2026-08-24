@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "fec0265c21f3d445c59d9ff926945673",
+    "content-hash": "3f1dba9f7614ddc8b8f473f2bf6600f4",
     "packages": [
         {
             "name": "assegaiphp/util",
-            "version": "0.9.0",
+            "version": "0.10.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/assegaiphp/util.git",
-                "reference": "8d5d7f0f1b67833910d75f8d706ce3ad405be18c"
+                "reference": "fb236ecfb9a5088c4b76cf82932ce873ac7b64ec"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/assegaiphp/util/zipball/8d5d7f0f1b67833910d75f8d706ce3ad405be18c",
-                "reference": "8d5d7f0f1b67833910d75f8d706ce3ad405be18c",
+                "url": "https://api.github.com/repos/assegaiphp/util/zipball/fb236ecfb9a5088c4b76cf82932ce873ac7b64ec",
+                "reference": "fb236ecfb9a5088c4b76cf82932ce873ac7b64ec",
                 "shasum": ""
             },
             "require": {
@@ -50,9 +50,9 @@
             "description": "A  collection of useful PHP utility classes to simplify common tasks and enhance application development.",
             "support": {
                 "issues": "https://github.com/assegaiphp/util/issues",
-                "source": "https://github.com/assegaiphp/util/tree/0.9.0"
+                "source": "https://github.com/assegaiphp/util/tree/0.10.0"
             },
-            "time": "2026-04-25T16:21:06+00:00"
+            "time": "2026-08-24T12:57:48+00:00"
         },
         {
             "name": "atatusoft-ltd/plural",
