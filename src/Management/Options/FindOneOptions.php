@@ -29,6 +29,7 @@ class FindOneOptions extends FindOptions
      * @param object|array|null $order Order, in which entities should be ordered.
      * @param array<string, string>|JoinOptions|null $join Join options.
      * @param string[]|null $exclude
+     * @param bool $hydrate Whether to hydrate the row into an entity instance.
      */
     public function __construct(
         null|object|array                      $select = null,
@@ -37,6 +38,7 @@ class FindOneOptions extends FindOptions
         null|object|array                      $order = null,
         public readonly null|array|JoinOptions $join = null,
         ?array                                 $exclude = null,
+        bool                                   $hydrate = false,
     )
     {
         parent::__construct(
@@ -47,12 +49,13 @@ class FindOneOptions extends FindOptions
             skip: 0,
             limit: 1,
             exclude: $exclude,
+            hydrate: $hydrate,
             withRealTotal: false
         );
     }
 
     /**
-     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, join: array<string, string>|JoinOptions|null, exclude: array|string[], exclude_explicit?: bool, with_real_total: bool} $options
+     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, join: array<string, string>|JoinOptions|null, exclude: array|string[], exclude_explicit?: bool, hydrate?: bool, with_real_total: bool} $options
      * @return FindOptions
      * @throws ORMException
      */
@@ -65,6 +68,7 @@ class FindOneOptions extends FindOptions
         $join = $options['join'] ?? null;
         $excludeIsExplicit = $options['exclude_explicit'] ?? array_key_exists('exclude', $options);
         $exclude = $excludeIsExplicit ? ($options['exclude'] ?? []) : null;
+        $hydrate = $options['hydrate'] ?? false;
 
         if (is_array($where)) {
             $where = new FindWhereOptions($where, $exclude);
@@ -77,6 +81,7 @@ class FindOneOptions extends FindOptions
             order: $order,
             join: $join,
             exclude: $exclude,
+            hydrate: $hydrate,
         );
     }
 }

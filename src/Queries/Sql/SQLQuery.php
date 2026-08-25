@@ -260,6 +260,25 @@ class SQLQuery
     }
 
     /**
+     * Returns a fresh query builder using the requested PDO fetch mode.
+     */
+    public function withFetchMode(int $fetchMode, string $fetchClass = stdClass::class): self
+    {
+        if ($this->fetchMode === $fetchMode && $this->fetchClass === $fetchClass) {
+            return $this;
+        }
+
+        return self::forConnection(
+            db: $this->db,
+            fetchClass: $fetchClass,
+            fetchMode: $fetchMode,
+            passwordHashFields: $this->passwordHashFields,
+            passwordHashAlgorithm: $this->passwordHashAlgorithm,
+            dialect: $this->dialect,
+        );
+    }
+
+    /**
      * Returns a query configured for PostgreSQL rendering.
      *
      * @return \Assegai\Orm\Queries\PostgreSql\PostgreSQLQuery

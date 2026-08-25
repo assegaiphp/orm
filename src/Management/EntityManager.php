@@ -64,6 +64,7 @@ use DateTimeZone;
 use Exception;
 use JetBrains\PhpStorm\ArrayShape;
 use NumberFormatter;
+use PDO;
 use PDOException;
 use PDOStatement;
 use Psr\Log\LoggerInterface;
@@ -1325,6 +1326,21 @@ class EntityManager implements IEntityStoreOwner
     {
         $reflection = new ReflectionClass($entityClass);
 
+        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
+            foreach ($property->getAttributes(Column::class, ReflectionAttribute::IS_INSTANCEOF) as $attribute) {
+                /** @var Column $column */
+                $column = $attribute->newInstance();
+                $propertyName = $property->getName();
+
+                if ($column->alias !== '' && array_key_exists($column->alias, $row)) {
+                    $row[$propertyName] = $row[$column->alias];
+                    unset($row[$column->alias]);
+                }
+
+                break;
+            }
+        }
+
         foreach ($row as $property => $value) {
             if (!is_string($property) || !property_exists($entityClass, $property)) {
                 continue;
@@ -1536,6 +1552,7 @@ class EntityManager implements IEntityStoreOwner
     public function find(string $entityClass, ?FindOptions $findOptions = new FindOptions()): FindResult
     {
         $entity = $this->create(entityClass: $entityClass);
+        $query = $findOptions->hydrate ? $this->query->withFetchMode(PDO::FETCH_ASSOC) : $this->query;
         $conditions = [];
         $availableRelations = [];
         $requestedRelations = $this->getRequestedRelationNames($findOptions);
@@ -1554,7 +1571,7 @@ class EntityManager implements IEntityStoreOwner
         $columns = $this->appendRequiredRelationColumns($entity, $columns, $availableRelations);
 
         $tableName = $this->entityInspector->getTableName(entity: $entity);
-        $statement = $this->query->select()->all(columns: $columns)->from(tableReferences: $tableName);
+        $statement = $query->select()->all(columns: $columns)->from(tableReferences: $tableName);
 
         if (!empty($findOptions)) {
             foreach ($requestedRelations as $relationName) {
@@ -1590,11 +1607,14 @@ class EntityManager implements IEntityStoreOwner
         $result = $statement->execute();
 
         if ($result->isError()) {
-            return new FindResult(raw: $result->getRaw(), data: $result->value(), errors: [$this->newGeneralSqlQueryException($this->query, $result), ...$this->publicResultErrors($result)], affected: $result->getTotalAffectedRows());
+            return new FindResult(raw: $result->getRaw(), data: $result->value(), errors: [$this->newGeneralSqlQueryException($query, $result), ...$this->publicResultErrors($result)], affected: $result->getTotalAffectedRows());
         }
 
         $loadedRelations = $this->loadRequestedRelations($entityClass, $result->getData(), $findOptions, $availableRelations);
         $resultSet = $this->processRelations($result->getData(), $entityClass, $findOptions, $availableRelations, $loadedRelations);
+        if ($findOptions->hydrate) {
+            $resultSet = $this->hydrateReadRows($entityClass, $resultSet);
+        }
         $resultSet = $this->stripExcludedColumns(
             $resultSet,
             $this->resolveReadExcludeColumns($entity, $findOptions->exclude, $findOptions->excludeIsExplicit)
@@ -1970,7 +1990,7 @@ class EntityManager implements IEntityStoreOwner
             unset($relatedRow->{$inversePropertyName});
 
             if ($ownerKey !== null) {
-                $groupedRows[$ownerKey] = $relatedRow;
+                $groupedRows[$ownerKey] = $this->finalizeRelationReadRow($targetClass, $relatedRow, $relationProperty, $findOptions);
             }
         }
 
@@ -2016,7 +2036,7 @@ class EntityManager implements IEntityStoreOwner
             unset($relatedRow->__relation_reference_key);
 
             if ($key !== null) {
-                $groupedRows[$key] = $relatedRow;
+                $groupedRows[$key] = $this->finalizeRelationReadRow($targetClass, $relatedRow, $relationProperty, $findOptions);
             }
         }
 
@@ -2225,7 +2245,7 @@ class EntityManager implements IEntityStoreOwner
             }
 
             $groupedRows[$ownerKey] ??= [];
-            $groupedRows[$ownerKey][] = $relatedRow;
+            $groupedRows[$ownerKey][] = $this->finalizeRelationReadRow($targetClass, $relatedRow, $relationProperty, $findOptions);
         }
 
         return $groupedRows;
@@ -2465,7 +2485,7 @@ class EntityManager implements IEntityStoreOwner
             }
 
             $groupedRows[$ownerKey] ??= [];
-            $groupedRows[$ownerKey][] = $row;
+            $groupedRows[$ownerKey][] = $this->finalizeRelationReadRow($targetClass, $row, $relationProperty, $findOptions);
         }
 
         return $groupedRows;
@@ -2692,6 +2712,56 @@ class EntityManager implements IEntityStoreOwner
     }
 
     /**
+     * @param array<object|array<string, mixed>> $rows
+     * @return object[]
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function hydrateReadRows(string $entityClass, array $rows): array
+    {
+        return array_map(
+            fn(object|array $row): object => $this->hydrateReadRow($entityClass, $row),
+            $rows,
+        );
+    }
+
+    /**
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function hydrateReadRow(string $entityClass, object|array $row): object
+    {
+        if ($row instanceof $entityClass) {
+            return $row;
+        }
+
+        $values = is_array($row) ? $row : get_object_vars($row);
+        $values = $this->normalizeReturnedRowForEntity($entityClass, $values);
+
+        return $this->create($entityClass, $values);
+    }
+
+    /**
+     * @throws ClassNotFoundException
+     * @throws ORMException
+     * @throws ReflectionException
+     */
+    private function finalizeRelationReadRow(string $entityClass, object|array $row, RelationPropertyMetadata $relationProperty, FindOptions $findOptions): object
+    {
+        if (!$findOptions->hydrate) {
+            return is_array($row) ? (object)$row : $row;
+        }
+
+        $row = $this->hydrateReadRow($entityClass, $row);
+        $excludeColumns = $this->resolveRelationExcludeColumns($relationProperty, $findOptions, $excludeIsExplicit);
+        $excludeColumns = $this->resolveReadExcludeColumns($row, $excludeColumns, $excludeIsExplicit);
+
+        return $this->stripExcludedColumns([$row], $excludeColumns)[0];
+    }
+
+    /**
      * Expand the default password exclusion to every configured sensitive field.
      * Any caller-supplied override remains authoritative, including an empty list.
      *
@@ -2728,13 +2798,16 @@ class EntityManager implements IEntityStoreOwner
 
         $statement = $this->query->select()->count()->from(tableReferences: $this->entityInspector->getTableName(entity: $entity));
 
-        if ($options) {
-            $conditions = [];
+        $conditions = $options?->where instanceof FindWhereOptions
+            ? $options->where->conditions
+            : ($options?->where ?? []);
+        $conditions = is_object($conditions) ? (array)$conditions : $conditions;
 
-            if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
-                $conditions = array_merge($options->where->conditions ?? $options->where ?? [], [$deleteColumnName => 'NULL']);
-            }
+        if ($deleteColumnName = $this->getDeleteDateColumnName(entityClass: $entityClass)) {
+            $conditions = array_merge($conditions, [$deleteColumnName => 'NULL']);
+        }
 
+        if ($conditions) {
             $statement = $statement->where(condition: new FindWhereOptions(conditions: $conditions, entityClass: $entityClass));
         }
 
@@ -2748,7 +2821,9 @@ class EntityManager implements IEntityStoreOwner
             throw $this->newGeneralSqlQueryException($this->query, $result);
         }
 
-        return $result->value()[0]?->total ?? 0;
+        $row = $result->value()[0] ?? null;
+
+        return (int)(is_array($row) ? ($row['total'] ?? 0) : ($row?->total ?? 0));
     }
 
     private function normalizeSaveInsertOptions(InsertOptions|UpdateOptions|null $options): InsertOptions
@@ -2783,13 +2858,12 @@ class EntityManager implements IEntityStoreOwner
     {
         $entity = $this->create(entityClass: $entityClass);
         if (is_array($where)) {
-            $where = new FindWhereOptions(
-                conditions: $where['condition'] ?? $where,
-                entityClass: $entityClass
-            );
+            $where = FindWhereOptions::fromArray($where);
         }
+        $where = $where->forEntity($entityClass);
         $excludeColumns = $this->resolveReadExcludeColumns($entity, $where->exclude, $where->excludeIsExplicit);
-        $statement = $this->query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
+        $query = $where->hydrate ? $this->query->withFetchMode(PDO::FETCH_ASSOC) : $this->query;
+        $statement = $query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);
 
         [$limit, $skip] = $this->resolvePagination(100, 0);
 
@@ -2802,12 +2876,17 @@ class EntityManager implements IEntityStoreOwner
         $result = $statement->execute();
 
         if ($result->isError()) {
-            throw $this->newGeneralSqlQueryException($this->query, $result);
+            throw $this->newGeneralSqlQueryException($query, $result);
+        }
+
+        $data = $result->getData();
+        if ($where->hydrate) {
+            $data = $this->hydrateReadRows($entityClass, $data);
         }
 
         return new FindResult(
             raw: $result->getRaw(),
-            data: $this->stripExcludedColumns($result->getData(), $excludeColumns),
+            data: $this->stripExcludedColumns($data, $excludeColumns),
             errors: $this->publicResultErrors($result)
         );
     }
@@ -4223,9 +4302,10 @@ class EntityManager implements IEntityStoreOwner
     #[ArrayShape(['entities' => "array|null", 'count' => "int"])]
     public function findAndCount(string $entityClass, ?FindManyOptions $options = null): FindResult
     {
-        $result = $this->find(entityClass: $entityClass, findOptions: $options);
-
-        return new FindResult($result->getRaw(), $result->getTotal(), $this->publicResultErrors($result), $result->getTotalAffectedRows());
+        return $this->find(
+            entityClass: $entityClass,
+            findOptions: $options ?? new FindManyOptions(),
+        );
     }
 
     /**
@@ -4242,9 +4322,23 @@ class EntityManager implements IEntityStoreOwner
      */
     public function findAndCountBy(string $entityClass, FindWhereOptions|array $where): FindResult
     {
-        $result = $this->findBy(entityClass: $entityClass, where: $where);
+        if (is_array($where)) {
+            $where = FindWhereOptions::fromArray($where);
+        }
 
-        return new FindResult($result->getRaw(), $result->getTotal(), $this->publicResultErrors($result), $result->getTotalAffectedRows());
+        $result = $this->findBy(entityClass: $entityClass, where: $where);
+        $total = $this->count(
+            entityClass: $entityClass,
+            options: new FindOptions(where: $where->conditions, withRealTotal: false),
+        );
+
+        return new FindResult(
+            raw: $result->getRaw(),
+            data: $result->getData(),
+            errors: $this->publicResultErrors($result),
+            affected: $result->getTotalAffectedRows(),
+            total: $total,
+        );
     }
 
     /**

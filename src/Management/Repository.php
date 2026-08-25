@@ -275,7 +275,7 @@ readonly class Repository implements RepositoryInterface
   }
 
   /**
-   * @param FindWhereOptions|array{entities: mixed, count: int} $where
+   * @param FindWhereOptions|array{conditions?: array<string, mixed>, exclude?: string[], hydrate?: bool, with_real_total?: bool} $where
    * @return FindResult
    * @throws ClassNotFoundException
    * @throws GeneralSQLQueryException

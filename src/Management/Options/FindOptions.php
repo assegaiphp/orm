@@ -31,11 +31,12 @@ class FindOptions implements JsonSerializable
      * @param int|null $skip The number of results to skip.
      * @param int|null $limit The number of results to return.
      * @param array|null $exclude The fields to exclude, or null to use the secure defaults.
+     * @param bool $hydrate Whether to hydrate rows into entity instances.
      * @param bool $withRealTotal Whether to get the real total.
      * @param bool $isDebug Whether to enable debug mode.
      * @param RelationOptions[] $relationOptions Options for relations.
      */
-    public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, ?array $exclude = null, public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [])
+    public function __construct(public readonly null|object|array $select = null, null|object|array $relations = null, public readonly null|FindWhereOptions|array $where = null, public readonly null|object|array $order = null, public readonly ?int $skip = null, public readonly ?int $limit = null, ?array $exclude = null, public readonly bool $withRealTotal = self::DEFAULT_WITH_REAL_TOTAL, public readonly bool $isDebug = false, public array $relationOptions = [], public readonly bool $hydrate = false)
     {
         $this->relations = $this->normalizeRelations($relations);
         $this->excludeIsExplicit = $exclude !== null;
@@ -87,7 +88,7 @@ class FindOptions implements JsonSerializable
     /**
      * Creates a FindOptions instance from an array.
      *
-     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], exclude_explicit?: bool, with_real_total: bool} $options The array of options.
+     * @param array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], exclude_explicit?: bool, hydrate?: bool, with_real_total: bool} $options The array of options.
      * @return FindOptions
      * @throws ORMException
      */
@@ -101,13 +102,14 @@ class FindOptions implements JsonSerializable
         $limit = $options['limit'] ?? null;
         $excludeIsExplicit = $options['exclude_explicit'] ?? array_key_exists('exclude', $options);
         $exclude = $excludeIsExplicit ? ($options['exclude'] ?? []) : null;
+        $hydrate = $options['hydrate'] ?? false;
         $withRealTotal = $options['with_real_total'] ?? self::DEFAULT_WITH_REAL_TOTAL;
 
         if (is_array($where)) {
             $where = new FindWhereOptions($where);
         }
 
-        return new FindOptions(select: $select, relations: $relations, where: $where, order: $order, skip: $skip, limit: $limit, exclude: $exclude, withRealTotal: $withRealTotal);
+        return new FindOptions(select: $select, relations: $relations, where: $where, order: $order, skip: $skip, limit: $limit, exclude: $exclude, hydrate: $hydrate, withRealTotal: $withRealTotal);
     }
 
     /**
@@ -156,10 +158,10 @@ class FindOptions implements JsonSerializable
      * Converts a FindOptions instance to an array.
      *
      * @param FindOptions $options
-     * @return array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], exclude_explicit: bool, with_real_total: bool}
+     * @return array{select: array|null|object, relations: array|null|object, where: array|FindWhereOptions|null, order: array|null|object, skip: int|null, limit: int|null, exclude: array|string[], exclude_explicit: bool, hydrate: bool, with_real_total: bool}
      */
     public static function toArray(self $options): array
     {
-        return ['select' => $options->select, 'relations' => $options->relations, 'where' => $options->where, 'order' => $options->order, 'skip' => $options->skip, 'limit' => $options->limit, 'exclude' => $options->exclude, 'exclude_explicit' => $options->excludeIsExplicit, 'with_real_total' => $options->withRealTotal,];
+        return ['select' => $options->select, 'relations' => $options->relations, 'where' => $options->where, 'order' => $options->order, 'skip' => $options->skip, 'limit' => $options->limit, 'exclude' => $options->exclude, 'exclude_explicit' => $options->excludeIsExplicit, 'hydrate' => $options->hydrate, 'with_real_total' => $options->withRealTotal,];
     }
 }
