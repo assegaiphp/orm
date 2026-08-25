@@ -13,14 +13,16 @@ class FindManyOptions extends FindOptions
      * @param int|null $skip
      * @param int|null $limit
      * @param array|null $exclude
+     * @param bool $hydrate Whether to hydrate rows into entity instances.
      */
     public function __construct(
         ?int   $skip = null,
         ?int   $limit = null,
         ?array $exclude = null,
+        bool   $hydrate = false,
     )
     {
-        parent::__construct(skip: $skip, limit: $limit, exclude: $exclude);
+        parent::__construct(skip: $skip, limit: $limit, exclude: $exclude, hydrate: $hydrate);
     }
 
     /**
@@ -36,6 +38,7 @@ class FindManyOptions extends FindOptions
             skip: $options['skip'] ?? null,
             limit: $options['limit'] ?? null,
             exclude: $excludeIsExplicit ? ($options['exclude'] ?? []) : null,
+            hydrate: $options['hydrate'] ?? false,
         );
     }
 

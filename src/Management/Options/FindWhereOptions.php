@@ -30,6 +30,7 @@ final readonly class FindWhereOptions
     /**
      * @param object|array<string, mixed> $conditions The conditions to search for.
      * @param string[]|null $exclude The columns to exclude, or null to use the secure defaults.
+     * @param bool $hydrate Whether to hydrate rows into entity instances.
      * @param class-string|null $entityClass The entity class.
      * @param bool $withRealTotal The flag to include the real count.
      * @throws ORMException
@@ -38,7 +39,8 @@ final readonly class FindWhereOptions
         public object|array $conditions,
         ?array              $exclude = null,
         private ?string     $entityClass = null,
-        public bool         $withRealTotal = false
+        public bool         $withRealTotal = false,
+        public bool         $hydrate = false,
     )
     {
         $this->excludeIsExplicit = $exclude !== null;
@@ -66,7 +68,7 @@ final readonly class FindWhereOptions
     /**
      * Creates a new FindWhereOptions instance from an array.
      *
-     * @param array{conditions: ?array<string, mixed>, exclude: ?string[], exclude_explicit?: bool, entity_class: ?class-string, with_real_total: ?bool} $options The options.
+     * @param array{conditions: ?array<string, mixed>, exclude: ?string[], exclude_explicit?: bool, entity_class: ?class-string, with_real_total: ?bool, hydrate?: bool} $options The options.
      * @return FindWhereOptions The FindWhereOptions instance.
      * @throws ORMException
      */
@@ -77,12 +79,14 @@ final readonly class FindWhereOptions
         $exclude = $excludeIsExplicit ? ($options['exclude'] ?? []) : null;
         $entityClassName = $options['entity_class'] ?? null;
         $withRealTotal = $options['with_real_total'] ?? false;
+        $hydrate = $options['hydrate'] ?? false;
 
         return new FindWhereOptions(
             conditions: $conditions,
             exclude: $exclude,
             entityClass: $entityClassName,
-            withRealTotal: $withRealTotal
+            withRealTotal: $withRealTotal,
+            hydrate: $hydrate,
         );
     }
 

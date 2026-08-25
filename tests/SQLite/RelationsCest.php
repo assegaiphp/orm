@@ -225,6 +225,43 @@ class RelationsCest
     $I->assertSame(['Deep Dive', 'Hello ORM'], array_values($postTitles));
   }
 
+  public function hydratesRootAndRelatedRowsIntoTheirEntityClasses(UnitTester $I): void
+  {
+    $user = $this->manager->findOne(
+      RelationUser::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['profile'], hydrate: true)
+    )->getData();
+    $post = $this->manager->findOne(
+      RelationPost::class,
+      new FindOneOptions(where: ['id' => 2], relations: ['author', 'tags'], hydrate: true)
+    )->getData();
+    $author = $this->manager->findOne(
+      RelationAuthor::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['posts'], hydrate: true)
+    )->getData();
+    $issue = $this->manager->findOne(
+      RelationIssue::class,
+      new FindOneOptions(where: ['id' => 1], relations: ['publisher'], hydrate: true)
+    )->getData();
+
+    $I->assertInstanceOf(RelationUser::class, $user);
+    $I->assertInstanceOf(RelationProfile::class, $user->profile);
+    $I->assertInstanceOf(RelationPost::class, $post);
+    $I->assertInstanceOf(RelationAuthor::class, $post->author);
+    $I->assertContainsOnlyInstancesOf(RelationTag::class, $post->tags);
+    $I->assertInstanceOf(RelationAuthor::class, $author);
+    $I->assertContainsOnlyInstancesOf(RelationPost::class, $author->posts);
+    $I->assertInstanceOf(RelationIssue::class, $issue);
+    $I->assertInstanceOf(RelationPublisher::class, $issue->publisher);
+    $I->assertSame('tech', $issue->publisher->code);
+    $I->assertFalse(property_exists($issue->publisher, 'publicCode'));
+
+    foreach ($post->tags as $tag) {
+      $I->assertFalse(isset($tag->credentialHash));
+      $I->assertFalse(isset($tag->legacyCredential));
+    }
+  }
+
   public function loadsRelationsEvenWhenPrimaryKeyIsExcludedFromPayload(UnitTester $I): void
   {
     $author = $this->manager->findOne(

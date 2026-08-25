@@ -120,6 +120,22 @@ $created = $notes->save($note);
 $allNotes = $notes->find()->getData();
 ```
 
+## Hydrated reads
+
+Reads retain their existing result shape by default. Pass `hydrate: true` when application code needs deterministic entity instances and entity property types:
+
+```php
+$notes = $dataSource->getRepository(NoteEntity::class);
+
+$note = $notes->findOne([
+  'where' => ['id' => 1],
+  'relations' => ['author'],
+  'hydrate' => true,
+])->getData();
+```
+
+The root row is a `NoteEntity`, and each explicitly requested relation is an instance of its declared target entity class. Column aliases are mapped to their entity property names, while backed enums, `DateTime`, and booleans use the ORM's normal conversion pipeline. Exclusion rules still apply after hydration, including sensitive-property defaults and explicit `exclude` overrides.
+
 ## Using SQLite
 
 SQLite is a good fit for local development, small apps, prototypes, and CLI tools. This ORM supports SQLite through
