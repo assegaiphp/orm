@@ -2858,15 +2858,9 @@ class EntityManager implements IEntityStoreOwner
     {
         $entity = $this->create(entityClass: $entityClass);
         if (is_array($where)) {
-            $excludeIsExplicit = array_key_exists('exclude', $where);
-            $where = new FindWhereOptions(
-                conditions: $where['conditions'] ?? $where['condition'] ?? $where,
-                exclude: $excludeIsExplicit ? $where['exclude'] : null,
-                entityClass: $entityClass,
-                withRealTotal: $where['with_real_total'] ?? false,
-                hydrate: $where['hydrate'] ?? false,
-            );
+            $where = FindWhereOptions::fromArray($where);
         }
+        $where = $where->forEntity($entityClass);
         $excludeColumns = $this->resolveReadExcludeColumns($entity, $where->exclude, $where->excludeIsExplicit);
         $query = $where->hydrate ? $this->query->withFetchMode(PDO::FETCH_ASSOC) : $this->query;
         $statement = $query->select()->all(columns: $this->entityInspector->getColumns(entity: $entity, exclude: $excludeColumns))->from(tableReferences: $this->entityInspector->getTableName(entity: $entity))->where(condition: $where);

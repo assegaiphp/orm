@@ -20,6 +20,16 @@ use UnitEnum;
  */
 final readonly class FindWhereOptions
 {
+    private const array OPTION_KEYS = [
+        'conditions',
+        'condition',
+        'exclude',
+        'exclude_explicit',
+        'entity_class',
+        'with_real_total',
+        'hydrate',
+    ];
+
     /**
      * @var string|null
      */
@@ -68,13 +78,17 @@ final readonly class FindWhereOptions
     /**
      * Creates a new FindWhereOptions instance from an array.
      *
-     * @param array{conditions: ?array<string, mixed>, exclude: ?string[], exclude_explicit?: bool, entity_class: ?class-string, with_real_total: ?bool, hydrate?: bool} $options The options.
+     * @param array<string, mixed> $options Conditions in shorthand form or an options array containing `conditions`.
      * @return FindWhereOptions The FindWhereOptions instance.
      * @throws ORMException
      */
     public static function fromArray(array $options): FindWhereOptions
     {
-        $conditions = $options['conditions'] ?? $options;
+        $conditions = match (true) {
+            array_key_exists('conditions', $options) => $options['conditions'] ?? [],
+            array_key_exists('condition', $options) => $options['condition'] ?? [],
+            default => array_diff_key($options, array_flip(self::OPTION_KEYS)),
+        };
         $excludeIsExplicit = $options['exclude_explicit'] ?? array_key_exists('exclude', $options);
         $exclude = $excludeIsExplicit ? ($options['exclude'] ?? []) : null;
         $entityClassName = $options['entity_class'] ?? null;
@@ -87,6 +101,27 @@ final readonly class FindWhereOptions
             entityClass: $entityClassName,
             withRealTotal: $withRealTotal,
             hydrate: $hydrate,
+        );
+    }
+
+    /**
+     * Returns these options with entity metadata available for property-to-column mapping.
+     *
+     * @param class-string $entityClass
+     * @throws ORMException
+     */
+    public function forEntity(string $entityClass): self
+    {
+        if ($this->entityClass === $entityClass) {
+            return $this;
+        }
+
+        return new self(
+            conditions: $this->conditions,
+            exclude: $this->excludeIsExplicit ? $this->exclude : null,
+            entityClass: $entityClass,
+            withRealTotal: $this->withRealTotal,
+            hydrate: $this->hydrate,
         );
     }
 

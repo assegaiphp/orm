@@ -103,6 +103,46 @@ final class ReadHydrationTest extends TestCase
         self::assertSame(1, $fromFindAndCountBy->getTotal());
     }
 
+    public function testFindByShorthandSeparatesConditionsFromHydrationMetadata(): void
+    {
+        $managerResult = $this->dataSource->manager->findBy(
+            HydratedRecordEntity::class,
+            ['name' => 'Hydrated row', 'hydrate' => true],
+        )->getData()[0];
+        $repository = new Repository(HydratedRecordEntity::class, $this->dataSource->manager);
+        $repositoryResult = $repository->findBy([
+            'id' => 1,
+            'hydrate' => true,
+        ])->getData()[0];
+        $counted = $repository->findAndCountBy([
+            'id' => 1,
+            'hydrate' => true,
+        ]);
+
+        $this->assertHydratedRecord($managerResult);
+        $this->assertHydratedRecord($repositoryResult);
+        $this->assertHydratedRecord($counted->getData()[0]);
+        self::assertSame(1, $counted->getTotal());
+
+        $options = FindWhereOptions::fromArray([
+            'id' => 1,
+            'hydrate' => true,
+            'with_real_total' => true,
+            'exclude' => [],
+        ]);
+        self::assertSame(['id' => 1], $options->conditions);
+        self::assertTrue($options->hydrate);
+        self::assertTrue($options->withRealTotal);
+        self::assertTrue($options->excludeIsExplicit);
+
+        $reservedColumn = FindWhereOptions::fromArray([
+            'conditions' => ['hydrate' => true],
+            'hydrate' => false,
+        ]);
+        self::assertSame(['hydrate' => true], $reservedColumn->conditions);
+        self::assertFalse($reservedColumn->hydrate);
+    }
+
     public function testHydrationDoesNotDependOnTheDataSourceFetchClass(): void
     {
         $manager = new EntityManager(
