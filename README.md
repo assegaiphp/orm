@@ -26,6 +26,11 @@ For commit and pull request conventions in this repo, see:
 
 ## Installation
 
+ORM 0.11.x belongs to the AssegaiPHP 0.11 release line and accepts Util `^0.10.0 || ~0.11.0`.
+The coordinated release recommends Util 0.11.x while preserving compatibility with Util 0.10.x.
+When using the optional Core and Console integrations, use their coordinated 0.11.x releases.
+See the [0.11.0 release notes](./docs/release-notes/0.11.0.md) for upgrade guidance.
+
 ```bash
 $ assegai add orm
 ```
