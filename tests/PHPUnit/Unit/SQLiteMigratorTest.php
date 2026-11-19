@@ -5,8 +5,16 @@ namespace Tests\PHPUnit\Unit;
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\DataSource\DataSourceOptions;
 use Assegai\Orm\Enumerations\DataSourceType;
+use Assegai\Orm\Interfaces\IMigration;
+use Assegai\Orm\Migrations\Migration;
 use Assegai\Orm\Migrations\Migrator;
+use Error;
+use PDOException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use RuntimeException;
+use Throwable;
 use Unit\mocks\MockEntity;
 
 final class SQLiteMigratorTest extends TestCase
@@ -83,8 +91,122 @@ final class SQLiteMigratorTest extends TestCase
         self::assertSame(0, $this->countMigrationRecords($classOne, $classTwo));
     }
 
-    private function writeMigrationFixture(string $filename, string $className, string $tableName): void
+    public function testMigrationCallbacksAndRunnersDeclareThrowable(): void
     {
+        foreach ([IMigration::class => ['up', 'down'], Migration::class => ['up', 'down'],
+            Migrator::class => ['run', 'revert', 'redo', 'runAll', 'revertAll']] as $class => $methods) {
+            foreach ($methods as $method) {
+                self::assertMatchesRegularExpression(
+                    '/@throws\\s+Throwable\\b/',
+                    (string) (new ReflectionMethod($class, $method))->getDocComment(),
+                    "$class::$method must declare the callback failure contract.",
+                );
+            }
+        }
+    }
+
+    public static function callbackFailures(): iterable
+    {
+        foreach (['run' => ['up'], 'revert' => ['down'], 'redo' => ['up', 'down']] as $operation => $callbacks) {
+            foreach ($callbacks as $callback) {
+                foreach ([RuntimeException::class, Error::class] as $failureClass) {
+                    yield "$operation/$callback/$failureClass" => [$operation, $callback, $failureClass];
+                }
+            }
+        }
+    }
+
+    #[DataProvider('callbackFailures')]
+    public function testCallbackFailuresPropagateUnchanged(string $operation, string $callback, string $failureClass): void
+    {
+        $failure = new $failureClass('Application migration failed.');
+        $migration = new class($failure, $callback) extends Migration {
+            public function __construct(private Throwable $failure, private string $callback) {}
+
+            public function up(DataSource $dataSource): void
+            {
+                if ($this->callback === 'up') {
+                    throw $this->failure;
+                }
+            }
+
+            public function down(DataSource $dataSource): void
+            {
+                if ($this->callback === 'down') {
+                    throw $this->failure;
+                }
+            }
+
+            public function getName(): string
+            {
+                return 'CallbackFailure';
+            }
+        };
+        $migrator = new Migrator($this->dataSource, $this->migrationsDirectory);
+        $expectedRecords = $callback === 'down' ? 1 : 0;
+        if ($expectedRecords === 1) {
+            $migrator->run($migration);
+        }
+
+        $caught = null;
+        try {
+            $migrator->$operation($migration);
+        } catch (Throwable $exception) {
+            $caught = $exception;
+        }
+
+        self::assertSame($failure, $caught);
+        self::assertSame($expectedRecords, $this->countMigrationRecords($migration->getName()));
+    }
+
+    public static function databaseFailureOperations(): iterable
+    {
+        foreach (['run', 'revert', 'runAll', 'revertAll'] as $operation) {
+            yield $operation => [$operation];
+        }
+    }
+
+    #[DataProvider('databaseFailureOperations')]
+    public function testDatabaseFailuresStopMigrationBookkeeping(string $operation): void
+    {
+        $classOne = 'FailureAlpha' . str_replace('.', '', uniqid('', true));
+        $classTwo = 'FailureBeta' . str_replace('.', '', uniqid('', true));
+        $this->writeMigrationFixture('001_alpha.php', $classOne, 'failure_alpha', false);
+        $this->writeMigrationFixture('002_beta.php', $classTwo, 'failure_beta', false);
+        require_once $this->migrationsDirectory . '/001_alpha.php';
+        require_once $this->migrationsDirectory . '/002_beta.php';
+        $migrator = new Migrator($this->dataSource, $this->migrationsDirectory);
+        $reverting = str_starts_with($operation, 'revert');
+
+        if ($reverting) {
+            $migrator->runAll();
+            $this->dataSource->getClient()->exec('DROP TABLE failure_beta');
+        } else {
+            $this->dataSource->getClient()->exec('CREATE TABLE failure_alpha (id INTEGER PRIMARY KEY)');
+        }
+
+        $caught = null;
+        try {
+            if (str_ends_with($operation, 'All')) {
+                $migrator->$operation();
+            } else {
+                $migrationClass = $reverting ? $classTwo : $classOne;
+                $migrator->$operation(new $migrationClass());
+            }
+        } catch (PDOException $exception) {
+            $caught = $exception;
+        }
+
+        self::assertInstanceOf(PDOException::class, $caught);
+        self::assertSame($reverting ? 2 : 0, $this->countMigrationRecords($classOne, $classTwo));
+        self::assertTrue($this->hasTable('failure_alpha'));
+        self::assertFalse($this->hasTable('failure_beta'));
+    }
+
+    private function writeMigrationFixture(string $filename, string $className, string $tableName, bool $idempotent = true): void
+    {
+        $createGuard = $idempotent ? 'IF NOT EXISTS ' : '';
+        $dropGuard = $idempotent ? 'IF EXISTS ' : '';
         $contents = <<<PHP
 <?php
 
@@ -95,12 +217,12 @@ class {$className} extends Migration
 {
     public function up(DataSource \$dataSource): void
     {
-        \$dataSource->getClient()->exec("CREATE TABLE IF NOT EXISTS `{$tableName}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `name` TEXT NOT NULL)");
+        \$dataSource->getClient()->exec("CREATE TABLE {$createGuard}`{$tableName}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `name` TEXT NOT NULL)");
     }
 
     public function down(DataSource \$dataSource): void
     {
-        \$dataSource->getClient()->exec("DROP TABLE IF EXISTS `{$tableName}`");
+        \$dataSource->getClient()->exec("DROP TABLE {$dropGuard}`{$tableName}`");
     }
 }
 PHP;

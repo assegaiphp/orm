@@ -9,7 +9,7 @@ use Assegai\Orm\Exceptions\MigrationException;
 use Assegai\Orm\Support\OrmRuntime;
 use Assegai\Orm\Util\SqlDialectHelper;
 use PDO;
-use PDOException;
+use Throwable;
 
 /**
  * Class for handling the processing of 'Migration' objects
@@ -48,6 +48,7 @@ readonly class Migrator
    * @param Migration $migration The migration to run.
    * @return void
    * @throws MigrationException if an error occurs while updating the migrations table
+   * @throws Throwable if migration application logic or a database operation fails; propagated unchanged.
    */
   public function run(Migration $migration): void
   {
@@ -80,6 +81,7 @@ readonly class Migrator
    * @param Migration $migration The migration to revert
    * @return void
    * @throws MigrationException if an error occurs while updating the migrations table
+   * @throws Throwable if migration application logic or a database operation fails; propagated unchanged.
    */
   public function revert(Migration $migration): void
   {
@@ -160,6 +162,7 @@ EOF2;
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
    * @throws MigrationException if an error occurs while updating the migrations table
+   * @throws Throwable if migration application logic or a database operation fails; propagated unchanged.
    */
   public function redo(?Migration $migration = null, ?string $migrationsDirectory = null): void
   {
@@ -195,6 +198,7 @@ EOF2;
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
    * @throws MigrationException if an error occurs while updating the migration table.
+   * @throws Throwable if migration application logic or a database operation fails; propagated unchanged.
    */
   public function runAll(?string $migrationsDirectory = null): void
   {
@@ -215,6 +219,7 @@ EOF2;
    * @param string|null $migrationsDirectory The directory containing the migrations. Defaults to null.
    * @return void
    * @throws MigrationException if an error occurs while updating the migration table
+   * @throws Throwable if migration application logic or a database operation fails; propagated unchanged.
    */
   public function revertAll(?string $migrationsDirectory = null): void
   {

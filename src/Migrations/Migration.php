@@ -4,6 +4,7 @@ namespace Assegai\Orm\Migrations;
 
 use Assegai\Orm\DataSource\DataSource;
 use Assegai\Orm\Interfaces\IMigration;
+use Throwable;
 
 /**
  * Abstract Migration class that serves as a base for all database migrations
@@ -15,6 +16,7 @@ abstract class Migration implements IMigration
    *
    * @param DataSource $dataSource The DataSource to be used for migrations.
    * @return void
+   * @throws Throwable if application logic or a database operation fails.
    */
   public abstract function up(DataSource $dataSource): void;
 
@@ -23,6 +25,7 @@ abstract class Migration implements IMigration
    *
    * @param DataSource $dataSource The DataSource to be used for migrations.
    * @return void
+   * @throws Throwable if application logic or a database operation fails.
    */
   public abstract function down(DataSource $dataSource): void;
 
